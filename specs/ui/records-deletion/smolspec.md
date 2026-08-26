@@ -61,8 +61,11 @@ a confirmed date-range purge. Full findings in
   (From/To `DatePicker`s, live count, confirmed delete). Glucose rows lose
   `.deleteDisabled(true)`. No new files, so no `project.pbxproj` edits.
 - **Out of Scope:** the MealOverviewView menu path (stays as a secondary
-  route); day-section headers; long-press context menus; any Trends/History
-  changes (they follow via `eventsDidChange`).
+  route) *(route since deleted by `specs/ui/home-router` Decision 16,
+  2026-08-26: `MealOverviewView` is removed and its delete menu lives on
+  ResultView, the one meal-detail surface)*; day-section headers; long-press
+  context menus; any Trends/History changes (they follow via
+  `eventsDidChange`).
 
 ## Risks and Assumptions
 - **Risk:** `List(selection:)` plus `NavigationLink` rows — selection is

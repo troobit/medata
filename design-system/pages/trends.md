@@ -64,6 +64,8 @@ glucose line; Week and Month aggregate to per-day totals and averages.
   mmol/L, `—` when there are no readings.
 - **Day meal list (§10.6):** `Meals` header, rows `HH:mm · N g` opening
   `MealRoute.overview`; empty state `no meals`. Shown only in the Day range.
+  *(Superseded by `specs/ui/home-router` Decision 16, 2026-08-26: rows open
+  `MealRoute.result` → ResultView directly; the overview is deleted.)*
 - **Footer (§10.7):** removed — the read-only disclaimer footer is deleted under
   the developer-phase copy rule (§14.5 / Decision 21). The Graph carries no
   disclaimer copy.

@@ -319,7 +319,7 @@ A `.sheet` coexists with the mutually-exclusive cover `item:`, so keeping Dose a
 ## Decision 11: Graph keeps meal tap-through; only its direct delete affordance is removed
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: accepted (tap-through destination redefined by Decision 16: the shared meal detail is `ResultView`; `MealOverviewView` is deleted)
 
 ### Context
 
@@ -496,5 +496,42 @@ Withholding the number past 30 minutes is right for the lock screen — a glance
 - One more `eventsDidChange` subscriber rebuilding on every tick — bounded (a 24-hour `bsl` read, ~288 rows) but no longer zero, and it runs while home is the visible root.
 - Home and the widget deliberately differ past 30 minutes, so "what does the app show for a stale reading" now has two correct answers depending on the surface.
 - `Persistence` gained a small public surface (`GlucoseSnapshotSource`) that exists for two callers.
+
+---
+
+## Decision 16: A tapped meal row lands on one detail surface; the overview hop is deleted
+
+**Date**: 2026-08-26
+**Status**: accepted
+
+### Context
+
+`specs/ui/design-handoff-00` introduced the Meal overview as its own page ("Meal overview (§9) — new `MealOverviewView.swift`") with the full detail one push deeper: "Overview → Full result → Done lands back on Overview" (`specs/ui/design-handoff-00/design.md`). This spec carried that chain into Records unchanged. `specs/ui/meal-review` later collapsed the *capture* stack to a single surface ("Collapse the read-only segmentation review and the result screen into one post-capture surface") and demoted `ResultView` to the history read path — leaving history the only path where a meal's detail still sits behind an intermediate summary. `specs/data/insulin-dosing` task 8 then added a third, DEBUG-only push (`⋯ → Review`) because the dose surface was unreachable from history at all. On device, the tap lands on a summary whose per-food rows, adjustment surface, and dose readout each require a further push — the detail reads as hidden.
+
+### Decision
+
+A meal row in Records and in the Graph's day list navigates directly to `ResultView` as the one meal-detail surface, which absorbs the overview's remaining content (capture-metadata line, delete menu with confirmation, mask-overlaid photo) and renders the recorded dose readout (`specs/data/insulin-dosing` Req 6.10). `MealOverviewView`, `MealRoute.overview`, and the DEBUG `MealRoute.review` push are deleted.
+
+### Rationale
+
+`ResultView` already holds the per-food rows with the serving-adjustment surface, corrections handling, the photo, the recorded dose-suggestion line, and the quick-preset draft — the overview duplicated a subset of it and existed only to push to it. Deleting the summary rather than enriching it follows the precedent `specs/ui/meal-review` set for the capture stack: one surface per meal, everything on it. Req 3.3 is redefined in place to require the single screen.
+
+### Alternatives Considered
+
+- **Keep the overview and add the dose line to it**: The smallest edit — rejected because the adjustment surface and per-food detail stay a push deeper; the intermediate hop is the defect, not the missing line.
+- **Reuse `MealReviewView` as the history surface**: Already a one-surface meal view — rejected because its verbs are capture verbs (Record, Retake); a stored meal is already recorded, and the DEBUG route's Retake-means-delete compromise showed the fit is wrong.
+- **A new combined view replacing both**: Rejected as duplication; `ResultView` already is the combined view minus ~three overview-only elements.
+
+### Consequences
+
+**Positive:**
+- One tap from Records or the Graph to a meal's full detail, dose readout included.
+- `MealOverviewView` (~246 lines duplicating `ResultView` content) is deleted; `specs/ui/shared-meal-components` loses a consumer, which lowers its DRY surface.
+- The DEBUG-only third page and its Retake-means-delete compromise go away.
+
+**Negative:**
+- `ResultView` grows the overview-only elements (metadata line, delete confirmation, overlay photo path) on an already-large file.
+- `specs/data/insulin-dosing` task 16's review-line judgement loses its no-camera entry point; judging the review line now requires a real capture.
+- design-handoff-00 §9's page documentation is superseded and must say so.
 
 ---

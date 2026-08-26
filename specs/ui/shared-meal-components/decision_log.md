@@ -179,3 +179,36 @@ content, and that is what is now written once.
   recorded narrowing (the pair + marker + suggestion line are shared, the container is not).
 
 ---
+
+## Decision 4: `MealOverviewView` leaves the consumer set
+
+**Date**: 2026-08-26
+**Status**: accepted
+
+### Context
+
+Requirements 3.1 and 3.2 named `MealOverviewView` as a consumer of the shared carb-total block and corrected capsule. `specs/ui/home-router` Decision 16 deletes that view: a meal row in Records or the Graph's day list now lands directly on `ResultView` as the single meal-detail surface.
+
+### Decision
+
+The shared components' consumer set is `MealReviewView`, `ResultView`, and (for the corrected capsule) the Records meal row. Requirements 3.1 and 3.2 are redefined in place; the shared implementations themselves are unchanged.
+
+### Rationale
+
+The shared unit is the content, not the container (Decision 3) — losing a container changes the consumer list, not the components. One fewer consumer also shrinks the duplication surface this spec exists to remove.
+
+### Alternatives Considered
+
+- **Keep the requirement wording and let it dangle**: Rejected — a named consumer that no longer exists is exactly the ghost reference the spec-janitor flags.
+- **Fold this into the two open tasks**: Rejected — the open tasks are the test gate and the on-device look; a consumer-set change is a scope statement, not a task.
+
+### Consequences
+
+**Positive:**
+- Consumer list matches the code after home-router Decision 16 lands.
+- Less duplication left to guard.
+
+**Negative:**
+- The two open tasks' on-device verification loses one surface to check; the verification notes must not reference the overview.
+
+---

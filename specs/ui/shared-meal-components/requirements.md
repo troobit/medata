@@ -13,7 +13,10 @@ shared-decoder DRY win") correctly rejected it.
 
 That requirement now exists. Three features land the same element on three-plus surfaces at
 once: the dose readout segment (`specs/data/insulin-dosing` Req 6.1/6.10) renders on the
-review line, the manual entry line, the overview and the result screen; the estimated-mass
+review line, the manual entry line and the result screen *(Redefined in place by
+Decision 4 — `specs/ui/home-router` Decision 16 deletes the overview. Superseded wording:
+"the review line, the manual entry line, the overview and the result screen".)*; the
+estimated-mass
 line (`specs/ui/mass-readout`) is already on three; save-as-quick-add
 (`specs/data/manual-carb-intake` Req 8.1) lands on two. Every one of these currently means
 the same edit made twice or three times, divergence-prone in exactly the way
@@ -84,10 +87,13 @@ identically everywhere they appear.
 
 1. <a name="3.1"></a>The carb-total block (big numeral + `g carbs` + corrected marker +
    confidence pill + secondary mass/dose line) SHALL be one shared implementation
-   parameterised by palette and numeral size, consumed by `MealOverviewView`,
-   `MealReviewView` and `ResultView`.
+   parameterised by palette and numeral size, consumed by `MealReviewView` and
+   `ResultView`. *(Redefined in place by Decision 4: `MealOverviewView` is deleted by
+   `specs/ui/home-router` Decision 16 and leaves the consumer set.)*
 2. <a name="3.2"></a>The "corrected" capsule SHALL be one implementation consumed by all
-   four current sites (the three above plus the Records meal row).
+   current sites (the two above plus the Records meal row). *(Redefined in place by
+   Decision 4. Superseded wording: "all four current sites (the three above plus the
+   Records meal row)".)*
 3. <a name="3.3"></a>The dose segment SHALL enter these surfaces only through the shared
    readout line (`DoseReadoutLine` from the insulin-dosing synthesis), never as a per-view
    string.

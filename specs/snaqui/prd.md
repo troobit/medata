@@ -13,7 +13,7 @@ Target repository: `medata` (this repository). All work is SwiftUI in `App/`; th
 ## Goals
 
 - The user can state, on the result screen, how much of the estimated plate they ate (a fraction such as 2 of 5, or more than one plate) and have the scaled carb value become the recorded amount.
-- The scaled (corrected) carb total is what Records rows, the Meal overview, and the Graph's carb bars all display — one consistent "eaten" number everywhere downstream.
+- The scaled (corrected) carb total is what Records rows, the Meal overview (since deleted — home-router Decision 16; its role passed to ResultView), and the Graph's carb bars all display — one consistent "eaten" number everywhere downstream.
 - The original estimate is always preserved and visible; a portion adjustment is reversible and re-adjustable.
 - Full-screen pages stop spending a nav-bar band on a redundant title; the freed vertical space goes to content.
 - Nothing on the Graph or result screens truncates with an ellipsis in portrait on the primary device (iPhone 16 Pro).
@@ -40,9 +40,9 @@ Covers the SwiftUI surfaces in `App/` (result and history screens, Graph, Record
    - Acceptance: re-opening the meal from history seeds the portion control from the recorded portion, and re-adjusting (including back to full plate) appends a further correction — the history of adjustments is preserved (corrections are append-only).
 3. The Graph's carb bars MUST reflect the corrected (eaten) totals, not the raw estimate.
    - Acceptance: after a portion adjustment (or any manual correction), the Graph's day-view carb bar for that meal shows the corrected value; week/month aggregates use the same corrected totals (`App/TrendsModel.swift` currently reads `record.macros.totalCarbsG` directly — this is the gap being closed).
-   - Acceptance: Records rows and the Meal overview show the same scaled total with the existing `corrected` marker (already wired via `displayTotalCarbsG` — must keep working).
+   - Acceptance: Records rows and the Meal overview show the same scaled total with the existing `corrected` marker (already wired via `displayTotalCarbsG` — must keep working). *(Superseded in surface by `specs/ui/home-router` Decision 16, 2026-08-26: `MealOverviewView` is deleted; the criterion's substance stands — the scaled total shows on the meal-detail surface, now ResultView.)*
 4. Full-screen pages MUST NOT render a navigation title, and the freed vertical space MUST go to content.
-   - Acceptance: Graph (`TrendsView`), Records (`RecordsView`), Intake (`IntakeView`), Settings (`SettingsView`), Meal overview (`MealOverviewView`), Adjust (`ManualCorrectionView`), and Foods (`SegmentationReviewView`) show no title text in the navigation bar; their close/options toolbar controls remain functional.
+   - Acceptance: Graph (`TrendsView`), Records (`RecordsView`), Intake (`IntakeView`), Settings (`SettingsView`), Meal overview (`MealOverviewView`, since deleted — home-router Decision 16), Adjust (`ManualCorrectionView`), and Foods (`SegmentationReviewView`) show no title text in the navigation bar; their close/options toolbar controls remain functional.
    - Acceptance: on each of these pages the first content element sits higher than before the change (no empty band where the title was) — verified visually on device/simulator.
 5. The Graph and result screens MUST NOT truncate any control or label with an ellipsis in portrait on the primary device.
    - Acceptance: the Graph metric-chip row (`Carbs / Glucose / Insulin / Protein · Fat`, `TrendsView.metricChips`) renders all chips fully legible in portrait — wrapping, resizing, or scrolling are all acceptable; truncation is not.

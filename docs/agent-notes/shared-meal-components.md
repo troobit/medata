@@ -35,16 +35,17 @@ The corrections-observation loop (`MealOverviewView` / `ResultView` /
 `RecordsModel`) and `TrendsModel`'s decoders — shared-meal-components
 Decision 2 and home-router Decision 13 (perf-hang file). Do not extract them.
 
-## Dose readout wiring (insulin-dosing Decision 16 synthesis)
+## Dose readout wiring (insulin-dosing Decisions 16–18)
 
 `DoseSuggestionModel` (AppRoot-owned, environment-injected, optional in every
 consumer so history routes render without it) computes via the pure `Dosing`
-target, writes a real `dose_suggestions` row on every refresh (INSERT OR
-REPLACE on a per-subject stable id), and arms a 45-minute `DoseSeed` carrying
-the row id. `AppRoot.presentInsulinSheet` consumes the seed; on insulin save
-the two-parameter `onInsulinSaved` links the dose back via `linkDose`. Live
-readouts: `MealTotalSecondLine` (review), the CarbEntryContent secondary line;
-history surfaces render `RecordedSuggestion.line` from the stored row — never
-a recomputation (Req 6.11). The remaining device judgement is insulin-dosing
-task 18's STOP, including design-direction §10's bare `12 U` vs
-`12 U at 5 g/U`.
+target and arms a 45-minute `DoseSeed`. Since insulin-dosing Decision 18 it
+writes nothing: the `dose_suggestions` store, `saveDoseSuggestion`/`linkDose`,
+and the row id on the seed are removed — every surface recomputes live from
+recorded events + settings for the subject meal's own instant (Req 6.11
+reversed). `AppRoot.presentInsulinSheet` consumes the seed. Live readouts:
+`MealTotalSecondLine` (review), the CarbEntryContent secondary line; history
+surfaces recompute and render via `RecordedSuggestion.line` — the type name
+survives, the stored row does not. The remaining device judgement is
+insulin-dosing task 18's STOP, including design-direction §10's bare `12 U`
+vs `12 U at 5 g/U`.

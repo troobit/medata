@@ -1,3 +1,10 @@
+> **Superseded by home-router Decision 16** — this page is superseded by
+> [`design-system/pages/result.md`](result.md) (`specs/ui/home-router`
+> Decision 16, 2026-08-26): `MealOverviewView` and `MealRoute.overview` are
+> deleted, and a tapped meal row lands directly on ResultView, which absorbed
+> the overview's remaining content. Content is preserved for history only; do
+> not implement against it.
+
 # Meal overview — page-specific overrides
 
 **Inherits:** `design-system/MASTER.md`. The §9 Meal overview screen.
