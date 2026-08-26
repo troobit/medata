@@ -146,8 +146,7 @@ corpus that finally carries relabels. `bleed_verdict=hurting` there reopens
 ranking repair (the closed task's candidate mitigations, measured with
 `tools/candidate_probe.py --erode`) before the removal gate is considered. It
 was closed rather than left pending because a pending non-STOP task gated on
-real-use data loops autonomous runners — the 2026-08-12 orbit run re-entered
-that phase 45 times before being killed.
+real-use data loops any autonomous runner.
 
 ## The Req 8 analysis: `tools/shortlist_hit_rate.py`
 

@@ -531,7 +531,7 @@ The eligible-channel restriction is not a tuning choice. Without it the second-a
 
 "Mitigate boundary bleed in the candidate ranking" was written as a conditional task in the agent-executable stream: it fires only if the boundary-bleed partition of the Req 8 analysis shows adjacent corrections hitting the shortlist while non-adjacent ones miss. That partition reads from the corrections corpus, which as of 2026-08-12 holds zero relabel records, so `tools/shortlist_hit_rate.py` returns `bleed_verdict=insufficient` — and no agent session can change that, because only real device use adds corrections.
 
-The 2026-08-11/12 orbit run exposed the structural cost of holding that state as a pending task. Orbit selects the next phase by "does it contain an unchecked task", and its phase prompt (`/next-task --phase`, then `/commit`) does not pin the agent to one spec's task file. After the phase's first task closed at 02:18, orbit re-entered the phase 45 more times over 13 hours (~$191 of the run's ~$221): each fresh agent found the mitigation task unfireable, was routed by `/next-task` to agent-actionable work in a different spec (`support-plane-reference`), committed there, and exited cleanly — leaving the task pending and the loop live until the run was killed.
+Holding that state as a pending task has a structural cost: an autonomous runner selects work by "does it contain an unchecked task", finds the mitigation task unfireable, drifts to whatever work is actionable elsewhere, and exits with the task still pending — so a run over this ledger never terminates on it. A pending non-STOP task gated on data only real device use can produce loops any such runner.
 
 ### Decision
 
@@ -543,7 +543,7 @@ The partition is one cut of the same analysis run the acceptance verdict already
 
 ### Alternatives Considered
 
-- **Leave it pending in the corpus-measurement phase**: the status quo - Rejected: it loops any autonomous runner (measured: 45 re-entries, 13 hours, ~$191) and misrepresents waiting-on-data as actionable work.
+- **Leave it pending in the corpus-measurement phase**: the status quo - Rejected: it loops any autonomous runner and misrepresents waiting-on-data as actionable work.
 - **Move it under the acceptance-gates STOP phase**: keeps it visible as a task - Rejected: it would duplicate the acceptance verdict's read of the same analysis output as a fourth STOP task whose entire content is "if that run says hurting"; a bullet on the verdict task records the same obligation without a second gate.
 - **Implement a mitigation now**: make the task completable by doing the work - Rejected: unevidenced. Decision 13 ships bleed unmitigated precisely because bleed and signal are the same measurement until corrections separate them, and the one direct remedy already measured (interior-only sampling) is rejected on evidence.
 
