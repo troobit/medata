@@ -1,0 +1,116 @@
+{
+  "_": "The miniature field session the loop rehearsal replays. Two dishes photographed twice each (four same-scene clusters), a weighed benchmark capture per dish, one refusal, one slimmed bundle, and one non-meal note. Committed as data rather than built inline so the scenario the guard chain is judged against is reviewable on its own.",
+
+  "_size": "The design's sketch of this fixture says 'two synthetic notes'. Five distinct captures across two clusters is the evidence floor a draft must clear to REACH the weighed guard, so a two-note session could never demonstrate the demotion this rehearsal exists to assert; the session carries six annotated captures per dish instead.",
+
+  "_carbs": "base_total_carbs_g is what the replay predicts with the food database as CoFID bakes it. The rehearsal's stub replay scales it by (current density / source density), so an overlay entry that lands genuinely moves the weighed before/after — the veto is measured, not asserted.",
+
+  "base_timestamp_ms": 1756000000000,
+  "build_stamp": "b99303a-20260827-101500",
+  "model_version": "coreml_ab812dc3aa9d",
+
+  "attempts": [
+    {
+      "offset_s": 0, "dish": "white_rice", "volume_cm3": 300.0,
+      "base_total_carbs_g": 46.0,
+      "note": {"id": "note-rice-a1", "text": "about a teacup of rice, maybe 30 g of carbs",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+    {
+      "offset_s": 30, "dish": "white_rice", "volume_cm3": 305.0,
+      "base_total_carbs_g": 46.0,
+      "note": {"id": "note-rice-a2", "text": "same bowl again, still reads far too high",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+    {
+      "offset_s": 60, "dish": "white_rice", "volume_cm3": 310.0,
+      "base_total_carbs_g": 46.0,
+      "note": {"id": "note-rice-a3", "text": "third go at the same bowl, same answer",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+
+    {
+      "offset_s": 600, "dish": "white_rice", "volume_cm3": 300.0,
+      "base_total_carbs_g": 46.0,
+      "note": {"id": "note-rice-b1", "text": "rice again at dinner, same teacup portion",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+    {
+      "offset_s": 630, "dish": "white_rice", "volume_cm3": 305.0,
+      "base_total_carbs_g": 46.0,
+      "note": {"id": "note-rice-b2", "text": "retook it from higher up, no change",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+    {
+      "offset_s": 660, "dish": "white_rice", "volume_cm3": 310.0,
+      "base_total_carbs_g": 46.0, "slimmed": true,
+      "note": {"id": "note-rice-b3", "text": "last one of the evening",
+               "stated_carbs_g": 30.0, "displayed_carbs_g": 45.0, "displayed_mass_g": 219.0}
+    },
+
+    {
+      "offset_s": 1200, "dish": "bread_white", "volume_cm3": 400.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-c1", "text": "two slices of toast, call it 40 g",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+    {
+      "offset_s": 1230, "dish": "bread_white", "volume_cm3": 405.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-c2", "text": "same two slices, second attempt",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+    {
+      "offset_s": 1260, "dish": "bread_white", "volume_cm3": 410.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-c3", "text": "third attempt, still over",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+
+    {
+      "offset_s": 1800, "dish": "bread_white", "volume_cm3": 400.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-d1", "text": "toast again later, same two slices",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+    {
+      "offset_s": 1830, "dish": "bread_white", "volume_cm3": 405.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-d2", "text": "retaken on the wooden board",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+    {
+      "offset_s": 1860, "dish": "bread_white", "volume_cm3": 410.0,
+      "base_total_carbs_g": 60.0,
+      "note": {"id": "note-bread-d3", "text": "and once more, unchanged",
+               "stated_carbs_g": 40.0, "displayed_carbs_g": 59.0, "displayed_mass_g": 152.0}
+    },
+
+    {
+      "offset_s": 2400, "dish": "white_rice", "volume_cm3": 340.0,
+      "base_total_carbs_g": 52.0,
+      "benchmark": {"id": "bm-rice", "name": "weighed rice bowl", "truth_carbs_g": 40.0},
+      "_": "Weighed truth agrees with the notes here: the pipeline over-prices rice, so lowering its density improves the benchmark and the fix survives guard 5."
+    },
+    {
+      "offset_s": 2500, "dish": "bread_white", "volume_cm3": 380.0,
+      "base_total_carbs_g": 50.0,
+      "benchmark": {"id": "bm-bread", "name": "weighed toast plate", "truth_carbs_g": 55.0},
+      "_": "Weighed truth CONTRADICTS the notes here: the scales say the toast carries more carbohydrate than the pipeline reports, so the drafted density cut worsens the weighed error and guard 5 vetoes it. Stated values steer, weighed values veto (Req 5.4)."
+    },
+
+    {
+      "offset_s": 3000, "dish": "white_rice", "outcome": "refusal",
+      "replayable": false,
+      "note": {"id": "note-refusal", "text": "full plate of food and it refused to estimate",
+               "screen_id": "capture.refusal"},
+      "_": "Diagnosing a pre-segmentation refusal needs the device, so this one becomes a STOP line in the cycle file rather than a task."
+    }
+  ],
+
+  "loose_notes": [
+    {"id": "note-ui-1", "screen_id": "records",
+     "text": "the delete affordance on a records row is too small to hit",
+     "screenshot": "note-ui-1.png"}
+  ]
+}

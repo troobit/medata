@@ -1,0 +1,53 @@
+[
+  {
+    "_": "Well-evidenced and well-argued, and wrong: the weighed benchmark says the toast is UNDER-priced, so guard 5 vetoes the cut the notes asked for. This draft is the reason the rehearsal exists.",
+    "fix_id": "cycle1-density-bread_white",
+    "class_id": "bread_white",
+    "column": "density",
+    "value": 0.33,
+    "cause": "wrong_density_conversion",
+    "expected_effect": "brings two slices of toast from 60 g down towards the stated 40 g",
+    "basis": {
+      "notes": ["note-bread-c1", "note-bread-c2", "note-bread-c3",
+                "note-bread-d1", "note-bread-d2", "note-bread-d3"],
+      "captures": ["1756001200000-success", "1756001230000-success",
+                   "1756001260000-success", "1756001800000-success",
+                   "1756001830000-success", "1756001860000-success"],
+      "cause": "wrong_density_conversion",
+      "rationale": "classes and recovered volume agree across both clusters; only the mass disagrees"
+    }
+  },
+  {
+    "_": "The fix that lands: stated values and the weighed rice bowl point the same way.",
+    "fix_id": "cycle1-density-white_rice",
+    "class_id": "white_rice",
+    "column": "density",
+    "value": 0.65,
+    "cause": "wrong_density_conversion",
+    "expected_effect": "brings a teacup of rice from 46 g down towards the stated 30 g",
+    "basis": {
+      "notes": ["note-rice-a1", "note-rice-a2", "note-rice-a3",
+                "note-rice-b1", "note-rice-b2", "note-rice-b3"],
+      "captures": ["1756000000000-success", "1756000030000-success",
+                   "1756000060000-success", "1756000600000-success",
+                   "1756000630000-success", "1756000660000-success"],
+      "cause": "wrong_density_conversion",
+      "rationale": "steady volume across two clusters, mass consistently high"
+    }
+  },
+  {
+    "_": "Never judged on its merits: the cycle's commit cap is already spent, so it is refused before any guard runs. A cap that only held when nothing else wanted a commit would not be a cap.",
+    "fix_id": "cycle1-density-pasta",
+    "class_id": "pasta",
+    "column": "density",
+    "value": 0.55,
+    "cause": "wrong_density_conversion",
+    "expected_effect": "n/a — expected to hit the per-cycle commit cap",
+    "basis": {
+      "notes": [],
+      "captures": [],
+      "cause": "wrong_density_conversion",
+      "rationale": "drafted last so the cap, not the evidence, is what refuses it"
+    }
+  }
+]

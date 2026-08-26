@@ -109,9 +109,13 @@ def proto_fallback(fixture_path: Path) -> dict:
 
 # --------------------------------------------------------------- the diagnosis
 
-def collect(conn, cycle: int, settings: dict, replay=swift_replay,
+def collect(conn, cycle: int, settings: dict, replay=None,
             replay_checkpoint=None) -> list:
     """One row per annotated capture: replay outcome, delta, cluster, cause."""
+    # Resolved here rather than as a default argument: bound at def time, the
+    # harness call would be unreachable from the CLI entry point, and the
+    # loop-rehearsal test drives `main()` with the Swift half stubbed out.
+    replay = replay or swift_replay
     root = corpus.corpus_root()
     notes = [dict(r) for r in conn.execute(
         "SELECT * FROM notes WHERE meal_linked = 1 ORDER BY id")]
