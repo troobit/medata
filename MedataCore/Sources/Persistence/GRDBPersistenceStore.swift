@@ -1237,14 +1237,20 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             );
             CREATE UNIQUE INDEX IF NOT EXISTS dose_occurrences_schedule
                 ON dose_occurrences(schedule_id, due_at);
+            CREATE TABLE IF NOT EXISTS protected_outcomes (
+                outcome_id TEXT PRIMARY KEY
+            );
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '10')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '11')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '10' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 10 adds
+    // Idempotent: re-stamps schema_version to '11' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 11 adds
+    // protected_outcomes (specs/estimation/ml-feedback-loop Req 3.2, design
+    // "Protected outcomes") — a new table, so the CREATE IF NOT EXISTS above
+    // retrofits it with no ALTER. Version 10 adds
     // quick_presets.source_meal_id (specs/data/manual-carb-intake Req 8,
     // design "Schema: quick_presets.source_meal_id") — the one ADD COLUMN,
     // gated on the stored version because ADD COLUMN is not idempotent in
@@ -1277,7 +1283,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             }
         }
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '10')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '11')"
         )
     }
 
@@ -1352,6 +1358,28 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         }
     }
 
+    public func markOutcomesProtected(mealID: UUID) async throws {
+        // One statement rather than a read-then-write: the set is resolved
+        // inside the same transaction that inserts it, so an attempt saved
+        // between the two halves cannot slip through unprotected.
+        try await queue.write { db in
+            try db.execute(
+                sql: "INSERT OR IGNORE INTO protected_outcomes (outcome_id) " +
+                    "SELECT id FROM estimation_outcomes WHERE meal_id = ?",
+                arguments: [mealID.uuidString]
+            )
+        }
+    }
+
+    public func unmarkOutcomeProtected(id: UUID) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: "DELETE FROM protected_outcomes WHERE outcome_id = ?",
+                arguments: [id.uuidString]
+            )
+        }
+    }
+
     // MARK: - Estimation outcomes (specs/estimation/snaq-parity)
 
     public func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws {
@@ -1380,6 +1408,16 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             // bound is enforced. "Newest" is (timestamp, id) descending —
             // the id tie-break keeps eviction deterministic when attempts
             // share a millisecond.
+            //
+            // Every branch below also excludes `protected_outcomes` ids
+            // (specs/estimation/ml-feedback-loop Req 3.2): a row a field note
+            // was written about must survive as long as the note does. The
+            // benchmark branches are not exceptions — a note on a weighed
+            // attempt is the corpus's highest-value capture. Protected rows sit
+            // OUTSIDE the bound rather than occupying a slot, so the population
+            // may exceed the bound by the protected count. Accepted: protection
+            // is bounded by the note count, and the pull's manifest pass prunes
+            // these rows once the note has left the device.
             if let benchmarkMealID = outcome.benchmarkMealID {
                 // The group's latest completed attempt is exempt: oldest-first
                 // eviction alone could drop a meal's ONLY success under a run
@@ -1406,6 +1444,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                             DELETE FROM estimation_outcomes
                             WHERE benchmark_meal_id = ? AND model_version = ?
                               AND id <> ?
+                              AND id NOT IN (SELECT outcome_id FROM protected_outcomes)
                               AND id NOT IN (
                                 SELECT id FROM estimation_outcomes
                                 WHERE benchmark_meal_id = ? AND model_version = ?
@@ -1427,6 +1466,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                         sql: """
                             DELETE FROM estimation_outcomes
                             WHERE benchmark_meal_id = ? AND model_version = ?
+                              AND id NOT IN (SELECT outcome_id FROM protected_outcomes)
                               AND id NOT IN (
                                 SELECT id FROM estimation_outcomes
                                 WHERE benchmark_meal_id = ? AND model_version = ?
@@ -1446,6 +1486,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                     sql: """
                         DELETE FROM estimation_outcomes
                         WHERE benchmark_meal_id IS NULL
+                          AND id NOT IN (SELECT outcome_id FROM protected_outcomes)
                           AND id NOT IN (
                             SELECT id FROM estimation_outcomes
                             WHERE benchmark_meal_id IS NULL
@@ -1460,6 +1501,20 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         // No eventsDidChange: outcome rows are not `events` rows (quick_presets
         // convention) and a recording write must never ripple into UI refresh
         // of the event surfaces (Req 2.4).
+    }
+
+    public func markOutcomeProtected(id: UUID) async throws {
+        // Keyed by id alone, so marking is valid before the outcome row lands
+        // (the App saves the outcome on a detached task and marks afterwards)
+        // and survives the row's own re-save. No foreign key: a dangling
+        // protection row is inert, whereas a constraint here would make the
+        // note-save path fail on a race it has no way to win.
+        try await queue.write { db in
+            try db.execute(
+                sql: "INSERT OR IGNORE INTO protected_outcomes (outcome_id) VALUES (?)",
+                arguments: [id.uuidString]
+            )
+        }
     }
 
     public func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome] {

@@ -300,7 +300,7 @@ final class QuickPresetTests: XCTestCase {
         XCTAssertNil(carried.sourceMealID, "a pre-v10 preset survives with NULL")
 
         // A second open must not throw "duplicate column name" — the ALTER is
-        // gated on the stored version, which the first open re-stamped to 10.
+        // gated on the stored version, which the first open re-stamped past 10.
         let reopened = try GRDBPersistenceStore(dbURL: nineURL, artefactsBaseURL: nineDir)
         _ = try await reopened.quickPresets()
     }

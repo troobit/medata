@@ -141,6 +141,9 @@ struct AppRoot: View {
             onSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
+        #if FIELD_LOOP
+        .fieldScreen("home")
+        #endif
         .environment(doseSuggestions)
         .fullScreenCover(item: $activeSheet, onDismiss: {
             settingsOpensAtDoseSchedule = false
@@ -169,12 +172,38 @@ struct AppRoot: View {
                     visionCardDetector: visionCardDetector,
                     preShutterSegmenter: preShutterSegmenter
                 )
+                #if FIELD_LOOP
+                // Field-note screen identity (ml-feedback-loop Req 1.4). The
+                // covers mount here rather than each inside its own view: this
+                // switch already IS the shell's screen enum, and a mount per
+                // cover file would be five identical lines in five places.
+                // Surfaces pushed onto a cover's own NavigationStack mount
+                // themselves; a sheet that mounts nothing keeps its host
+                // cover's id, which is the intended fallback.
+                //
+                // The capture cover carries a state-derived id, and — while the
+                // refusal overlay is up — the outcome row the refused attempt
+                // wrote, which is the only join key a refusal has (Req 2.1).
+                .fieldScreen(
+                    captureModel.state.fieldScreenID,
+                    meal: captureModel.refusal != nil ? captureModel.lastOutcome : nil
+                )
+                #endif
             case .intake:
                 IntakeView(store: store)
+                #if FIELD_LOOP
+                .fieldScreen("intake")
+                #endif
             case .records:
                 RecordsView(store: store)
+                #if FIELD_LOOP
+                .fieldScreen("records")
+                #endif
             case .graph:
                 TrendsView(store: store)
+                #if FIELD_LOOP
+                .fieldScreen("graph")
+                #endif
             case .settings:
                 NavigationStack {
                     SettingsView(
@@ -196,6 +225,9 @@ struct AppRoot: View {
                         scrollToDoseSchedule: settingsOpensAtDoseSchedule
                     )
                 }
+                #if FIELD_LOOP
+                .fieldScreen("settings")
+                #endif
             }
         }
         // Relocated from TrendsView (Decision 10): the dose sheet keeps its

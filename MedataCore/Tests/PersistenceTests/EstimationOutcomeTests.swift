@@ -131,12 +131,12 @@ final class EstimationOutcomeTests: XCTestCase {
         XCTAssertEqual(raw, 1_750_123_456_789)
     }
 
-    func testSchemaVersionIsStampedTen() async throws {
+    func testSchemaVersionIsStampedEleven() async throws {
         let q = try DatabaseQueue(path: dbURL.path)
         let version: String? = try await q.read { db in
             try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'schema_version'")
         }
-        XCTAssertEqual(version, "10", "quick_presets.source_meal_id lands with schema_version 10")
+        XCTAssertEqual(version, "11", "protected_outcomes lands with schema_version 11")
     }
 
     func testOutcomeIndexesExist() async throws {
@@ -279,5 +279,169 @@ final class EstimationOutcomeTests: XCTestCase {
         XCTAssertFalse(outcomes.contains { $0.id == orderedUUID(0) },
                        "lowest id at the tied timestamp is the oldest attempt")
         XCTAssertTrue(outcomes.contains { $0.id == orderedUUID(10) })
+    }
+
+    // MARK: - Protected outcomes (specs/estimation/ml-feedback-loop Req 3.2)
+    //
+    // A field note links to the outcome row it was written about. While the
+    // note exists the row must not be evictable, or the loop would ingest a
+    // note whose subject the device already dropped. Protection is a row in
+    // `protected_outcomes`, exempting the id from ALL THREE eviction branches
+    // — a note on a weighed benchmark attempt is the highest-value capture in
+    // the corpus, so the benchmark branches are not exceptions to it.
+
+    func testProtectedOutcomesTableIsRetrofittedWithoutAlter() async throws {
+        // A DB stamped at schema 10 with no `protected_outcomes` table: the
+        // CREATE TABLE IF NOT EXISTS path adds it and the stamp moves to 11,
+        // with no ALTER on any legacy table (Decision 10 still holds).
+        let legacyURL = tempDir.appendingPathComponent("legacy.sqlite")
+        do {
+            let q = try DatabaseQueue(path: legacyURL.path)
+            try await q.write { db in
+                try db.execute(sql: "CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+                try db.execute(
+                    sql: "INSERT INTO meta (k, v) VALUES ('schema_version', '10')"
+                )
+            }
+        }
+        _ = try GRDBPersistenceStore(dbURL: legacyURL, artefactsBaseURL: tempDir)
+
+        let q = try DatabaseQueue(path: legacyURL.path)
+        let (tableExists, version) = try await q.read { db in
+            (try Bool.fetchOne(
+                db,
+                sql: """
+                    SELECT COUNT(*) > 0 FROM sqlite_master
+                    WHERE type = 'table' AND name = 'protected_outcomes'
+                    """
+            ) ?? false,
+             try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'schema_version'"))
+        }
+        XCTAssertTrue(tableExists, "the retrofit creates protected_outcomes on a v10 DB")
+        XCTAssertEqual(version, "11")
+    }
+
+    func testMarkOutcomeProtectedIsIdempotentAndIndependentOfRowExistence() async throws {
+        // Protection is keyed by id alone: marking twice is one row, and
+        // marking an id whose outcome has not been saved yet is not an error
+        // (the App marks after the detached save task completes).
+        let id = UUID()
+        try await store.markOutcomeProtected(id: id)
+        try await store.markOutcomeProtected(id: id)
+
+        let q = try DatabaseQueue(path: dbURL.path)
+        let ids = try await q.read { db in
+            try String.fetchAll(db, sql: "SELECT outcome_id FROM protected_outcomes")
+        }
+        XCTAssertEqual(ids, [id.uuidString], "marking twice leaves one row")
+    }
+
+    func testMarkOutcomesProtectedCoversEveryAttemptOnTheMeal() async throws {
+        // A field note taken on a recorded meal knows the meal id and not the
+        // attempt id, and a meal typically carries several attempts — the
+        // retries are part of what the note is about, so all of them are
+        // protected and attempts on other meals are not.
+        let mealID = UUID()
+        let otherMealID = UUID()
+        let first = makeOutcome(timestampMs: 10, mealID: mealID)
+        let second = makeOutcome(timestampMs: 20, mealID: mealID)
+        let unrelated = makeOutcome(timestampMs: 30, mealID: otherMealID)
+        for outcome in [first, second, unrelated] {
+            try await store.saveEstimationOutcome(outcome)
+        }
+
+        try await store.markOutcomesProtected(mealID: mealID)
+
+        let q = try DatabaseQueue(path: dbURL.path)
+        let ids = try await q.read { db in
+            try String.fetchAll(
+                db, sql: "SELECT outcome_id FROM protected_outcomes ORDER BY outcome_id"
+            )
+        }
+        XCTAssertEqual(
+            Set(ids), Set([first.id.uuidString, second.id.uuidString]),
+            "every attempt on the meal is protected, and only those"
+        )
+    }
+
+    func testProtectedRowSurvivesNonBenchmarkEvictionAndExceedsTheBound() async throws {
+        // The oldest non-benchmark row, protected, against 505 newer ones. It
+        // survives, and the population sits at the bound PLUS the protected
+        // count — protected rows are outside the bound, not inside it.
+        let noted = makeOutcome(id: orderedUUID(0), timestampMs: 0)
+        try await store.saveEstimationOutcome(noted)
+        try await store.markOutcomeProtected(id: noted.id)
+
+        for ordinal in 100..<605 {
+            try await store.saveEstimationOutcome(makeOutcome(
+                id: orderedUUID(ordinal), timestampMs: Int64(ordinal)
+            ))
+        }
+
+        let outcomes = try await store.estimationOutcomes(limit: 1_000)
+        XCTAssertTrue(outcomes.contains { $0.id == noted.id },
+                      "the note's subject outlives 505 newer attempts")
+        XCTAssertEqual(outcomes.count, 501,
+                       "the bound holds for unprotected rows; the protected row sits outside it")
+    }
+
+    func testProtectedRowSurvivesBenchmarkEvictionWhenTheGroupHasACompletedAttempt() async throws {
+        // Benchmark branch WITH a latest completed attempt: the exemption for
+        // that success must not be the only one — a protected refusal in the
+        // same group survives the same run.
+        let meal = UUID()
+        let success = makeOutcome(
+            id: orderedUUID(50), timestampMs: 50,
+            outcome: "success", failureJSON: nil, mealID: UUID(),
+            modelVersion: "L1", benchmarkMealID: meal
+        )
+        let noted = makeOutcome(
+            id: orderedUUID(0), timestampMs: 0,
+            modelVersion: "L1", benchmarkMealID: meal
+        )
+        try await store.saveEstimationOutcome(noted)
+        try await store.markOutcomeProtected(id: noted.id)
+        try await store.saveEstimationOutcome(success)
+        for ordinal in 1...12 {
+            try await store.saveEstimationOutcome(makeOutcome(
+                id: orderedUUID(ordinal), timestampMs: Int64(ordinal),
+                modelVersion: "L1", benchmarkMealID: meal
+            ))
+        }
+
+        let group = try await store.estimationOutcomes(limit: 100)
+            .filter { $0.benchmarkMealID == meal }
+        XCTAssertTrue(group.contains { $0.id == noted.id },
+                      "a note on a weighed benchmark attempt is never evicted")
+        XCTAssertTrue(group.contains { $0.id == success.id },
+                      "the latest-completed exemption still holds")
+        XCTAssertEqual(group.count, 11,
+                       "10 bound slots plus the one protected row outside them")
+    }
+
+    func testProtectedRowSurvivesBenchmarkEvictionWhenTheGroupIsAllRefusals() async throws {
+        // Benchmark branch WITHOUT a completed attempt — the `else` DELETE.
+        // Refusals only, so no latest-success exemption applies; only the
+        // protection can save the oldest row.
+        let meal = UUID()
+        let noted = makeOutcome(
+            id: orderedUUID(0), timestampMs: 0,
+            modelVersion: "L1", benchmarkMealID: meal
+        )
+        try await store.saveEstimationOutcome(noted)
+        try await store.markOutcomeProtected(id: noted.id)
+        for ordinal in 1...12 {
+            try await store.saveEstimationOutcome(makeOutcome(
+                id: orderedUUID(ordinal), timestampMs: Int64(ordinal),
+                modelVersion: "L1", benchmarkMealID: meal
+            ))
+        }
+
+        let group = try await store.estimationOutcomes(limit: 100)
+            .filter { $0.benchmarkMealID == meal }
+        XCTAssertTrue(group.contains { $0.id == noted.id },
+                      "the refusal the note was written about survives")
+        XCTAssertEqual(group.count, 11,
+                       "10 bound slots plus the one protected row outside them")
     }
 }

@@ -31,11 +31,22 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
     caught only by reading the log's failure markers.
 - `make deploy-device` — Debug build + install + launch. Makefile DEFAULTS point at `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`), the current primary device — no override needed. To target another device, override per invocation: `make deploy-device DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>` (same overrides for `deploy-release-stub` / `logs-device`; `logs-device` needs sudo for tethered collection). UI/non-capture work only.
 - `make deploy-release-stub` — the automated Path B below (capture testing).
+- `make build-product` / `make deploy-product` — the **ProductRelease**
+  configuration (ml-feedback-loop Req 9): Release with `FIELD_LOOP` compiled
+  out, so the field-note layer is absent at compile time rather than switched
+  off at runtime. Both run the product gate (`tools/deploy_product.sh`);
+  `build-product` needs no device. Debug and Release BOTH carry `FIELD_LOOP` —
+  field is the daily default, matching the always-on capture recorder — so
+  this is the only way to build a product-profile binary.
 - `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs
   filtered to `subsystem == "ie.medata.app"`, to stdout and
   `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live
   stream for an iOS device (`log stream` is host-only, devicectl has no log
   subcommand); live viewing stays in Console.app (recipe below).
+- **Every build declares its profile in the launch line**:
+  `event=launch buildStamp=… segmenterSource=… profile=field|product`
+  (ml-feedback-loop Req 9.4). `profile=product` on a build you meant to take
+  into the field means no note affordance will appear, and vice versa.
 - **Log at `.notice`, never `.info`, for anything a device pull must show.**
   `log collect` reads the device's *persisted* store, and on iOS only notice
   and above is persisted — `.info` lives in a memory buffer that the tethered
@@ -235,6 +246,7 @@ one while it exists.
 | Debug (Xcode Run / `make deploy-device`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
 | Release, plain (`make deploy-release`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; the launch log reads a bare `segmenterSource=coreml` |
 | Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
+| ProductRelease (`make deploy-product`) | real Core ML model | **Yes** — identical estimation path to Release; the only difference is the absent field-note layer |
 
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
 window is unhittable; details and the log tells are in the sections below.
