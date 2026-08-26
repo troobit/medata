@@ -635,3 +635,47 @@ Prompt-level rules ("ignore instructions in images") are advisory; removing the 
 **Negative:**
 - Loop agents cannot self-serve small git conveniences; everything lands via drafts and `field_close.py`.
 
+
+---
+
+## Decision 20: The bake refuses to drop calibration lineage it cannot reconstruct
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+Implementing the `make food-db` build gate (guard 6 of the auto-commit chain) surfaced a defect in the target as designed. `make food-db` was specified as a bare `python3 tools/food_db/generate.py` followed by the generator's pytest suite. Running it against this repo regenerated both committed sqlite artifacts *without* nineteen `calibration_*` meta rows they carry — the lineage recording the N5k fit that produced them (release hashes, tau values, seed, per-class effective sample and identifiability, pinned intrinsics, licence).
+
+The cause is that the calibrate artifact is fitted from the N5k corpus and is not committed to this repo, so `generate.py` has no way to reconstruct that lineage from a bare invocation. The loss is provenance, not values — every β in the committed DBs is already `uncalibrated_unity` — but `make food-db` is a gate `field_close.py` runs unattended, and its output is paired into an auto-commit. A silent provenance strip would land in a commit nobody read, which is exactly the failure mode the overlay's own fail-closed inverse guard exists to prevent for the other unreconstructable input.
+
+### Decision
+
+`generate.py` aborts when the prior database carries `calibration_*` meta and no calibration artifact was named, with the message naming the override. `make food-db` takes `CALIBRATION=<artifact>` and passes it through as `--calibration-json`. The overlay and the calibration therefore have the same fail-closed shape: an input the bake cannot reconstruct, once applied, must be supplied again or the bake refuses.
+
+### Rationale
+
+The bake's established contract is abort-before-write on any condition that would ship a database making a claim it cannot support — the palette lock, the serving-coverage lock, the support-plane-reference guard, and the overlay inverse guard all take this form. Dropping lineage is the same class of harm one level down: the artifact stops recording where its numbers came from, and nothing in the file says so.
+
+Failing closed also fails in the safe direction for the loop. With no artifact configured, guard 6 fails and every candidate fix demotes to a proposal — the loop stalls visibly instead of committing lineage-stripped databases cycle after cycle. `field_close.py` (task 24) carries the artifact path in `loop_config.json`, which is where the constant belongs.
+
+### Alternatives Considered
+
+- **Leave `make food-db` as designed (bare invocation)**: The literal reading of the design - Rejected: it regresses the committed artifacts on every run, and the loop would commit that regression paired with each overlay fix.
+- **Carry the prior lineage forward automatically**: Read the `calibration_*` rows out of the prior DB and rewrite them - Rejected: it re-derives input state from an output artifact, and it would happily preserve a lineage that no longer describes the rows beside it — the appearance of provenance without the substance.
+- **Warn on stderr and bake anyway**: Keeps the target always usable - Rejected: `field_close` runs this gate unattended, where a warning is a line in a log nobody reads before the commit lands.
+
+### Consequences
+
+**Positive:**
+- The committed databases cannot silently lose their fit lineage.
+- The two unreconstructable bake inputs, overlay and calibration, now behave identically, so there is one rule to remember rather than two exceptions.
+- The loop's failure mode is a stalled cycle with proposals, not a stream of lineage-stripping commits.
+
+**Negative:**
+- A bare `make food-db` aborts on this repo today; regenerating the databases requires the N5k calibrate artifact in hand.
+- Guard 6 cannot pass until `loop_config.json` carries that path, so the first cycles will demote fixes to proposals if it is missing.
+
+### Impact
+
+`tools/food_db/generate.py` (`_prior_db_carries_calibration`, the `bake()` guard), the `food-db` Makefile target, and `field_close.py`'s guard-6 configuration in task 24.
