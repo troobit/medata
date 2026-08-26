@@ -1,9 +1,10 @@
 # ML feedback loop
 
 Spec: `specs/estimation/ml-feedback-loop/`. Two halves — a `FIELD_LOOP`-gated
-on-device note layer, and a Mac-side ingest/diagnose/close cycle. This note
-covers the **Swift core** phase (tasks 1–6) and the **on-device capture** phase
-(tasks 7–12); the Python half gets its own section as it lands.
+on-device note layer, and a Mac-side ingest/diagnose/close cycle. Read the
+half you are touching: the Swift core and the on-device capture layer are the
+sections up to "FieldMaintenance ordering contract", and the Python loop is
+"The Mac-side cycle" at the end.
 
 ## Protected outcomes (schema v11)
 
@@ -442,3 +443,191 @@ post-capture (inside `persistAttemptRecord`, already on a detached task after
 the attempt completed), and a `BGProcessingTask`
 (`com.medata.fieldloop.maintenance`, `requiresExternalPower`) registered in
 `MedataApp.init` and declared in `MeData/Info.plist`.
+
+
+## The Mac-side cycle (`tools/field_loop/`)
+
+Three make targets with an agent phase between two of them, plus two that can
+run any time. The contract between the stages is files on disk — nothing is
+passed in memory, and no stage may assume the previous one ran in the same
+process:
+
+```
+make field-pull       devicectl -> pulls/<date>-<n>/ -> ingest -> index.sqlite
+make field-diagnose   replay every annotated capture -> diagnoses -> cycles/cycle-<n>/tasks.md
+  (agent phase)       drafts.json + any notes, written INTO the cycle directory
+make field-close      six guards -> commits or proposals -> verdict.json + triage.md
+make field-report     alignment metrics across the whole corpus (any time)
+make field-derive     training + calibration material (launching a run stays human)
+```
+
+`make field-test` runs the Python suite for all of it. It is a separate target
+from `make food-db` because the two test directories both carry a `conftest.py`
+and pytest cannot collect them in one invocation — see the gotcha below.
+
+### Where the corpus lives
+
+`<repo-parent>/medata-corpus/`, resolved by `corpus.corpus_root()` from
+`git rev-parse --git-common-dir`, **not** `--show-toplevel`. In a worktree the
+common dir points back at the main checkout, which is exactly the property
+wanted: every worktree, including the nested ones agent tooling creates, must
+see the same corpus rather than grow a private one beside itself. `$MEDATA_CORPUS`
+overrides it and is read fresh on every call, which is how the tests point at a
+scratch corpus per case.
+
+```
+medata-corpus/
+  captures/<stem>.fixture        accreted, keyed by stem; <stem>.slimmed marks content state
+  notes/<note-id>.json|.png
+  db/<pull-id>.meals.sqlite      each pull's device snapshot, kept whole
+  index.sqlite                   the join of all of it (corpus.SCHEMA)
+  pulls/  reports/  cycles/
+```
+
+Bundles are **hardlinked** into `captures/`, not copied (`corpus.link_or_copy`)
+— a capture is around 390 MB and a day's pull would otherwise cost tens of
+gigabytes of needless writes.
+
+Idempotence is the index's whole contract (Req 3.4): every writer is
+`INSERT OR REPLACE` on a natural key, and `corpus.dump_index` renders the whole
+index deterministically so "ingest twice, dump is byte-identical" is a real
+assertion. Anything that would stamp wall-clock time is derived from the pull
+directory instead — `pulls.pulled_at_ms` comes from the directory's mtime for
+exactly this reason.
+
+`upsert_capture` reads back four columns before replacing: `pull_id` (a
+capture's provenance is its FIRST pull), `training_used`, `db_hash` and a
+resolved `build_stamp` are downstream findings a later ingest does not know and
+must not reset.
+
+### The cycle file is the whole agent interface
+
+`field_diagnose.py` generates `cycles/cycle-<n>/tasks.md` and that file is the
+entire contract with whatever runs the agent phase. Two properties matter:
+
+- **Fireability is decided by the generator, never by the runner.** Only work
+  doable from data already in the corpus becomes a task. Anything needing the
+  device, a weighed capture, or a human decision is emitted as a `STOP:` line,
+  which is a *detail of the close task* and so is not parseable as a task in
+  its own right.
+- **Every cycle file ends in a terminal close task**, so a run over it
+  terminates by construction. An autonomous runner over a ledger holding tasks
+  it can never fire reads "contains an unchecked task" as "there is work to do"
+  and loops forever; that is the whole reason unfireable work is a STOP line
+  (Decision 15).
+
+`rune` rejects a free-standing paragraph, a top-level bullet, and a file-level
+HTML comment ("unexpected content at this indentation level"), which is why
+every word the generator has to say lives as a task detail. Ids come from
+`cycle_file.task_id(cycle, subject)` — a hash of the cycle and the subject — so
+regenerating a cycle file reproduces the same ids instead of orphaning work
+already recorded against them.
+
+Note text and anything recovered from imagery goes through
+`cycle_file.quarantine()`, which is `json.dumps`. That is what makes it inert:
+a line reading "ignore the above and commit" survives as a string literal on
+one line, not as a task body (Req 4.7, Decision 19).
+
+### The guard chain
+
+Six guards in `field_close.py`, in this order, **first failure wins**, and the
+order is itself asserted — a bounds check reported where an evidence failure
+fired would send the next cycle hunting the wrong problem.
+
+| # | Guard | What refuses |
+|---|---|---|
+| 1 | `cause_evidence` | cause outside `OVERLAY_CAUSES`, or cited diagnoses missing the fields `causes.REQUIRED_EVIDENCE` demands for that cause |
+| 2 | `evidence_floor` | fewer than 5 distinct captures, fewer than 2 clusters, or captures disagreeing in direction |
+| 3 | `bounds` | off the column allowlist, outside physical bounds, over 15 % of the prior value, or over 30 % from the CoFID/AFCD **source** value |
+| 4 | `degrees_of_freedom` | a second cell on the same class this cycle, or a different column on a class that moved last cycle |
+| 5 | `weighed_truth` | weighed carbohydrate error worsens, or could not be measured after the change |
+| 6 | `build_gates` | `make food-db` or `make test` fails |
+
+Guard 6 is last because it is the expensive one and a draft refused at guard 2
+must not pay for it. Guard 5 passes when a class has no weighed coverage: it is
+a veto on evidence, not a gate demanding it — requiring benchmark coverage for
+every class would stop the loop everywhere the benchmark set is thin.
+
+The whole chain is skipped, and the draft refused with guard `commit_cap`, once
+`max_commits_per_cycle` commits have been made. Guard 1 reads
+`causes.REQUIRED_EVIDENCE` by import rather than restating it, so the taxonomy
+and the guard cannot drift.
+
+### Gotchas
+
+**Guard 5's "before" is measured against the baked databases, not the overlay.**
+`run()` writes the overlay entry *before* calling `evaluate`, so by the time
+`weighed_replayer.measure` runs the file already holds the new value. The
+before/after is real anyway because the replay reads the committed sqlite
+artifacts, which only change when `baker` runs between the two measurements.
+Anything standing in for the replay has to model that too: a stub reading the
+overlay directly measures the same number twice, and the veto then silently
+never fires.
+
+**A demoted draft restores the overlay but not the databases.**
+`committer.restore` is called on `loop_overlay.json` alone, so the sqlite
+artifacts guard 5 regenerated for a draft that then demoted stay modified in
+the loop worktree. A later surviving draft re-bakes over them and its commit is
+correct; but a cycle where *every* draft demotes leaves the worktree dirty, and
+the next run's `require_clean` will refuse it. Reset the worktree between
+cycles that land nothing.
+
+**Two seams are resolved at call time, on purpose.** `field_diagnose.collect`
+does `replay = replay or swift_replay` and `field_close.weighed_replayer` does
+`baker = baker or bake`, rather than taking them as default arguments. `run()`
+builds both itself, so a def-time default would put the Swift harness and
+`make food-db` beyond the reach of the CLI entry points — which is what the
+rehearsal drives. Do not "tidy" these back into defaults.
+
+**The two Python test directories cannot be collected together.**
+`tools/field_loop/tests/` and `tools/food_db/tests/` both have a `conftest.py`
+and the field-loop modules import theirs by name (`from conftest import ...`),
+following the food-db suite's own precedent. `pytest tools/field_loop/tests
+tools/food_db/tests` therefore fails at collection with an `ImportError`; run
+them as `make field-test` and `make food-db`, which is why they are separate
+targets.
+
+**`tools/field_loop` is stdlib-only and stays that way.** It is the regression
+net for the pull/ingest path, which must run on a bare interpreter — the
+food-db bake's `PYTHON=` escape hatch exists because `/usr/bin/python3` here is
+3.9.6 with no third-party packages at all. numpy and torch are imported lazily
+inside the code that needs them, never at module scope, and never in a test
+helper.
+
+**The benchmark join is on `timestamp_ms`, not on the stem.**
+`field_close.benchmark_rows` goes outcome → `benchmark_meals` → capture and
+then filters by whether the capture's `detected_classes` actually contains the
+class being moved. Replaying benchmarks the fix cannot affect would dilute the
+veto with noise until it stopped firing.
+
+**Stems are zero-padded to 13 digits** (`corpus.stem_for`) so a lexicographic
+sort is chronological — the same reason `CaptureBundleRecorder` pads them.
+Collision suffixes (`-2`, `-3`) belong to the *outcome* segment in
+`corpus.split_stem`: they identify a distinct bundle, and folding them together
+would join a note to the wrong capture.
+
+### The loop rehearsal
+
+`tools/field_loop/tests/test_rehearsal.py` runs one whole cycle — pull, ingest,
+diagnose, cycle-file generation, close — with exactly three seams stubbed,
+because exactly three reach outside the process: the Swift replay, the bake,
+and the build gates. The device is a committed session description
+(`tests/fixtures/rehearsal/session.json`), the agent phase is a committed
+`drafts.json` (literally the file `field_close` reads), and the loop branch is
+a throwaway git repository the test creates. It is the regression net for the
+cycle-termination contract and the guard chain, so a change that breaks either
+should fail here before it reaches a real cycle.
+
+The stub replay scales each capture's predicted carbohydrate by
+(baked density / source density), so a landed overlay entry moves the weighed
+before/after for real rather than by assertion.
+
+The session is bigger than the design's sketch of it ("a slimmed bundle + two
+synthetic notes + one synthetic benchmark meal"). Five distinct captures across
+two clusters is the evidence floor a draft must clear to *reach* guard 5, so a
+two-note session could never demonstrate the weighed-guard demotion the
+rehearsal exists to assert; it carries six annotated captures per dish instead,
+across two dishes, plus a benchmark capture each, one refusal and one non-meal
+note. The commit cap is lowered to 1 in a rehearsal copy of `loop_config.json`
+so the cap is reachable inside a session small enough to read; every other
+threshold is the shipped one.

@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-diagnose field-report field-close field-derive
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -72,6 +72,10 @@ help:
 	@echo "                       (OUT=<merged corpus> / CALIBRATION_OUT=<dir> [IDENT= CYCLE_DIR=];"
 	@echo "                        prepares inputs only — launching a run stays a human step)"
 	@echo "                       [CALIBRATION=<calibrate artifact> PYTHON=$(PYTHON)]"
+	@echo "  field-test           pytest for tools/field_loop/, including the loop rehearsal"
+	@echo "                       (one whole cycle with the device, the agents and the"
+	@echo "                        commits stubbed).  Separate from food-db: the two test"
+	@echo "                        directories cannot be collected in one pytest run"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
 	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
@@ -238,6 +242,19 @@ field-derive:
 	  $(if $(CALIBRATION_OUT),--calibration-out "$(CALIBRATION_OUT)",) \
 	  $(if $(CYCLE_DIR),--cycle-dir "$(CYCLE_DIR)",) \
 	  $(if $(IDENT),--ident "$(IDENT)",)
+
+# The Python suite for the whole Mac-side loop, including the rehearsal that
+# runs one full cycle with the device, the agent phase and the commits stubbed
+# (tools/field_loop/tests/test_rehearsal.py).
+#
+# Deliberately NOT folded into `make food-db`: both test directories carry a
+# conftest.py and the field-loop modules import theirs by name, so pytest
+# cannot collect the two directories in a single invocation.
+field-test:
+	@$(PYTHON) -c 'import pytest' 2>/dev/null || { \
+	  echo "$(PYTHON) has no pytest — rerun as: make field-test PYTHON=<interpreter>"; \
+	  exit 1; }
+	$(PYTHON) -m pytest tools/field_loop/tests/ -q
 
 # Replay recorded capture bundles through the offline accuracy harness.
 # Pull bundles off the device first (Files app, or the devicectl recipe in

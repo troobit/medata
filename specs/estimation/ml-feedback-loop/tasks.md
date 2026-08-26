@@ -188,14 +188,14 @@ references:
 
 ## Integration and docs
 
-- [ ] 27. Build the loop-rehearsal dry-run test and miniature fixtures <!-- id:i6u18c9 -->
+- [x] 27. Build the loop-rehearsal dry-run test and miniature fixtures <!-- id:i6u18c9 -->
   - pytest executing one full cycle with everything external stubbed: committed miniature fixtures (slimmed bundle + two synthetic notes + one synthetic benchmark meal), agent drafts as fixtures, field_close against a throwaway git repo
   - Asserts ingest, diagnose, task generation (terminal task, STOP lines), close (guard chain fires, one weighed-guard demotion, commit cap holds)
   - Blocked-by: i6u18c0 (Implement field_diagnose.py), i6u18c2 (Implement field_report.py), i6u18c4 (Implement the refmodel package), i6u18c6 (Implement field_close.py and loop_config.json), i6u18c8 (Implement derive_dataset.py)
   - Stream: 3
   - Requirements: [3.3](requirements.md#3.3), [4.8](requirements.md#4.8), [5.7](requirements.md#5.7)
 
-- [ ] 28. Write the module agent note and Makefile/docs touch-ups <!-- id:i6u18ca -->
+- [x] 28. Write the module agent note and Makefile/docs touch-ups <!-- id:i6u18ca -->
   - docs/agent-notes/ml-feedback-loop.md: cycle contract, corpus layout, guard chain, profile mechanics, gotchas; Makefile help text for the new targets; make spell clean
   - Blocked-by: i6u18c9 (Build the loop-rehearsal dry-run test and miniature fixtures)
   - Stream: 3

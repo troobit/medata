@@ -722,7 +722,7 @@ def bake(repo, settings, runner=subprocess.run) -> tuple:
     return True, ""
 
 
-def weighed_replayer(conn, root, settings, repo, replay=None, baker=bake):
+def weighed_replayer(conn, root, settings, repo, replay=None, baker=None):
     """Guard 5's measurement: weighed error with and without the overlay entry.
 
     The entry is already written when this runs (guards 1-4 passed), so the
@@ -732,7 +732,12 @@ def weighed_replayer(conn, root, settings, repo, replay=None, baker=bake):
     """
     from . import field_diagnose
 
+    # Both seams are resolved at call time, not as default arguments: `run()`
+    # builds this replayer itself, so a def-time default would put the Swift
+    # harness and `make food-db` beyond the reach of the CLI entry point the
+    # loop-rehearsal test drives.
     replay = replay or field_diagnose.swift_replay
+    baker = baker or bake
 
     def measure(draft: Draft):
         rows = benchmark_rows(conn, draft.class_id)
