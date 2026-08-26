@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-diagnose field-report field-close field-derive
 
 help:
 	@echo "MeData targets:"
@@ -58,6 +58,19 @@ help:
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
 	@echo "  food-db              regenerate the bundled food databases (CoFID + AFCD,"
 	@echo "                       loop overlay applied) and run the generator test suite"
+	@echo "  field-pull           pull a field session off the device, ingest it into"
+	@echo "                       the corpus, and push the cleanup manifest back"
+	@echo "  field-diagnose       replay the annotated captures and generate the"
+	@echo "                       cycle task file the agent phase executes"
+	@echo "  field-report         alignment report across pulls (key=value, every"
+	@echo "                       figure beside its cell count)"
+	@echo "  field-close          judge the cycle's drafts, commit what survives the six"
+	@echo "                       guards, write the verdict and triage artifacts"
+	@echo "                       (CYCLE=<n> APPLIED_AT=<date> [REPO=<worktree> PROBE_IMAGE=<path>];"
+	@echo "                        run it in a dedicated worktree — it refuses a dirty tree)"
+	@echo "  field-derive         derive training + calibration material from the corpus"
+	@echo "                       (OUT=<merged corpus> / CALIBRATION_OUT=<dir> [IDENT= CYCLE_DIR=];"
+	@echo "                        prepares inputs only — launching a run stays a human step)"
 	@echo "                       [CALIBRATION=<calibrate artifact> PYTHON=$(PYTHON)]"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
@@ -130,6 +143,101 @@ food-db:
 	$(PYTHON) tools/food_db/generate.py \
 	  $(if $(CALIBRATION),--calibration-json "$(CALIBRATION)",)
 	$(PYTHON) -m pytest tools/food_db/tests/ -q
+
+# ml-feedback-loop Req 3.4: ONE command for a field session — copy Documents/
+# off the phone into <repo-parent>/medata-corpus/pulls/<date>-<n>/, ingest it
+# (idempotently) into the corpus and its index, and push back the manifest the
+# app deletes its copies from (Decision 14). Every run prints the Req 3.4
+# counts and the single-copy acceptance line.
+#
+# devicectl has no recursive pull, so this is one `copy from` per file; on a
+# large backlog it is the loop's wall-clock bottleneck and device-side slimming
+# is the mitigation, not a faster transport.
+#
+# Ingest an already-copied directory (no device needed):
+#   make field-pull PULL_DIR=<path>
+field-pull:
+	$(PYTHON) tools/field_loop/field_pull.py \
+	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID) \
+	  $(if $(PULL_DIR),--pull-dir "$(PULL_DIR)",--prune)
+
+# ml-feedback-loop Reqs 4.1-4.4: replay every annotated capture in the corpus
+# through `HarnessCLI diagnose`, attribute each estimation-vs-stated gap, and
+# generate specs/estimation/ml-feedback-loop/cycles/cycle-<n>/tasks.md.
+#
+# The generated file holds ONLY tasks fireable from the corpus and ends in a
+# terminal close task, so a run over it terminates by construction (Decision
+# 15). Work that needs the device or a human is a STOP line, never a task.
+#
+#   make field-diagnose                       # next unused cycle number
+#   make field-diagnose CYCLE=3
+#   make field-diagnose REPLAY_SHA=<sha256>   # stamp version skew explicitly
+field-diagnose:
+	$(PYTHON) tools/field_loop/field_diagnose.py \
+	  $(if $(CYCLE),--cycle $(CYCLE),) \
+	  $(if $(REPLAY_SHA),--replay-checkpoint $(REPLAY_SHA),)
+
+# ml-feedback-loop Req 6: is the gap shrinking, or am I just hoping?
+#
+# Output follows tools/shortlist_hit_rate.py — key=value lines, every figure
+# beside its cell count, `insufficient` below --min-cell. Captures already used
+# as training material are excluded from the evaluation set and BOTH set sizes
+# are printed, so the metric cannot be inflated by evaluating on trained-on
+# captures. Stated values are labelled developer-stated throughout: the weighed
+# surface is benchmark_meals, not this report.
+field-report:
+	$(PYTHON) tools/field_loop/field_report.py \
+	  $(if $(CYCLE),--cycle $(CYCLE),) $(if $(OUT),--out "$(OUT)",)
+
+# ml-feedback-loop Req 5: close a cycle. This is the loop's SOLE COMMITTER
+# (Decision 19) — agent sessions executing a cycle file draft overlay entries
+# into cycles/cycle-<n>/drafts.json and never run git themselves.
+#
+# Each draft passes six guards in order (cause-specific evidence, evidence
+# floor, bounds, one degree of freedom per class, weighed-truth veto, build
+# gates); the first refusal demotes it to a git-diff-style patch in the cycle
+# directory. Survivors land as one commit each, pairing the overlay edit with
+# the regenerated databases, capped per cycle.
+#
+# RUN IT IN A DEDICATED WORKTREE — it refuses a dirty tree and refuses to run
+# on research or main:
+#   make worktree name=field-loop branch=field-loop
+#   make field-close CYCLE=3 REPO=../medata-field-loop APPLIED_AT=2026-08-30
+#
+# PROBE_IMAGE reads one image through every enabled reference adapter and
+# records the result in the verdict, so a broken standby is found before the
+# active adapter needs replacing (Decision 16).
+field-close:
+	@test -n "$(CYCLE)" || { \
+	  echo "usage: make field-close CYCLE=<n> APPLIED_AT=<YYYY-MM-DD> [REPO=<worktree>] [PROBE_IMAGE=<path>]"; \
+	  exit 1; }
+	$(PYTHON) tools/field_loop/field_close.py \
+	  --cycle $(CYCLE) \
+	  --applied-at "$(or $(APPLIED_AT),$(shell date -u +%Y-%m-%d))" \
+	  $(if $(REPO),--repo "$(REPO)",) \
+	  $(if $(PROBE_IMAGE),--probe-image "$(PROBE_IMAGE)",)
+
+# ml-feedback-loop Req 8.4-8.6: turn the captures that carry signal into
+# training and calibration material. Field data joins train and val only —
+# never the frozen leak-free anchor — capped at the configured share of the
+# merged train set, and every consumed capture leaves the alignment metric's
+# evaluation set, which is why the evaluation floor blocks a derivation that
+# would starve a cell.
+#
+# It PREPARES inputs and records the commands; launching a training or
+# calibration run stays a human step.
+#
+#   make field-derive OUT=data/merged_foodseg_foodrec2022 IDENT=anthropic:claude-opus-5:2026-06
+#   make field-derive CALIBRATION_OUT=/tmp/field-calibration
+field-derive:
+	@test -n "$(OUT)$(CALIBRATION_OUT)" || { \
+	  echo "usage: make field-derive [OUT=<merged corpus root>] [CALIBRATION_OUT=<dir>] [IDENT=<model ident>] [CYCLE_DIR=<dir>]"; \
+	  exit 1; }
+	$(PYTHON) tools/field_loop/derive_dataset.py \
+	  $(if $(OUT),--out "$(OUT)",) \
+	  $(if $(CALIBRATION_OUT),--calibration-out "$(CALIBRATION_OUT)",) \
+	  $(if $(CYCLE_DIR),--cycle-dir "$(CYCLE_DIR)",) \
+	  $(if $(IDENT),--ident "$(IDENT)",)
 
 # Replay recorded capture bundles through the offline accuracy harness.
 # Pull bundles off the device first (Files app, or the devicectl recipe in

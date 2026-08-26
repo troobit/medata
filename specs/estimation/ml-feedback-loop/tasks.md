@@ -116,71 +116,71 @@ references:
 
 ## Field loop tooling
 
-- [ ] 15. Write failing pytest for pull and ingest <!-- id:i6u18bx -->
+- [x] 15. Write failing pytest for pull and ingest <!-- id:i6u18bx -->
   - tools/field_loop/tests/ (stdlib-only, lazy heavy imports): ingest-twice yields identical index dump; join note to outcome to (timestampMs,outcome) to stem with timestamp-window + detected-class fallback; unmatched reasons via the decision procedure (deleted / never_present; evicted = defect signal); Req 3.4 counts printed (notes, bundles, outcome rows, correction rows, joins); PRAGMA integrity_check gating; manifest+sentinel emission; corpus accretes keyed by stem
   - Stream: 3
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7), [8.1](requirements.md#8.1)
 
-- [ ] 16. Implement field_pull.py, ingest, and the corpus index <!-- id:i6u18by -->
+- [x] 16. Implement field_pull.py, ingest, and the corpus index <!-- id:i6u18by -->
   - Corpus at <repo-parent>/medata-corpus/ resolved from git rev-parse --git-common-dir; devicectl enumerate + per-file copy incl. meals.sqlite WAL/shm/journal siblings; SHA-256 everything; INSERT OR REPLACE index writers; make field-pull target
   - Every run summary prints corpus size + the Decision 14 single-copy acceptance line
   - Blocked-by: i6u18bx (Write failing pytest for pull and ingest)
   - Stream: 3
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7), [8.1](requirements.md#8.1), [8.3](requirements.md#8.3)
 
-- [ ] 17. Write failing pytest for diagnosis and cycle-file generation <!-- id:i6u18bz -->
+- [x] 17. Write failing pytest for diagnosis and cycle-file generation <!-- id:i6u18bz -->
   - Cluster chaining at 120s max gap, split on dominant-class change or disjoint argmax class sets; replay-delta attribution floor from skew-free pairs only; replay_version_skew stamping; cause taxonomy incl. food-absent-from-palette and structurally-absent evidence; cycle tasks.md contains only corpus-fireable tasks, ends in a terminal close task, unfireable work as STOP lines
   - Stream: 3
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.8](requirements.md#4.8)
 
-- [ ] 18. Implement field_diagnose.py <!-- id:i6u18c0 -->
+- [x] 18. Implement field_diagnose.py <!-- id:i6u18c0 -->
   - Stages single fixtures to temp dirs for HarnessCLI diagnose; direct-proto fallback via candidate_probe reader import (never fork the reader); generates specs/estimation/ml-feedback-loop/cycles/cycle-<n>/tasks.md rune-parseable; make field-diagnose target
   - Blocked-by: i6u18bz (Write failing pytest for diagnosis and cycle-file generation), i6u18bm (Implement HarnessCLI diagnose), i6u18by (Implement field_pull.py, ingest, and the corpus index)
   - Stream: 3
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.8](requirements.md#4.8)
 
-- [ ] 19. Write failing pytest for the alignment report <!-- id:i6u18c1 -->
+- [x] 19. Write failing pytest for the alignment report <!-- id:i6u18c1 -->
   - Metrics: class-selection error, quantity gap in stated household terms, mask consistency (within-cluster dominant-class agreement + mean pairwise argmax IoU + carbs CoV); segmentation by capture mode and (build stamp, model version, DB hash); dirty stamps bucketed unattributable; training_used rows excluded with both set sizes printed; evaluation-floor guard; per-food non-decrease flag; developer-stated labelling; corpus growth incl. per-class coverage; key=value output with cell counts and insufficient floors
   - Stream: 3
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [6.6](requirements.md#6.6), [8.7](requirements.md#8.7)
 
-- [ ] 20. Implement field_report.py <!-- id:i6u18c2 -->
+- [x] 20. Implement field_report.py <!-- id:i6u18c2 -->
   - shortlist_hit_rate.py output conventions; per-build loop-fix containment via git merge-base --is-ancestor over the loop branch
   - Blocked-by: i6u18c1 (Write failing pytest for the alignment report), i6u18by (Implement field_pull.py, ingest, and the corpus index)
   - Stream: 3
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [6.6](requirements.md#6.6), [8.7](requirements.md#8.7)
 
-- [ ] 21. Write failing pytest for the reference-model adapters <!-- id:i6u18c3 -->
+- [x] 21. Write failing pytest for the reference-model adapters <!-- id:i6u18c3 -->
   - RefModel protocol (ident + read); stub transports for anthropic/openai/google/local_torch — the openai adapter takes a configurable base URL so OpenAI-compatible local servers (LM Studio) are covered without a dedicated adapter
   - One active adapter at a time, all four at verified parity: stub suite covers every adapter equally; per-cycle one-image health probe of every enabled adapter recorded in the verdict; active-adapter switch = config edit, cached readings and per-ident series survive
   - Per-adapter mask contract (mask vs polygon/box vs none, recorded); cache keyed (image sha256, ident); per-ident comparison series with cross-ident pooling refused; recovered image text quarantined as data fields
   - Stream: 3
   - Requirements: [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7)
 
-- [ ] 22. Implement the refmodel package <!-- id:i6u18c4 -->
+- [x] 22. Implement the refmodel package <!-- id:i6u18c4 -->
   - tools/field_loop/refmodel/ with refmodel.json at <repo-parent>/medata-corpus/ holding the enabled set (each entry pinned to a model/version) and naming the single active adapter; all four adapters maintained at working parity for seamless handover per Decision 16 (amended)
   - Blocked-by: i6u18c3 (Write failing pytest for the reference-model adapters)
   - Stream: 3
   - Requirements: [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7)
 
-- [ ] 23. Write failing pytest for field_close guards, commits, and triage <!-- id:i6u18c5 -->
+- [x] 23. Write failing pytest for field_close guards, commits, and triage <!-- id:i6u18c5 -->
   - Six ordered guards: cause-specific evidence, 5-captures/2-clusters floor, bounds + 15% per cycle + 30% lifetime anchored to source values, one-DOF-per-class-per-cycle + column cooldown, weighed-truth veto (synthetic benchmark meal replayed before/after, worsening demotes), make food-db + make test gates; denylist refusal for regressive fix ids; max 5 commits/cycle in a throwaway git repo; git-diff-style proposal patches; verdict artifact contents; triage.md format with quarantined evidence fields and note traceability
   - Stream: 3
   - Requirements: [4.7](requirements.md#4.7), [4.8](requirements.md#4.8), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7), [6.3](requirements.md#6.3), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4)
 
-- [ ] 24. Implement field_close.py and loop_config.json <!-- id:i6u18c6 -->
+- [x] 24. Implement field_close.py and loop_config.json <!-- id:i6u18c6 -->
   - Sole committer; dedicated worktree, dirty-tree refusal, [ml-feedback-loop] subjects, Co-Authored-By + Loop-Fix-Id trailers, one commit per fix pairing overlay edit with regenerated sqlite artifacts and a before/after table
   - Constants (floors, ceilings, budgets, eval floors, denylist) in tools/field_loop/loop_config.json; make field-close target
   - Blocked-by: i6u18c5 (Write failing pytest for field_close guards, commits, and triage), i6u18bw (Implement _load_overlay in generate.py and the make food-db target), i6u18by (Implement field_pull.py, ingest, and the corpus index)
   - Stream: 3
   - Requirements: [4.8](requirements.md#4.8), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4)
 
-- [ ] 25. Write failing pytest for training-data derivation <!-- id:i6u18c7 -->
+- [x] 25. Write failing pytest for training-data derivation <!-- id:i6u18c7 -->
   - fld_ stem prefix; contributes train/val only, frozen anchor heldout asserted untouched; mixing cap field max 10% of train recorded in splits.json; per-label provenance JSON (note id, interpreting model ident, self_training flag on predicted masks); evaluation-floor guard blocks derivation that would starve an eval cell; calibration derivation emits .fixture + run_summary.json per the canonical contract
   - Stream: 3
   - Requirements: [8.2](requirements.md#8.2), [8.4](requirements.md#8.4), [8.5](requirements.md#8.5), [8.6](requirements.md#8.6)
 
-- [ ] 26. Implement derive_dataset.py <!-- id:i6u18c8 -->
+- [x] 26. Implement derive_dataset.py <!-- id:i6u18c8 -->
   - Emits the prepare_dataset.py layout (<split>/images, <split>/masks, splits.json, co_stats.json) following merge_corpus_foodrec2022.py; marks consumed captures training_used in the index; writes recommended retrain/recalibration commands into the cycle verdict (launch stays human-gated)
   - Blocked-by: i6u18c7 (Write failing pytest for training-data derivation), i6u18by (Implement field_pull.py, ingest, and the corpus index)
   - Stream: 3
