@@ -309,3 +309,71 @@ metadata:
   - `/specs-overview` — `specs/OVERVIEW.md` is a generated index and currently lists neither `specs/data/insulin-dosing` nor `specs/data/activity-events`
   - Also confirm the regenerated Segmenter Foundation row no longer contradicts itself: it currently reads both "19 of 22 tasks done" and "ALL 23 tasks done" in the same cell
   - Blocked-by: idz000t (Annotate the superseded non-goal in the shipped PRD — do not rewrite it)
+
+## Phase 9 — Decisions 17/18: carbs-only whole-unit rule, recompute everywhere
+
+- [ ] 29. Red — DosingTests for the amended rule <!-- id:idz000y -->
+  - Failing tests against the current DoseSuggester: dose = carbs ÷ ratio − unoffset IOB floored at 0; rounding half away from zero on the final value with Req 5.2 examples (3.5→4, 3.4→3, 0.6→1); reductionUnits capped at the base so base − reduction = exact at every input; a 0 U result is .suggested (rendered) with no seedable amount; .suppressed only for a nil carb total; no belowMeaningfulDose or belowControlMinimum outcomes exist
+  - Increment fixed at 1 U — DosableIncrement.permitted collapses per the design; tests assert no 0.5 U path survives
+  - Existing fixtures for the IOB curve (design fixture table) stay untouched
+  - Stream: 1
+  - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.4](requirements.md#5.4)
+
+- [ ] 30. Green — DoseSuggester implements the amended rule <!-- id:idz000z -->
+  - MedataCore/Sources/Dosing/DoseSuggester.swift: DoseInputs takes unoffset IOB; SuggestedDose carries reductionUnits and the unrounded result for the working; .suppressed slims to its SuppressionReason (noCarbTotal only); ruleID/ruleVersion bookkeeping deleted — nothing recorded pools (Decision 18)
+  - The physiological IOB total is no longer computed anywhere unless a surface consumes it — design says it is not
+  - Blocked-by: idz000y (Red — DosingTests for the amended rule)
+  - Stream: 1
+  - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [4.7](requirements.md#4.7), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [10.2](requirements.md#10.2)
+
+- [ ] 31. Red — DosingTests for food-offset window membership <!-- id:idz0010 -->
+  - Failing tests for the pure membership rule the design places in Dosing: a bolus within ±45 min of any logged meal or intake instant is food-offset and excluded; pre-bolus (dose 20 min before a meal) excluded; freestanding correction bolus counted; boundary at exactly ±45 min per the design's stated inclusivity; events query window is instant − (360+45) min … instant
+  - Blocked-by: idz000z (Green — DoseSuggester implements the amended rule)
+  - Stream: 1
+  - Requirements: [4.8](requirements.md#4.8)
+
+- [ ] 32. Green — unoffset membership implemented in Dosing <!-- id:idz0011 -->
+  - Pure function over (boluses, meal/intake instants, subject instant); no store types cross the firewall (Req 10.3); consumed by DoseSuggestionModel in task 34
+  - Blocked-by: idz0010 (Red — DosingTests for food-offset window membership)
+  - Stream: 1
+  - Requirements: [4.8](requirements.md#4.8), [10.3](requirements.md#10.3)
+
+- [ ] 33. Drop dose_suggestions — migration test then removal <!-- id:idz0012 -->
+  - Persistence test first: a database at the current version with dose_suggestions rows migrates clean, the table is gone, the version stamp bumps once — the literal lives in three places in GRDBPersistenceStore.swift (docs/agent-notes/persistence.md)
+  - Delete saveDoseSuggestion / linkDose / doseSuggestion(forSourceEventID:) / doseSuggestions(limit:) and the DoseSuggestionRecord DTO; export path no longer carries rows
+  - Requirement 7 is superseded in full — no replacement API of any kind
+  - Blocked-by: idz000z (Green — DoseSuggester implements the amended rule)
+  - Stream: 1
+  - Requirements: [6.11](requirements.md#6.11)
+
+- [ ] 34. Dissolve DoseSuggestionModel into DoseComputation + DoseSeedHolder (wiring) <!-- id:idz0013 -->
+  - Delete App/DoseSuggestionModel.swift: the pure helper DoseComputation.outcome(for:store:) computes per surface on appearance (no shared readout state, no refresh/clear choreography, no environment model); DoseSeedHolder is the only shared object — arm(_:)/take() with the 45-minute lifetime (Req 6.4, Decision 19)
+  - Fail-loud classification (Req 4.9): an insulin event whose metadata cannot be classified as bolus/basal is a Debug assertion, never a silent compactMap drop
+  - refresh call sites in MealReviewView / CarbEntrySheet / ResultView / AppRoot move to local .task computation; arm() arms only for a seed of ≥ 1 U (Req 6.4)
+  - Delete SettingsKeys.dosableIncrementU and the Settings increment row (Req 6.9); a stale stored key is never read
+  - Rename RecordedSuggestion in App/MealReadouts.swift to match the recompute model
+  - App-target change: no new test scaffolding (project test gate); MedataCore stays green via tasks 29–33
+  - Blocked-by: idz0011 (Green — unoffset membership implemented in Dosing), idz0012 (Drop dose_suggestions — migration test then removal)
+  - Stream: 1
+  - Requirements: [6.4](requirements.md#6.4), [6.6](requirements.md#6.6), [6.9](requirements.md#6.9), [4.8](requirements.md#4.8)
+
+- [ ] 35. The working, one tap away, on every readout surface (wiring/UI) <!-- id:idz0014 -->
+  - Tap on the readout (review line, manual entry line, ResultView detail) opens the working: base line, one line per reduction (− x U, for insulin on board), the unrounded result, the rounding step — lines sum at every step (12.0 − 1.4 = 10.6 → 11 U)
+  - History recomputes identically — no recorded-row path exists after task 33; given units beside the readout pair by the ±45-minute window over insulin events (Req 6.10)
+  - Reveal-not-act: nothing written, no control; accessibility custom action per design-direction §2.6
+  - Derived register unchanged — DoseReadoutLine grammar, no restyle
+  - Blocked-by: idz0013 (Dissolve DoseSuggestionModel into DoseComputation + DoseSeedHolder wiring)
+  - Stream: 1
+  - Requirements: [6.10](requirements.md#6.10), [6.11](requirements.md#6.11), [6.12](requirements.md#6.12), [6.2](requirements.md#6.2), [6.8](requirements.md#6.8)
+
+- [ ] 36. Gate — make test (both totals), make build-app, make spell <!-- id:idz0015 -->
+  - Report the XCTest and swift-testing totals separately; the Dosing and Persistence suites carry the phase's executable coverage
+  - Blocked-by: idz0014 (The working, one tap away, on every readout surface wiring/UI)
+  - Stream: 1
+
+- [ ] 37. STOP — on-device verification of the recompute surfaces <!-- id:idz0016 -->
+  - Seed demo meal → Records → meal → detail: dose line present with no navigation beyond the row tap; tap opens the working and its lines sum; a small manual intake shows 0 U and the dose sheet still opens at the standing default; a ≥ 1 U meal seeds the sheet
+  - Depends on home-router's Decision 16 reroute landing (its tasks 12–13) for the Records path
+  - Blocked-by: idz0015 (Gate — make test both totals, make build-app, make spell)
+  - Stream: 1
+  - Requirements: [6.4](requirements.md#6.4), [6.6](requirements.md#6.6), [6.12](requirements.md#6.12)

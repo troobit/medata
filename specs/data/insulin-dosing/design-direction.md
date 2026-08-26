@@ -2,7 +2,8 @@
 
 **Feature:** insulin-dosing
 **Scope:** the visual and typographic treatment of a suggested dose, everywhere it appears
-**Companion:** [design.md](design.md) owns the module boundary, the ledger schema and the seam.
+**Companion:** [design.md](design.md) owns the module boundary, the no-persistence model and the
+seam. *(Reworded by Decision 18; it read "the ledger schema" — nothing derived is stored.)*
 This file owns only how the thing looks, reads and moves.
 
 Tokens are quoted from `App/Colors.swift` and `design-system/MASTER.md`. No token is invented here;
@@ -109,6 +110,14 @@ Everything below `60 g carbs` is unchanged from what ships today except for the 
 - No range, no plus-or-minus, no confidence qualifier on the dose. The confidence pill already
   reports what the app knows about the estimate; qualifying the dose separately would be counsel.
 
+*(Amended by Decision 17, [Req 6.12](requirements.md#6.12): the readout is now tappable — the tap
+opens the working (`60 g ÷ 5.0 g/U = 12.0 U`, one `− x U, for <reason>` line per reduction, the
+unrounded result, then the rounding step to the whole-unit dose: `12.0 − 1.4 = 10.6 → 11 U`,
+lines summing exactly at every step — rounding step added by Decision 18, which also has every
+surface recompute the same working live, history included). It reveals provenance; it does not
+act: nothing is written, no control chrome is added, and the visual register above is unchanged
+— "never a control" still governs how the segment looks and what it can change.)*
+
 ### 2.3 Degradation order — shed words before numbers
 
 One line, `lineLimit(1)`, `minimumScaleFactor(0.9)`. At Dynamic Type sizes where the line no longer
@@ -132,19 +141,22 @@ The moment this design is built around: tapping `1/2` on the plate scale rolls `
 `214 g on plate → 107 g`, and `12 U → 6 U` in one synchronised numeric roll. The divisor is taught
 by motion, and no sentence has to say it.
 
-### 2.5 Absent, suppressed, unavailable
+### 2.5 Absent means no carbohydrate total
 
-There is no placeholder, no em dash, no explanation. If the suggester returns nothing, the line is
-exactly what ships today:
+There is no placeholder, no em dash, no explanation. The only absent segment is a subject with no
+carbohydrate total ([Req 3.5](requirements.md#3.5)) — unreachable on this surface, where a captured
+meal always has a total. A computed `0 U` is a result, not an absence:
 
 ```
-  ≈ 214 g on plate
+  ≈ 214 g on plate · 0 U
 ```
 
-An em dash is the convention for a *slot that exists and has no value* (`HomeView` glucose,
-`TrendsView` stats). A suggestion that was suppressed has no slot — it is a segment that was not
-appended. Nothing on this screen distinguishes "below 0.5 U", "no ratio in force" and "IOB covers
-it"; the reason is a column in the ledger, not a word on the capture screen.
+and its reason is one tap away in the working ([Req 6.12](requirements.md#6.12)). An em dash is the
+convention for a *slot that exists and has no value* (`HomeView` glucose, `TrendsView` stats); this
+line never needs one. *(Redefined in place by Decision 17. Superseded wording: "A suggestion that
+was suppressed has no slot — it is a segment that was not appended. Nothing on this screen
+distinguishes 'below 0.5 U', 'no ratio in force' and 'IOB covers it'; the reason is a column in the
+ledger, not a word on the capture screen.")*
 
 ### 2.6 Accessibility
 
@@ -158,6 +170,10 @@ the quantity, because VoiceOver has no adjacency to read the relationship from:
 The dose `Text` carries `accessibilityIdentifier("review.doseSuggestion")` and is not separately
 focusable. Naming a number in a spoken label is labelling, not counsel — the rule bars reassurance
 and instruction, not nouns.
+
+The working of [Req 6.12](requirements.md#6.12) is reachable without focusing the segment: the
+combined `totalRow` element carries a custom accessibility action, "Show working", that opens the
+same calculation the tap does. *(Added by Decision 17, Req 6.12.)*
 
 ---
 
@@ -246,10 +262,13 @@ same font, same `textSecondary`, same grammar.
 │  └───────────────────────────────────┘  │
 ```
 
-Quick-add presets are single-tap buttons whose entire label is a carbohydrate figure. Adding a
-second number to a 44pt preset pill would rewrite the control and blunt its one job, so a preset tap
-shows nothing and the suggestion reaches the developer one tap later, as the dose sheet's opening
-value. Showing nothing is the specified empty treatment.
+The `· N U` segment is present whenever a carbohydrate amount is entered, `0 U` included
+([Req 6.6](requirements.md#6.6)). Quick-add presets are single-tap buttons whose entire label is a
+carbohydrate figure. Adding a second number to a 44pt preset pill would rewrite the control and
+blunt its one job — a preset button is a control, not a readout line — so a preset tap shows
+nothing on the button itself, and the number reaches the developer as the dose sheet's opening
+value (when it is ≥ 1 U) and on the intake's history detail. *(Redefined in place by Decision 17.
+Superseded wording: "Showing nothing is the specified empty treatment.")*
 
 ---
 
@@ -271,11 +290,14 @@ suffixed `g/U` with the reciprocal beneath as read-only `footnote` `textSecondar
  │                                = 1.0 U per 10 g│
  │ Dinner           16:00–24:00   [ 10.0 ] g/U   │
  │                                = 1.0 U per 10 g│
- │ Pen increment                 ( 0.5 | 1 U )   │
  │ Ratio source                ( Chosen | medreg)│
  │ medreg fit             [                   ]  │
  └───────────────────────────────────────────────┘
 ```
+
+*(Redefined in place by Decision 17. Superseded wording:
+"`│ Pen increment                 ( 0.5 | 1 U )   │`" — the increment is fixed at 1 U and the row
+is deleted.)*
 
 - The **stored** value is grams per unit, and the field is suffixed `g/U` so the direction is on
   screen at all times. The reciprocal is rendered, never stored, and its caption spells out the
@@ -346,29 +368,46 @@ qualifying a present number is counsel.**
 
 Rows with no suggestion show no second line.
 
-### 6.4 The ledger screen
+*(Decision 18 note: nothing is read back — the second line recomputes the suggestion for the
+paired meal's instant, with the dose paired to its meal by the ±45-minute window of
+[Req 4.8](requirements.md#4.8). A dose with no meal or intake inside its window is the row with
+no second line, and per [Req 6.11](requirements.md#6.11) the "suggested" figure is the rule
+applied now, not a stored quotation.)*
 
-Modelled on `EstimationLogView`: a plain list on `surfacePrimary`, newest first, one row per
-suggestion, no chart. Right-aligned monospaced figures so columns scan vertically.
+### 6.4 The dose log screen — recomputed, not read back
+
+*(Retitled and redefined in place by Decision 18; §7's token-table label follows the retitle.
+It was "The ledger screen", "Modelled on `EstimationLogView`: a plain list … one row per
+suggestion", its sketch reading stored-row values — second lines
+"`60 g · 5 g/U · seed · FPU 3.1 · IOB 0.0`" / "`108 g · 10 g/U · manual · FPU 5.4 · IOB 1.8`" /
+"`3 g · 10 g/U · seed · IOB 0.0`" — and "the same middle-dot grammar, now carrying provenance".
+No store exists: this future screen derives one row per recorded meal or intake, recomputing
+the suggestion for each subject's own instant and pairing the given dose by the ±45-minute
+window — the same computation every other surface runs.)*
 
 ```
- Dose ledger
+ Dose log
  ┌───────────────────────────────────────────────┐
  │ 14 Aug 08:41   breakfast          12 → 12 U   │
- │ 60 g · 5 g/U · seed · FPU 3.1 · IOB 0.0       │
+ │ 60 g · 5 g/U                                  │
  ├───────────────────────────────────────────────┤
  │ 13 Aug 18:20   dinner              11 → 9 U   │
- │ 108 g · 10 g/U · manual · FPU 5.4 · IOB 1.8   │
+ │ 129 g · 10 g/U · − 1.8 U on board             │
  ├───────────────────────────────────────────────┤
- │ 13 Aug 12:02   lunch          suppressed      │
- │ 3 g · 10 g/U · seed · below 0.5 U             │
+ │ 13 Aug 12:02   lunch                0 → — U   │
+ │ 3 g · 10 g/U                                  │
  └───────────────────────────────────────────────┘
 ```
 
 `12 → 12 U` is suggested → given. The second line is the same middle-dot grammar, now carrying
-provenance rather than time, because on this screen every row is a past event and the useful axis
-has changed. This is the one surface where a suppression reason is rendered as words, because the
-screen exists to explain rows.
+the working's terms — grams, ratio, and any reduction — because on this screen every row is a
+past event and the useful axis has changed. This is the one surface where the sole surviving
+suppression — no carbohydrate total ([Req 3.5](requirements.md#3.5)) — would be rendered as
+words, because the screen exists to explain rows. *(Redefined in place by Decision 17.
+Superseded wording: "`│ 13 Aug 12:02   lunch          suppressed      │`" /
+"`│ 3 g · 10 g/U · seed · below 0.5 U             │`" and "This is the one surface where a
+suppression reason is rendered as words" — under [Req 3.4](requirements.md#3.4) the 3 g quick-add
+is a `.suggested` `0 U` row with its working inspectable.)*
 
 ---
 
@@ -383,7 +422,7 @@ Everything below is already in `App/Colors.swift`. No new colour is required for
 | Grouped-surface derived text | `textSecondary` |
 | Committing controls | `medataAccent` on `captureBackground` foreground |
 | Sheet surfaces | `surfacePrimary`, `surfaceElevated` (step circles) |
-| Ledger / day-view insulin figures | `seriesInsulinBolus`, `seriesInsulinBasal` |
+| Dose log / day-view insulin figures | `seriesInsulinBolus`, `seriesInsulinBasal` |
 
 Type: `subheadline` monospacedDigit for capture-surface segments; `footnote` for the sheet
 provenance caption and the Settings reciprocal; `caption` for the day-view second line; existing

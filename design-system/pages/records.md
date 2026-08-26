@@ -8,8 +8,10 @@ carries every event type, not only meals.
 **Brief:** One chronological timeline of everything recorded — meals, insulin
 doses, glucose readings, manual intakes, activity — most-recent-first, no
 filtering or windowing. The list is also the primary deletion surface
-(`specs/ui/records-deletion`). Meal rows open the Meal overview; every other
-row type is a terminal instrument.
+(`specs/ui/records-deletion`). Meal rows open the Meal overview *(Superseded
+by `specs/ui/home-router` Decision 16, 2026-08-26: meal rows open ResultView
+directly; the overview is deleted)*; every other row type is a terminal
+instrument.
 
 ---
 
@@ -19,7 +21,7 @@ row type is a terminal instrument.
 ┌─────────────────────────────────────┐
 │  ✕                    Select    ⋯   │  Untitled, inline · edit toggle · menu
 │                                      │
-│  🍴 47 g carbs  ≈ 214 g   corrected  │  Meal row → Meal overview
+│  🍴 47 g carbs  ≈ 214 g   corrected  │  Meal row → ResultView
 │     25 Aug 2026, 14:32               │
 │  💉 12 U  Bolus                      │  Insulin row (no navigation)
 │     25 Aug 2026, 13:58               │
@@ -79,8 +81,14 @@ row type is a terminal instrument.
   its `Full result` action pushes `MealRoute.result` → the full ResultView
   (shared `mealRouteDestination`, `App/MealRouting.swift`). No other row
   type navigates. (A DEBUG-only `⋯ → Review` route on the overview reopens
-  the review surface without a capture.)
-- **Dose-suggestion line (history surfaces):** where a recorded suggestion
+  the review surface without a capture.) *(Superseded by
+  `specs/ui/home-router` Decision 16, 2026-08-26: the overview hop and the
+  DEBUG `⋯ → Review` route are deleted — a meal row pushes
+  `MealRoute.result` → ResultView directly, the one meal-detail surface.)*
+- **Dose-suggestion line (history surfaces):** *(Superseded in mechanism by
+  `specs/data/insulin-dosing` Decision 18: nothing derived is stored — the
+  line recomputes live from recorded events and settings, on ResultView
+  only per home-router Decision 16.)* where a recorded suggestion
   exists for a meal, the overview and result screens pushed from here render
   it under the carb total as a zero-tap read-only line —
   `suggested 12 U · 5 g/U`, gaining `· given 14 U` once a dose is linked —
@@ -97,7 +105,9 @@ row type is a terminal instrument.
 - Do NOT navigate from insulin, glucose, intake, or activity rows — only
   meal rows push.
 - Do NOT open the full Result from a meal row — the row opens the Meal
-  overview; Result is one more push away.
+  overview; Result is one more push away. *(Superseded by
+  `specs/ui/home-router` Decision 16: the reverse now holds — the row
+  opens ResultView directly; the overview is deleted.)*
 - Do NOT add a confirmation dialogue to swipe-delete — the revealed Delete
   button is the confirmation. Bulk, date-range, and delete-all keep theirs.
 - Do NOT render `0 min` for an activity with no recorded duration — absence

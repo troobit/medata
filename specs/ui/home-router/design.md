@@ -63,11 +63,11 @@ Every current `TrendsView` (`App/TrendsView.swift`) entry point and its wiring:
 | `onInsulinSheetDismiss` closure + insulin `.sheet(isPresented:onDismiss:)` (`:131-133`) | relocate to `AppRoot` | 1.6 |
 | `.onChange(of: showInsulinSheet)` options-collapse (`:137-139`) | remove — dead once the sheet leaves `TrendsView` | 1.6 |
 | `TrendsOptionsSheet` presentation (`:130`) | keep — chart options | 2.2 |
-| `dayMeals` inline list → `NavigationLink(MealRoute.overview)` (`:354-384`) | **keep** — meal tap-through retained (user decision) | 2.2 |
+| `dayMeals` inline list → `NavigationLink(MealRoute.overview)` (`:354-384`) | **keep** — meal tap-through retained (Decision 11) *(destination redefined to `MealRoute.result` by Decision 16)* | 2.2 |
 | `dayInsulin` inline list `.onDelete` → `model.deleteDose` (`:404-435`) | remove the `.onDelete`; list stays read-only | 2.4 |
 | the chart, ranges, series | keep unchanged | 2.2 |
 
-Graph carries no *direct* delete affordance after this (the only one was the day-insulin swipe). Meal rows still tap through to `MealOverviewView`, which has its own delete — accepted per the user's "keep meal tap-through" decision; Graph itself provides no deletion UI (Decision 11).
+Graph carries no *direct* delete affordance after this (the only one was the day-insulin swipe). Meal rows still tap through to the meal-detail surface, which has its own delete — retained per Decision 11; Graph itself provides no deletion UI (Decision 11). *(Redefined in place by Decision 16. Superseded wording: "Meal rows still tap through to `MealOverviewView`, which has its own delete" — the destination is now `ResultView`, whose delete the surface already carries.)*
 
 ### Records replaces Data (Req 3)
 
@@ -78,7 +78,18 @@ Graph carries no *direct* delete affordance after this (the only one was the day
 | `mealRouteDestination(_:store:path:)` (`DataView.swift:188-223`) | `RecordsView`, `TrendsView` (meal nav) | move to `MealRouting.swift` |
 | `CloseCoverButton` (`DataView.swift:233-243`) | `RecordsView`, `TrendsView`, `SettingsView`, `CaptureFlowView` | move to `MealRouting.swift` |
 
-`RecordsView` owns a `NavigationStack(path: [MealRoute])` (as `DataView` did) so meal rows navigate to `MealOverviewView` via the shared destination builder; insulin and glucose rows do not navigate (Req 3.3).
+`RecordsView` owns a `NavigationStack(path: [MealRoute])` (as `DataView` did) so meal rows navigate to the single meal-detail surface (`ResultView`) via the shared destination builder; insulin and glucose rows do not navigate (Req 3.3). *(Redefined in place by Decision 16. Superseded wording: "meal rows navigate to `MealOverviewView` via the shared destination builder" — the overview page and its push to a separate full-result screen are deleted.)*
+
+### Meal detail — one surface (Req [3.3](requirements.md#3.3), Decision 16) *(Added by Decision 16.)*
+
+`ResultView` (`App/ResultView.swift`) is the meal-detail destination for both the Records list and the Graph day list; `App/MealOverviewView.swift` is deleted (with its `project.pbxproj` entries). What the overview carried lands on named `ResultView` surfaces:
+
+- **Capture-metadata line** — the overview's `metadataLine` (capture path as `1-view · LiDAR` / `2-view`, middle dot, `MedataFormat.dateTimeString(record.createdAt)`) joins `ResultView`'s summary card beside the existing mass total and `CoFID + AFCD` provenance — the card is already the surface's metadata register.
+- **Delete with confirmation** — `ResultView`'s pinned action-row `Menu` (`result.menu`: Save as quick-add, Delete) keeps its items; the overview's `.confirmationDialog("Delete meal?")` attaches to its Delete item, replacing the immediate delete `mealRouteDestination` wires today — with the summary hop gone, the dialog is the one step between tap and cascade.
+- **Mask-overlaid photo** — `ResultView` already loads the photo in a `.task` via `MealPhotoLoader.loadImage(assetID:)`; the overview's `MaskOverlayLoader(store:mealId:paletteVersion:)` ZStack layer joins that photo surface. The loader renders nothing when the mask artefact is missing, so the photo-fallback behaviour is unchanged.
+- **Dose readout** — already present: `ResultView` renders the dose readout line (`RecordedSuggestion.line`, `result.doseSuggestion`) beneath the hero total. On this surface it follows `specs/data/insulin-dosing` [Req 6.10](../../data/insulin-dosing/requirements.md#6.10), recomputing the suggestion live for the meal's own instant ([Req 6.11](../../data/insulin-dosing/requirements.md#6.11)) and opening its tap-through working the same way ([Req 6.12](../../data/insulin-dosing/requirements.md#6.12)); the mechanics belong to that spec. *(Redefined in place by `specs/data/insulin-dosing` Decision 18. Superseded wording: "renders the recorded suggestion line" / "opens its tap-through working reconstructed from the recorded row" — the `dose_suggestions` store is removed; every surface recomputes. The `RecordedSuggestion` type name survives in code.)*
+
+`MealRoute` (`App/CaptureState.swift`) collapses to the single `.result(MealRecord)` case: `.overview` and the DEBUG-only `.review` case (with its `MealReviewView` destination and Retake-means-delete wiring) are deleted, so `mealRouteDestination` (`App/MealRouting.swift`) reduces to the one `.result` branch. Meal-row links in `RecordsView` and in `TrendsView`'s day list carry `MealRoute.result(record)`.
 
 ### Records data flow (Req 3.1, 3.6, 3.7)
 
@@ -100,7 +111,7 @@ Delete: swipe-to-delete on meal and insulin rows → `store.deleteMeal(id:)` (ca
 
 ### Intake seam — parallel-safe with `manual-carb-intake` (Req 1.2, Dependency)
 
-The design assumes `manual-carb-intake`'s intake surface already exists (parallel development, user directive) and is structured so the two streams edit disjoint lines:
+The design assumes `manual-carb-intake`'s intake surface already exists (parallel development, Decision 12) and is structured so the two streams edit disjoint lines:
 
 - `ActiveSheet.intake` presents `IntakeView()` by name; `IntakeView` is owned and implemented by `manual-carb-intake` in its own file. Home-router adds only the enum case and the one-line cover branch that constructs it — Track C never edits that switch, only `IntakeView`'s own file. If Track C lands after this, the case is inert until `IntakeView` compiles; if before, it wires straight through.
 - `RecordRow` (below) is an open enum: `manual-carb-intake` adds a single `.intake(IntakeRecord)` case plus one merge source in `RecordsModel` additively, without reworking existing cases — the manual intake records become deletable in Records (satisfying that spec's deferral of edit/delete to this surface) with a minimal, conflict-light diff. `IntakeRecord` and its subtype taxonomy (`carb`, `alcohol`, …) are **owned by `manual-carb-intake`**; it is one `RecordRow` case carrying the category internally (a discriminated union), so new intake subtypes never touch home-router's `RecordRow` switches. Home-router renders an intake row from `IntakeRecord`'s own display value + type label, staying agnostic to the category set. Note: intake records are not in this spec's Req 3.1 (meals/insulin/glucose); the `.intake` case is the forward seam Track C fills.
@@ -154,7 +165,7 @@ enum RecordRow: Identifiable {          // open for manual-carb-intake's .intake
 // also moved here from DataView.swift: mealRouteDestination(_:store:path:), CloseCoverButton
 ```
 
-`RecordsView` renders `RecordsModel.rows` in a `List` inside a `NavigationStack(path:)`; a meal row is a `NavigationLink(value: MealRoute.overview(record))`, insulin/glucose rows are plain; `.swipeActions`/`.onDelete` on meal+insulin rows call `model.delete`. Row rendering distinguishes type and shows the key value + timestamp (Req 3.2): carbs (current total incl. corrections) for meals, units + bolus/basal for insulin, mmol/L for glucose.
+`RecordsView` renders `RecordsModel.rows` in a `List` inside a `NavigationStack(path:)`; a meal row is a `NavigationLink(value: MealRoute.result(record))` *(Decision 16; superseded value: `MealRoute.overview(record)`)*, insulin/glucose rows are plain; `.swipeActions`/`.onDelete` on meal+insulin rows call `model.delete`. Row rendering distinguishes type and shows the key value + timestamp (Req 3.2): carbs (current total incl. corrections) for meals, units + bolus/basal for insulin, mmol/L for glucose.
 
 ## Data Models
 
@@ -169,4 +180,4 @@ No new failure modes. Deep-link deferral, delete cascades, and the empty state a
 Per the MVP test gate (build + looks-right on device; no committed app-target suite runs — `docs/agent-notes/ui-capture-flow.md`). Keep the MedataCore math tests green (`make test`); add no app-target test scaffolding (project `testing-mvp-minimal` convention).
 
 - **PBT candidate, not built:** the Records merge/sort has a genuine invariant — total, deterministic order under equal timestamps (Req 3.1). It lives in the App-layer `RecordsModel`, which no harness executes, so it is verified on device rather than by a committed property test. Recorded here as the one place a property test *would* apply if the app target gained a runnable suite.
-- **On-device verification checklist:** launch → HomeView root, no tab bar (1.1); all six controls route, Capture most prominent (1.2, 1.3); each surface closes back to home (1.4); AR session armed only during Capture (1.5); `medata://capture` and `medata://insulin/add` route, deferring behind an open surface (1.6); Graph shows no entry-point controls and no delete (2.3, 2.4); Records merges all three types most-recent-first (3.1), delete on meal/insulin reflects live in Records + Graph (3.6), add elsewhere reflects live (3.7), glucose not deletable (3.5), empty Records has no copy (3.8).
+- **On-device verification checklist:** launch → HomeView root, no tab bar (1.1); all six controls route, Capture most prominent (1.2, 1.3); each surface closes back to home (1.4); AR session armed only during Capture (1.5); `medata://capture` and `medata://insulin/add` route, deferring behind an open surface (1.6); Graph shows no entry-point controls and no delete (2.3, 2.4); Records merges all three types most-recent-first (3.1), a meal row in Records or the Graph day list lands directly on `ResultView` with metadata line, delete confirmation, overlaid photo, and dose readout present (3.3, Decision 16), delete on meal/insulin reflects live in Records + Graph (3.6), add elsewhere reflects live (3.7), glucose not deletable (3.5), empty Records has no copy (3.8).

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Create an in-repo git worktree under .worktrees/<name> and copy nextup.md in.
+# Create an in-repo git worktree under .worktrees/<name>
 # Usage:
 #   tools/new_worktree.sh <name> [branch]
 #     <name>    directory created under .worktrees/, and the default branch name
-#     [branch]  branch to check out; created off the current HEAD if it does not
-#               already exist. Defaults to <name>.
+#     [branch]  branch to check out; created off the current HEAD if it does not already exist. Defaults to <name>.
 #
 # Examples:
 #   tools/new_worktree.sh home-router ui/home-router
@@ -32,4 +31,4 @@ else
     git -C "$main_root" worktree add -b "$branch" "$wt_dir"
 fi
 
-echo "worktree ready: $wt_dir  [$branch]"
+echo "worktree: $wt_dir  [$branch]"

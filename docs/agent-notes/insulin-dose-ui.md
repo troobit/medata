@@ -33,7 +33,10 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   (`MealOverviewView`, `ResultView`) read a meal's recorded suggestion back
   via `doseSuggestion(forSourceEventID:)` and render it as the read-only
   `suggested 12 U · 5 g/U (· given 14 U)` line
-  (`specs/data/insulin-dosing/requirements.md` Req 6.10).
+  (`specs/data/insulin-dosing/requirements.md` Req 6.10). Since superseded:
+  insulin-dosing Decision 18 removed the `dose_suggestions` store and its API
+  (every surface recomputes live), and home-router Decision 16 deleted
+  `MealOverviewView`.
 - **TrendsModel** loads insulin via `events(in:type: EventType.insulin)` in
   the same `reload()` the `eventsDidChange` subscription drives, decoding
   `kind` from the metadata JSON (rows that fail to decode are dropped).
@@ -92,7 +95,9 @@ attempt 2's reach ported on top — `DoseReadoutLine` (`MiddleDotLine` /
 `MealTotalSecondLine`), the readout on the review line and the manual entry
 line, the dose sheet's provenance caption consumed by the first press, and a
 seed that is actually consumed. Attempt 3's documented ledger stub was
-replaced with the real `saveDoseSuggestion` / `linkDose` wiring. Attempt 1 was
+replaced with the real `saveDoseSuggestion` / `linkDose` wiring (since removed
+— insulin-dosing Decision 18; see the `DoseSuggestionModel` bullet above).
+Attempt 1 was
 rejected outright — the seed it armed on Record was never consumed
 (`takeSeed()` had no caller), which under the everywhere-readable bar is "the
 gap, not the restraint" (Decision 16).
@@ -168,7 +173,9 @@ attempt should be read as still proposing an activity design.
 Attempt 2 also wrote its suggestion rows through an in-memory
 `InMemoryDoseLedger`; the merge replaced that with the real
 `saveDoseSuggestion`/`linkDose` calls (Decision 16), so rows land in
-`dose_suggestions` from the first merged build.
+`dose_suggestions` from the first merged build. (Since removed —
+insulin-dosing Decision 18 dropped the `dose_suggestions` store and its API;
+every surface recomputes live.)
 
 ### Judging the merged tree (task 16)
 
@@ -178,11 +185,15 @@ on-device judgement is task 16's STOP — the synthesis tree is a shape no phone
 had displayed at merge time, and it includes design-direction §10's `12 U`
 versus `12 U at 5 g/U` choice on the review line.
 
-The two DEBUG affordances from `a1618ee` remain the way to get the surface on
-screen: **Settings → Seed demo meal** writes one fixed 56.0 g record, and
-**Records → that meal → ⋯ → Review** opens the review surface on it without a
-capture. The path to judge in full is seed → Review → Record → open the dose
-sheet: the readout on the review line, the seeded opening value and its
-provenance caption, and the consolidated `LogSheet`. The manual path — Intake
-→ carb entry — needs no seed at all. Mechanism and its Release exclusion:
+One DEBUG affordance from `a1618ee` remains the way to get the surface on
+screen: **Settings → Seed demo meal** writes one fixed 56.0 g record. (The
+second affordance it carried — **Records → that meal → ⋯ → Review** — is since
+deleted along with the overview hop, home-router Decision 16.) The path to
+judge is seed → Records → meal → ResultView for the readout and its
+tap-through working (recomputed live from recorded events + settings —
+insulin-dosing Decision 18), then the dose sheet — its seeded opening value,
+provenance caption and the consolidated `LogSheet` — from the Graph's log
+entry point. Judging the CAPTURE review line needs a real capture — there is
+no debug path onto `MealReviewView`. The manual path — Intake → carb entry —
+needs no seed at all. Mechanism and its Release exclusion:
 `device-build-and-test.md`, "Getting the surface on screen without a capture".

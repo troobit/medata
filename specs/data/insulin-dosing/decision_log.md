@@ -1210,3 +1210,132 @@ gains the verdict per Decision 15's contract. The current tags are the `-on-rese
 names `-on-research-2`.
 
 ---
+
+
+## Decision 17: Food-offset insulin-on-board, whole units, no suppressed outcomes, and the working on tap
+
+**Date**: 2026-08-26
+**Status**: accepted (its ledger-extension drafting — reduction column, seeder row write, version-aware rendering, stored-link membership — superseded by Decision 18; the rule changes stand)
+
+### Context
+
+The shipped rule was "carbs ÷ ratio − insulin-on-board, floored at zero" (Req 3.1), with every sub-0.5 U result suppressed (Req 3.4) and suppression rendered as silence (Req 6.6). On device this erased the readout for any meal within hours of a prior bolus: a 56 g meal at the 10 g/U dinner seed is 5.6 U, so ~5 U of insulin-on-board wiped it, and nothing on screen said so. The subtraction also mis-modelled meals: insulin dosed *for food already consumed* is offset by that food — it is spoken for — so counting it against the next meal under-doses everyone who eats a meal and then snacks, nibbles, or logs another intake. Separately, the 0.5 U pen option (Req 5.6) let fractional values reach a display, and the calculation itself lived nowhere near the surface — a reduced or zeroed number gave no way to see why.
+
+### Decision
+
+The suggested meal bolus is carbohydrate grams ÷ band ratio, less only the **unoffset** insulin-on-board — boluses with no meal or intake behind them (correction or freestanding doses); a bolus associated with a recorded meal or intake (the Req 7.5 association or its 45-minute window) never reduces a later meal's coverage (new Req 4.8). Results are whole units only (the 0.5 U increment is removed), and there are no suppressed outcomes: a meal with a carbohydrate total always shows its number, `0 U` included. Tapping the readout opens the working — `carbs ÷ ratio = y U`, each reduction as `− x U, for <reason>`, result — on every surface, reconstructed verbatim from the recorded row on history surfaces (Req 6.12). In the ledger, the insulin-on-board field keeps recording the physiological total (the field means what its name says); the subtraction the estimate applied is recorded as its own reduction field, capped at the base value so the recorded working sums exactly — a derived term is never recorded under its source's name (Req 7.2). The history surface is the single meal-detail screen of `specs/ui/home-router` Decision 16 (overview page and DEBUG `⋯ → Review` push deleted), and the demo-meal seeder writes its `dose_suggestions` row at seed time so a seeded meal shows its figure with zero navigation.
+
+### Rationale
+
+Full insulin-on-board subtraction conflates meal coverage with correction dosing; excluding food-offset boluses keeps the one case where active insulin genuinely reduces a needed dose (insulin given with no food behind it) while letting every eaten meal claim its own coverage. Making the reduction a visible line item and the working one tap away turns the old invisible-erasure failure into an inspectable arithmetic fact. Whole units match what the pen in use can deliver. `rule_version` bumps so rows computed under the superseded rule stay separable (Req 7.9).
+
+### Alternatives Considered
+
+- **Keep the full subtraction with a shorter duration of action (2–3 h)**: Shrinks the window but still charges a meal for insulin that covered the previous one; wrong at any window length.
+- **Drop insulin-on-board from the number entirely**: Simplest rule, but a correction bolus with no food behind it genuinely offsets the next dose; ignoring it invites stacking with no trace.
+- **Keep suppression but show the reason inline**: Renders a refusal reason on the line itself, colliding with Req 6.8's copy rule and still showing no number; `0 U` plus tap-through working conveys the same fact as arithmetic.
+- **Recompute the working live on history surfaces**: Rejected — Req 6.11 stands; the recorded row carries carbs, ratio, and insulin-on-board, so the working is reconstructable verbatim.
+
+### Consequences
+
+**Positive:**
+- Every meal with a carbohydrate total shows a dose figure; the invisible-estimate failure mode is gone.
+- The calculation is inspectable where the number is, on every surface, including history (from the recorded row).
+- A meal → snack → meal day doses each intake fully; only unmatched insulin reduces anything, and visibly.
+- Displayed values are always whole units; the Settings increment row goes away.
+
+**Negative:**
+- Determining "offset by food" needs the dose↔meal association at insulin-on-board time: the Req 7.5 link plus the 45-minute window against logged meals/intakes — more query surface than the old sum-all-boluses rule, and an unlogged meal's bolus still counts as unoffset (the model is only as good as what is logged).
+- The readout becomes tappable, softening design-direction §2.2's "never a control" (annotated in Req 6.12: it reveals, it does not act).
+- Recorded rows from the superseded rule mix with new rows in `dose_suggestions`; `rule_version` separates the populations.
+- The demo seeder writes into `dose_suggestions`; seeded rows are separable via the `demo_seed` provenance.
+
+### Impact
+
+`MedataCore/Sources/Dosing/DoseSuggester.swift` (unoffset insulin-on-board input, no suppression outcomes, `ruleVersion` bump), `App/DoseSuggestionModel.swift` (offset-aware insulin-on-board query; increment fixed at 1 U), `App/DoseReadoutLine.swift` + the review/history/manual surfaces (always-render, tap-through working), the Settings increment row (removed), `App/SettingsView.swift`'s demo-meal seeder (writes the suggestion row), and the routing deletions of `specs/ui/home-router` Decision 16. Requirements 3.1, 3.4, 4.7, 5.1, 5.6, 5.7, 6.6, 6.10 amended and 4.8, 6.12 added above.
+
+---
+
+## Decision 18: Nothing derived is stored — the suggestion ledger is removed and every surface recomputes
+
+**Date**: 2026-08-26
+**Status**: accepted
+
+### Context
+
+Requirement 7 recorded every computed suggestion in a `dose_suggestions` side store, and Req 6.11 forbade recomputing at read — history surfaces read stored rows back. Decision 17's amendments were extending that machinery: a reduction column, a migration, a demo-seeder row write, version-aware rendering for rows written under the old rule, and a store query that did not exist for the food-offset membership test. Peer review found the extension leaking: the subtracted quantity was recorded nowhere, old rows had no defined rendering, and the association lookup was unimplementable from the store's API. The premise under all of it: that a displayed estimate is history worth storing. But the dose is a pure function of recorded events and stated settings — computable for any instant, including or excluding any meal — so a stored copy is a cache with migration obligations, not a record. What matters is what IS recorded: the meals, intakes, boluses, and glucose in the event log.
+
+### Decision
+
+The `dose_suggestions` side store is removed — table, `saveDoseSuggestion`/`linkDose`/`doseSuggestion(forSourceEventID:)` API, rule-version bookkeeping, and the write paths in `DoseSuggestionModel`. Every surface recomputes the suggestion live from recorded events and the settings in force, for the subject meal's own instant (Req 6.11 reversed); the tap-through working recomputes the same way everywhere and shows the rounding step so its lines sum exactly (Req 6.12). Food-offset membership (Req 4.8) is the symmetric ±45-minute window against logged meals and intakes alone — pre-bolusing covered — with no stored link. Retrospective measurement (Req 11) recomputes over the event log and takes the ratio table as an explicit input. The schema migration drops the table.
+
+### Rationale
+
+Storing a value that a pure function can reproduce buys one thing — fidelity to settings later changed — and costs a side store, an association table, per-rule-change migrations, and row-version compatibility rules. For a developer-phase instrument the ratio table changes rarely and deliberately; a measurement that states its ratio inputs is more honest than one that pools stored rows of unstated provenance. Recompute-at-read also closes the original defect outright: a seeded demo meal shows its figure on every surface with no plumbing, because there is no row to be missing.
+
+### Alternatives Considered
+
+- **Extend the ledger as Decision 17 drafted (reduction column, seeder write, version-aware rendering)**: Rejected — three unresolved defects (unrecorded subtracted quantity, undefined v1-row rendering, unimplementable offset lookup) were all costs of storing what can be computed.
+- **Freeze the table for suggested-vs-given measurement only, recompute for display**: Keeps ratio-change fidelity for the regression — rejected: the measurement can recompute with declared ratio inputs (Req 11.5), and a frozen table still carries its API, its export surface, and its migration burden for no display value.
+- **Record ratio-change events instead, keep recompute**: Would restore point-in-time fidelity cheaply — rejected for iteration 1 as machinery without a consumer; `ratioFitRef` free text already names the fit in force, and the option remains open later without undoing anything decided here.
+
+### Consequences
+
+**Positive:**
+- The seeded demo meal — and every stored meal — shows its dose line and working on every surface with zero persistence plumbing; the invisible-estimate defect cannot recur as a missing-row bug.
+- No new column, no new table, no migration except the one that drops `dose_suggestions`; no v1/v2 row semantics; no store API to invent for offset membership (a window query over existing events suffices).
+- One code path computes the number everywhere — live and history cannot disagree.
+
+**Negative:**
+- A later ratio change re-renders past meals at the new ratio; the number once shown is not recoverable. Accepted: the readout is a present-tense statement of the rule, and measurements declare their ratio inputs instead.
+- Suggested-vs-given comparison loses the stored link; it recomputes and pairs by the ±45-minute window, so its pairing is only as good as the window rule.
+- Dropping the table discards rows already written on the developer device — measurement value already compromised by the superseded rule they were computed under.
+
+### Impact
+
+`MedataCore/Sources/Persistence/GRDBPersistenceStore.swift` (drop table + API, one schema bump — the version literal lives in three places, `docs/agent-notes/persistence.md`), `App/DoseSuggestionModel.swift` (pure compute, no writes), `App/MealOverviewView.swift`'s reader is already deleted by home-router Decision 16, `App/ResultView.swift`/`MealReviewView.swift`/`CarbEntrySheet.swift` (recompute + working), the export path (no rows to carry). Requirements 1.7, 2.5, 3.6, 4.5, 4.7, 4.8, 5.2, 5.3, 5.5, 6.4, 6.10, 6.11, 6.12, 8.1, 8.3, 9.4, 10.2, 11.1, 11.5 amended and Requirement 7 superseded in full above.
+
+---
+
+## Decision 19: medreg's suggest path is not the template; the curve stays, the model class goes
+
+**Date**: 2026-08-26
+**Status**: accepted
+
+### Context
+
+The app's dose arithmetic was transcribed from `~/repos/medreg` (Decision 7, Req 9), and this session's defects traced back to that transcription: the full insulin-on-board subtraction Decision 17 removed is `medreg/suggest/history.py::bolus_iob` term for term, and the silent readout suppression belonged to the same shape as `suggest/dose.py`'s four `NoSuggestion` abstention paths. An assessment of medreg's suitability was due. Findings: the suggest path (`suggest/dose.py`) is built around abstention, a correction term out of iteration-1 scope, and a 20,000-sample Monte-Carlo predictive interval no one can check against a screen — unsuitable as the app's template, though its term-by-term `_build_reasoning` anticipates Req 6.12's working. medreg's ingest is fail-fast (`parse_insulin_metadata` raises on any malformed row); the app's transcription inverted that into a silent `compactMap` drop, so a bolus with unparseable metadata left the insulin-on-board sum with no trace. Separately, `App/DoseSuggestionModel.swift` remained an `@Observable` coordinator — shared readout state, refresh/clear choreography, environment plumbing — around what Decision 18 reduced to a pure function.
+
+### Decision
+
+The medreg boundary (Req 9) is reaffirmed: medreg owns fitting, off-device, and its suggest path is explicitly not a template for the app. The exponential insulin-on-board curve is retained (Req 4.1 constants, Req 4.6 medreg parity unchanged): legibility is served by the working naming each unoffset dose, its time, and its decayed remainder — the lines still sum — while the curve's derivation lives in the design, not on screen. `DoseSuggestionModel` is dissolved: each surface computes its own readout directly through the pure suggester over fetched events, and the only shared state left is a minimal seed holder for the dose sheet's 45-minute seed (Req 6.4). Classification failures fail loud (new Req 4.9): an insulin event whose metadata cannot be classified is a development-build assertion, never a silent omission.
+
+### Rationale
+
+Keeping the curve keeps the one part of the transcription that was correct and verified (the ±0.01 U fixture parity), and the unoffset set it now applies to — correction and freestanding boluses only — is small enough that the curve's opacity sits behind a working whose visible lines still sum exactly. Dissolving the model removes the App layer's last piece of suggestion state that could go stale or be silently cleared: a surface that computes its own number when it appears cannot show another surface's leftovers. Fail-loud classification restores the discipline medreg's ingest already had and the transcription dropped.
+
+### Alternatives Considered
+
+- **Linear decay over the 6-hour window**: one checkable line of arithmetic — rejected in favour of the verified curve; the accuracy loss buys legibility the working's stated inputs already provide.
+- **Face value, no decay**: maximally simple and conservative — rejected; overstating insulin-on-board late in the window under-doses the one case the reduction exists for.
+- **Adopt medreg's suggest path wholesale (intervals, abstention, correction term)**: rejected — abstention and uncheckable intervals are the opposite of the no-suppressed-outcomes, working-on-tap rules (Req 3.4, 6.12), and the correction term stays out of iteration 1 (Req 3.8).
+- **Keep `DoseSuggestionModel` as the single computation owner**: rejected — after Decision 18 its shared `readout` state and refresh/clear choreography exist only to move a pure function's result between views, and that indirection is where stale-state bugs live.
+
+### Consequences
+
+**Positive:**
+- The verified curve and its fixture parity survive; no arithmetic changes, no new fixtures.
+- Every surface's number is computed where it renders; no cross-surface readout state to stale or clear.
+- A dose can no longer vanish from insulin-on-board silently (Req 4.9).
+- The medreg fitting boundary is restated after an actual assessment rather than by inertia.
+
+**Negative:**
+- The `− x U, for IOB` line's value derives from a curve the working cannot show being derived; the working names the inputs and the remainder, not the exponential.
+- Each surface fetches and computes on appearance — bounded work (a 6.75-hour event window), but done per surface rather than once.
+- The seed holder is still shared state, just minimal; Req 6.4's cross-surface seed cannot be dissolved further.
+
+### Impact
+
+`App/DoseSuggestionModel.swift` (dissolved into a pure computation helper plus a seed holder), the surfaces that consumed its environment object (`MealReviewView`, `CarbEntrySheet`/intake path, `ResultView`, `AppRoot`), and the insulin-on-board membership query (fail-loud classification, Req 4.9). `MedataCore/Sources/Dosing` is unchanged by this decision. Requirement 4.9 added; no other requirement moves.
+
+---

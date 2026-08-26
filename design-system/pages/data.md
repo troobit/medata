@@ -10,7 +10,9 @@ Supersedes `meals-tab.md` (feed-style photo cards → anonymous grouped rows).
 
 **Brief:** A plain chronological log of every capture, grouped by day. Rows are
 anonymous instruments — thumbnail, time, carbs, confidence — with no meal names.
-A row opens the Meal overview, never the full Result.
+A row opens the Meal overview, never the full Result. *(Superseded by
+`specs/ui/home-router` Decision 16, 2026-08-26: a row opens ResultView
+directly; the overview is deleted.)*
 
 ---
 
@@ -60,7 +62,9 @@ Empty state (no meals): a centred `fork.knife` glyph and `No meals yet`.
   so the composed struct is what makes `eventsDidChange` (which now fires on
   `appendCorrection` — Decision 18) invalidate the row.
 - **Navigation (§8.3):** a row pushes `MealRoute.overview` → Meal overview, not
-  the full Result.
+  the full Result. *(Superseded by `specs/ui/home-router` Decision 16,
+  2026-08-26: a meal row pushes `MealRoute.result` → ResultView directly; the
+  overview is deleted.)*
 - **Empty state (§8.5):** `No meals yet` — never a blank list.
 
 ---
@@ -69,5 +73,7 @@ Empty state (no meals): a centred `fork.knife` glyph and `No meals yet`.
 
 - Do NOT show a meal name or a photo-led card (that was the retired `meals-tab`).
 - Do NOT open the full Result on a row tap — open the Meal overview.
+  *(Superseded by `specs/ui/home-router` Decision 16, 2026-08-26: a row opens
+  ResultView directly; the overview is deleted.)*
 - Do NOT refetch bare `MealRecord`s for the rows — compose corrections in, or
   landed corrections will not repaint the carbs.

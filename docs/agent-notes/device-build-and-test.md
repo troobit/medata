@@ -158,20 +158,26 @@ What each attempt actually is: `docs/agent-notes/insulin-dose-ui.md`.
 ### Getting the surface on screen without a capture
 
 A comparison is only a comparison if every attempt shows the same numbers, and
-the post-capture surfaces used to need a fresh plate of food per install. Two
-DEBUG-only affordances (`a1618ee`) remove that:
+the post-capture surfaces used to need a fresh plate of food per install. One
+DEBUG-only affordance (`a1618ee`) removes that:
 
 - **Settings → Seed demo meal** writes one fixed record — three foods, 56.0 g of
   carbohydrate — through the ordinary `save(_:artefacts:)` path. It appears in
   Records and Trends immediately. Its segmenter source is `demo_seed`, which is
   what keeps its correction-corpus rows separable from real captures.
-- **Records → a meal → ⋯ → Review** pushes `MealReviewView` for a stored meal
-  (`MealRoute.review`). Off the capture stack Retake means nothing, so it and
-  Delete both delete the meal and unwind.
 
-Neither exists in Release, and neither touches MedataCore. Replay the commit
-onto an attempt branch the same way any other research change is replayed —
-without it, the attempt build has no seed button.
+The second affordance `a1618ee` carried — **Records → a meal → ⋯ → Review**
+pushing `MealReviewView` (`MealRoute.review`) — is deleted along with the
+overview hop (home-router Decision 16). It is no longer needed for the dose
+surfaces: since insulin-dosing Decision 18 every surface recomputes the dose
+live from recorded events + settings, so opening the seeded meal from history
+(Records → meal → ResultView) proves the readout and its tap-through working
+with zero extra navigation. Judging the CAPTURE review line still needs a real
+capture — there is no debug path onto `MealReviewView`.
+
+The seed button does not exist in Release and does not touch MedataCore. Replay
+the commit onto an attempt branch the same way any other research change is
+replayed — without it, the attempt build has no seed button.
 
 ### Deploying each one
 

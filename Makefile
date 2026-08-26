@@ -68,7 +68,7 @@ help:
 	@echo "                       (recipe: docs/agent-notes/device-build-and-test.md)."
 
 worktree:
-	@tools/new_worktree.sh "$(name)" $(branch)
+	@tools/new_worktree.sh $(name) $(branch)
 
 build:
 	swift build

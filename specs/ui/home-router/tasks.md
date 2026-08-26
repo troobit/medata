@@ -116,3 +116,27 @@ references:
   - 2026-08-13 developer verdict: STOP gate closed — home screen incl. latest-glucose header verified fine on device; the remaining checklist items are accepted under this blanket verdict
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.8](requirements.md#4.8)
   - References: design.md
+
+## Meal-detail collapse (Decision 16)
+
+- [ ] 12. ResultView absorbs the overview's content (UI, no new tests) <!-- id:gnuq1hr -->
+  - From App/MealOverviewView.swift into App/ResultView.swift: the capture-metadata line, the toolbar ⋯ menu with Delete behind its confirmation dialog, and the mask-overlay photo path (MaskOverlayLoader) — integration points per the design's meal-detail bullet
+  - The dose readout on this surface recomputes live (insulin-dosing Req 6.10/6.12; its Phase 9 tasks own the model) — this task wires the surface, not the arithmetic
+  - App-target change: gate is make build-app + the device look (project test rule)
+  - Stream: 1
+  - Requirements: [3.3](requirements.md#3.3)
+
+- [ ] 13. Reroute Records and the Graph day list; delete the overview and the DEBUG review route <!-- id:gnuq1hs -->
+  - App/RecordsView.swift:153 and App/TrendsView.swift:361 NavigationLinks push MealRoute.result
+  - Delete App/MealOverviewView.swift, the MealRoute.overview and DEBUG MealRoute.review cases (App/CaptureState.swift), and their destinations in App/MealRouting.swift — mealRouteDestination collapses to .result
+  - Remove the file from project.pbxproj in the four places (docs/agent-notes/ui-capture-flow.md checklist)
+  - Done/Delete unwind: .result already pops one on Done and removeAll on delete — with a one-element path both land on the list
+  - Blocked-by: gnuq1hr (ResultView absorbs the overview's content UI, no new tests)
+  - Stream: 1
+  - Requirements: [3.3](requirements.md#3.3), [2.2](requirements.md#2.2), [2.4](requirements.md#2.4)
+
+- [ ] 14. Gate + STOP — build, spell, and the on-device collapse check <!-- id:gnuq1ht -->
+  - make build-app + make spell; then on device: one tap from a Records meal row and from a Graph day-list row lands on the full detail (photo with overlays, food rows with adjustment, metadata, delete, dose line); no intermediate screen exists anywhere; delete from the detail unwinds to the list
+  - Blocked-by: gnuq1hs (Reroute Records and the Graph day list; delete the overview and the DEBUG review route)
+  - Stream: 1
+  - Requirements: [3.3](requirements.md#3.3), [3.6](requirements.md#3.6)
