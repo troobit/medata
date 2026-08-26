@@ -148,6 +148,23 @@ struct MedataApp: App {
             cardDetector: cardDetector,
             bundleRecorder: CaptureBundleRecorder(directoryURL: capturesDir)
         )
+        #if FIELD_LOOP
+        // The note window is outside AppRoot's view tree, so the store and the
+        // build identity are injected rather than read from the environment.
+        FieldNoteController.shared.configure(
+            store: store,
+            buildStamp: Self.buildStamp,
+            modelVersion: pipeline.segmenterSource
+        )
+        // BGTask registration must complete before the application finishes
+        // launching (the glucose source registers here for the same reason).
+        // The launch pass of the maintenance run itself is fired from the
+        // scene below, not here: it touches the filesystem and must not sit in
+        // front of the first frame.
+        FieldMaintenanceScheduler.register()
+        Task { await FieldMaintenance.shared.configure(store: store) }
+        #endif
+
         _model = State(initialValue: CaptureFlowModel(
             session: CaptureSession(engine: engine),
             pipeline: pipeline,
@@ -182,6 +199,14 @@ struct MedataApp: App {
                     UITestControlPanel(harness: uiTestHarness)
                 }
                 #endif
+                #if FIELD_LOOP
+                // Zero-size: its only job is to hand the field-note controller
+                // this window the moment it joins the scene, which is when the
+                // separate note window can be created (App/FieldNoteWindow.swift).
+                FieldNoteWindowInstaller()
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+                #endif
             }
             .tint(.medataAccent)
             .onChange(of: scenePhase) { _, phase in
@@ -190,8 +215,22 @@ struct MedataApp: App {
                 // every connected source.
                 if phase == .active {
                     glucoseConnections.catchUpConnectedSources()
+                    #if FIELD_LOOP
+                    // Foreground pass (ml-feedback-loop Decision 14): a pull
+                    // pushes its manifest while the app is backgrounded, so
+                    // coming to the front is when the phone learns what was
+                    // taken.
+                    Task { await FieldMaintenance.shared.run(reason: "foreground") }
+                    #endif
                 }
             }
+            #if FIELD_LOOP
+            // Launch pass, and the first arming of the background sweep.
+            .task {
+                await FieldMaintenance.shared.run(reason: "launch")
+                FieldMaintenanceScheduler.schedule()
+            }
+            #endif
         }
     }
 
@@ -203,16 +242,33 @@ struct MedataApp: App {
     // a plain Xcode Run leaves it empty => "unstamped". Always match this
     // stamp against the one the Make target printed before trusting a
     // captured trail.
-    private static func logLaunchIdentity() {
+    static var buildStamp: String {
         let plistStamp = Bundle.main.object(forInfoDictionaryKey: "MedataBuildStamp")
             as? String
-        let stamp = (plistStamp?.isEmpty ?? true) ? "unstamped" : plistStamp!
+        return (plistStamp?.isEmpty ?? true) ? "unstamped" : plistStamp!
+    }
+
+    // The profile token is part of the os_log FORMAT string, not an
+    // interpolated value, which is why the line is written out twice
+    // (ml-feedback-loop Req 9.1/9.4). A format literal is emitted verbatim into
+    // `__TEXT,__oslogstring`, where `strings` can see it; an interpolated Swift
+    // `String` of "profile=field" is 13 UTF-8 bytes, so Swift stores it as a
+    // small string packed into registers and NO such literal ever reaches the
+    // binary — the product gate would then grep for something that is absent
+    // from both profiles and pass vacuously. `strings` rather than `nm`: a
+    // stripped Swift Release binary keeps its literals and loses its symbols.
+    private static func logLaunchIdentity() {
+        let stamp = buildStamp
         let source = Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"
-        Logger(subsystem: "ie.medata.app", category: "Shutter")
-            // `.notice` so `make logs-device` can actually find it: `.info` is
-            // memory-only and never reaches the persisted store `log collect`
-            // reads (docs/agent-notes/device-build-and-test.md).
-            .notice("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public)")
+        // `.notice` so `make logs-device` can actually find it: `.info` is
+        // memory-only and never reaches the persisted store `log collect`
+        // reads (docs/agent-notes/device-build-and-test.md).
+        let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
+        #if FIELD_LOOP
+        log.notice("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public) profile=field")
+        #else
+        log.notice("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public) profile=product")
+        #endif
     }
 
     private static func makeStore() -> any PersistenceStore {

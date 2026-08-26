@@ -30,6 +30,13 @@ struct ARPreviewView: UIViewRepresentable {
         // view out of UIKit interaction entirely routes all touches to SwiftUI.
         arView.isUserInteractionEnabled = false
         bind(to: arView.session)
+        #if FIELD_LOOP
+        // Field-note screenshots of the capture screen need the AR content:
+        // `drawHierarchy` renders this Metal-backed layer black, so the
+        // composite path asks the view itself (App/FieldScreenshot.swift). The
+        // registry holds it weakly, so dismissing the cover needs no teardown.
+        FieldARViewRegistry.current = arView
+        #endif
         return arView
     }
 

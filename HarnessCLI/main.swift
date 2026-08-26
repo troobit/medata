@@ -1,5 +1,5 @@
 // HarnessCLI — offline test-set runner per design §7.3.
-// Subcommands: accuracy, calibrate, seg-bench, calibrate-and-eval.
+// Subcommands: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose.
 // Usage: HarnessCLI <subcommand> [flags]
 //
 // Feature-flagged off in v1 per Decision 41. The entire file is gated on
@@ -42,12 +42,19 @@ struct Args {
     // V_mesh_true / V_est per class, reported next to the mass-fit β with a
     // divergence flag. Reported, never baked.
     var meshTruthPath: String = ""
+    // ml-feedback-loop Req 4.3: the checkpoint the REPLAYING binary holds, as
+    // distinct from `--checkpoint-sha256`, which is the loader's guard and must
+    // equal what the capture recorded for the fixture to load at all. When the
+    // two differ the diagnosis is stamped `replay_version_skew` and the Mac
+    // side drops that pair from the attribution floor. Defaults to
+    // `--checkpoint-sha256`, i.e. no skew claimed.
+    var replayCheckpointSHA256: String = ""
 }
 
 func parseArgs() -> Args? {
     var args = CommandLine.arguments.dropFirst()
     guard let subcommand = args.first else {
-        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval> [flags]\n", stderr)
+        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval|diagnose> [flags]\n", stderr)
         return nil
     }
     args = args.dropFirst()
@@ -70,6 +77,8 @@ func parseArgs() -> Args? {
         case "--heldout-frac":
             if let s = it.next(), let f = Float(s) { result.heldoutFrac = f }
         case "--mesh-truth":        result.meshTruthPath    = it.next() ?? ""
+        case "--replay-checkpoint-sha256":
+            result.replayCheckpointSHA256 = it.next() ?? ""
         default: break
         }
     }
@@ -996,6 +1005,52 @@ func runLegacyEval(outcome: CalibrationOutcome, args: Args) throws {
     try emitAccuracy(report, to: args.outputPath)
 }
 
+// MARK: - diagnose (specs/estimation/ml-feedback-loop tasks 3-4)
+
+// Emits the MealCalibrationInput data `accuracy` computes and discards, one
+// record per fixture, stamped with the artifacts the replay ran against
+// (Reqs 4.1/4.2/4.3). The Mac-side loop consumes this to attribute an
+// estimation-vs-stated gap to a class, a volume, or a plane.
+//
+// Exit policy: non-zero ONLY on I/O failure — an unloadable fixtures directory
+// or an unwritable output. Zero replayed meals is a REPORTED status, not a
+// crash: field bundles routinely fail to replay (missing depth, a refusal
+// recorded before segmentation), and the diagnosis of that is the artifact the
+// loop needs, not an empty exit code (the calibrate-silently-drops precedent
+// read the other way — nothing is dropped, so nothing needs to fail).
+func runDiagnose(args: Args) throws {
+    guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
+        fputs("diagnose requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
+    }
+    let db = try GRDBFoodDatabase.bundled()
+    let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
+    let replaySHA = args.replayCheckpointSHA256.isEmpty
+        ? args.checkpointSHA256 : args.replayCheckpointSHA256
+    let dbHash = try DiagnoseRun.contentSHA256(of: GRDBFoodDatabase.bundledResourceURLs())
+
+    let report = DiagnoseRun.diagnose(
+        fixtures: fixtures,
+        replayCheckpointSHA256: replaySHA,
+        replayDatabaseSHA256: dbHash,
+        replayDatabaseEdition: db.version
+    ) { fx in
+        try FixtureRunner.run(fixture: fx, palette: paletteForFixture(fx),
+                              database: db, voxelEdgeMm: args.voxelEdgeMm)
+    }
+
+    let data = try DiagnoseRun.encoder().encode(report)
+    if args.outputPath.isEmpty {
+        print(String(data: data, encoding: .utf8) ?? "{}")
+    } else {
+        try data.write(to: URL(fileURLWithPath: args.outputPath))
+    }
+    fputs("diagnose: \(report.replayedCount) replayed, "
+        + "\(report.notReplayableCount) not replayable, "
+        + "\(report.zeroMealCount) zero-meal, "
+        + "\(report.versionSkewCount) version-skewed of \(fixtures.count) fixture(s)\n",
+        stderr)
+}
+
 // MARK: - seg-bench (task 64)
 
 func runSegBench(args: Args) throws {
@@ -1045,9 +1100,10 @@ do {
     case "calibrate":          try runCalibrate(args: args)
     case "calibrate-and-eval": try runCalibrateAndEval(args: args)
     case "seg-bench":          try runSegBench(args: args)
+    case "diagnose":           try runDiagnose(args: args)
     default:
         fputs("Unknown subcommand '\(args.subcommand)'\n", stderr)
-        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval\n", stderr)
+        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose\n", stderr)
         exit(1)
     }
 } catch {

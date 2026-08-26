@@ -214,6 +214,26 @@ eviction deterministic when attempts share a millisecond. Only the population
 the insert belongs to is evicted. `estimationOutcomes(limit:)` returns newest
 first. Outcome writes never touch `eventsDidChange` (quick_presets convention).
 
+`protected_outcomes(outcome_id TEXT PK)` (schema **v11**; `CREATE IF NOT
+EXISTS` retrofits it, no ALTER) exempts an id from **all three** eviction
+branches — the non-benchmark bound and both benchmark ones
+(specs/estimation/ml-feedback-loop Req 3.2). `markOutcomeProtected(id:)` is
+`INSERT OR IGNORE`, keyed on the id alone: no foreign key, so marking is legal
+before the outcome row lands (the App saves it on a detached task) and a
+dangling row is inert. Protected rows sit **outside** the bound, not in a slot
+of it, so the population can exceed 500 / 10 by the protected count.
+Profile-neutral — product builds simply never call it.
+
+Two companions landed with the on-device note layer.
+`markOutcomesProtected(mealID:)` protects **every** attempt recorded against a
+meal in one `INSERT … SELECT` — a note taken on a recorded meal (the review
+surface, the result screen, a Records row) knows the meal id and no attempt id,
+and the retries around a meal are part of what the note is about. One statement
+rather than a read-then-write, so an attempt saved mid-call cannot slip through.
+`unmarkOutcomeProtected(id:)` retires a protection once the pull's manifest pass
+confirms the note has left the phone, so protection does not accumulate for the
+life of the install after its reason is gone.
+
 ## Benchmark meals (snaq-parity)
 
 `benchmark_meals` (also schema v6 — Decision 7 defines v6 as BOTH snaq-parity

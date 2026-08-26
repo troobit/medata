@@ -92,6 +92,23 @@ struct MealReviewView: View {
         )
     }
 
+    #if FIELD_LOOP
+    private var fieldEstimateSnapshot: EstimateSnapshot {
+        EstimateSnapshot(
+            foods: model.activeFoods.map { food in
+                EstimateSnapshotFood(
+                    classID: food.currentClassId,
+                    displayName: MealReviewModel.prettify(food.currentClassId),
+                    massG: food.currentMassG,
+                    carbsG: food.currentCarbsG
+                )
+            },
+            displayedTotalCarbsG: model.pendingTotalCarbsG,
+            displayedTotalMassG: model.pendingTotalMassG
+        )
+    }
+    #endif
+
     private var palette: ClassPalette { .standard }
     private var colourTable: ClassColourTable { ClassColourTable(version: record.paletteVersion) }
 
@@ -126,6 +143,20 @@ struct MealReviewView: View {
             .padding(.top, 8)
         }
         .background(Color.captureBackground.ignoresSafeArea())
+        #if FIELD_LOOP
+        // Meal-linked note context (ml-feedback-loop Req 2.1 / 2.4). The
+        // snapshot is the CURRENT displayed state — post-relabel, post-scale,
+        // post-gram-edit — recomputed on every body pass, so a note saved after
+        // three corrections records the three corrections and not the raw
+        // prediction. The meal id is the join key; the outcome row carries it,
+        // so the Mac side reaches the bundle stem from here without this
+        // surface having to know an attempt timestamp it was never given.
+        .fieldScreen(
+            "meal.review",
+            meal: FieldNoteMealLink(mealID: record.id),
+            estimate: fieldEstimateSnapshot
+        )
+        #endif
         // The suggestion is computed from the total the user will actually
         // record (Req 3.2), so it re-derives with every correction — tapping
         // 1/2 on the plate scale rolls the carb total, the plate mass and the

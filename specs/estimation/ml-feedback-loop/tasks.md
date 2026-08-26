@@ -8,14 +8,14 @@ references:
 
 ## Swift core
 
-- [ ] 1. Write failing XCTests for protected estimation outcomes <!-- id:i6u18bj -->
+- [x] 1. Write failing XCTests for protected estimation outcomes <!-- id:i6u18bj -->
   - Beside the existing eviction tests for saveEstimationOutcome in MedataCore
   - Cover: markOutcomeProtected(id:) API, exemption in the non-benchmark branch AND both benchmark per-meal-per-lineage branches, schema stamp bumps to 11, protected rows may exceed the bounds
   - CREATE TABLE IF NOT EXISTS retrofit — no ALTER migration
   - Stream: 1
   - Requirements: [3.2](requirements.md#3.2)
 
-- [ ] 2. Implement protected_outcomes table (schema v11) and eviction exemptions <!-- id:i6u18bk -->
+- [x] 2. Implement protected_outcomes table (schema v11) and eviction exemptions <!-- id:i6u18bk -->
   - GRDBPersistenceStore: new table, markOutcomeProtected(id:), AND id NOT IN (SELECT outcome_id FROM protected_outcomes) in all three eviction branches
   - Profile-neutral MedataCore API — no FIELD_LOOP condition
   - make test both totals green
@@ -23,27 +23,27 @@ references:
   - Stream: 1
   - Requirements: [3.2](requirements.md#3.2)
 
-- [ ] 3. Write failing HarnessCLITests for the diagnose subcommand <!-- id:i6u18bl -->
+- [x] 3. Write failing HarnessCLITests for the diagnose subcommand <!-- id:i6u18bl -->
   - Per-fixture JSON: predictedCarbsPerClass, perClassVolumesCm3, dominantClass, supportPlaneReference, residuals, totals
   - Replay status values: replayed / not_replayable / replay_zero_meals (missing_bundle is Mac-side)
   - Output records the replaying checkpoint SHA and DB hash for version-skew stamping
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3)
 
-- [ ] 4. Implement HarnessCLI diagnose <!-- id:i6u18bm -->
+- [x] 4. Implement HarnessCLI diagnose <!-- id:i6u18bm -->
   - New subcommand beside accuracy/calibrate in HarnessCLI/main.swift; stages via existing FixtureLoader/FixtureRunner; emits the MealCalibrationInput data the accuracy path discards
   - Non-zero exit only on I/O failure — zero meals is a reported status, not a crash (calibrate-silently-drops precedent)
   - Blocked-by: i6u18bl (Write failing HarnessCLITests for the diagnose subcommand)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3)
 
-- [ ] 5. Write failing tests for the wire-level bundle slimmer <!-- id:i6u18bn -->
+- [x] 5. Write failing tests for the wire-level bundle slimmer <!-- id:i6u18bn -->
   - Against a committed miniature .fixture: slimmed output still loads, image/depth/argmax/intrinsics/gravity/mask fields intact, probability tensors absent, temp-file + atomic replace, .slimmed sidecar written
   - fixture_revision NOT mutated — the sidecar marks content state, the revision marks schema
   - Stream: 1
   - Requirements: [3.6](requirements.md#3.6)
 
-- [ ] 6. Implement the wire-level bundle slimmer in MedataCore <!-- id:i6u18bo -->
+- [x] 6. Implement the wire-level bundle slimmer in MedataCore <!-- id:i6u18bo -->
   - Varint field-skip over the proto wire format (Swift equivalent of tools/fixture_slice.py's reader) — no full SwiftProtobuf decode of a ~390 MB bundle
   - Profile-neutral MedataCore code; App-layer FieldMaintenance triggers it later
   - Blocked-by: i6u18bn (Write failing tests for the wire-level bundle slimmer)
@@ -52,7 +52,7 @@ references:
 
 ## On-device capture
 
-- [ ] 7. Add FIELD_LOOP build profiles and the product gate <!-- id:i6u18bp -->
+- [x] 7. Add FIELD_LOOP build profiles and the product gate <!-- id:i6u18bp -->
   - FIELD_LOOP joins SWIFT_ACTIVE_COMPILATION_CONDITIONS in project-level Debug (currently DEBUG $(inherited)) and a new Release-block setting; new ProductRelease configuration duplicates Release without FIELD_LOOP
   - Makefile: build-product / deploy-product targets; NO CLI SWIFT_ACTIVE_COMPILATION_CONDITIONS override (replaces the whole value, falsely implies package-graph control)
   - profile=field|product appended to the launch log line at App/App.swift logLaunchIdentity(); product gate = strings-grep asserting the binary lacks the profile=field literal
@@ -60,7 +60,7 @@ references:
   - Stream: 2
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4)
 
-- [ ] 8. Build FieldNoteWindow, FieldNoteContext, and the affordance button <!-- id:i6u18bq -->
+- [x] 8. Build FieldNoteWindow, FieldNoteContext, and the affordance button <!-- id:i6u18bq -->
   - Separate passthrough UIWindow at .alert+1 created on scene connection, hitTest returns nil outside the draggable button; all files App/FieldNote*.swift gated #if FIELD_LOOP at line 1 with manual pbxproj entries
   - FieldNoteContext (@Observable) composes screen id from ActiveSheet + stack top + CaptureState via ~8 .fieldScreen() mount points; sheets inside covers fall back to hosting cover id
   - UI wiring — TDD exempt (no executable app test target; gate is build + device look)
@@ -68,7 +68,7 @@ references:
   - Stream: 2
   - Requirements: [1.1](requirements.md#1.1), [1.4](requirements.md#1.4)
 
-- [ ] 9. Build the note sheet, note store, and screenshot service <!-- id:i6u18br -->
+- [x] 9. Build the note sheet, note store, and screenshot service <!-- id:i6u18br -->
   - Sheet: typed entry + optional carbs-grams field on meal-linked notes; save = one JSON + one PNG per note in Documents/notes/ (CaptureBundleRecorder pattern), log-and-swallow on failure
   - EstimateSnapshot Codable frozen at save (displayed corrected values — quickPresetDraft precedent); verbatim free text, no on-device parsing; multiple notes per capture as distinct files
   - FieldScreenshot fires at tap against a retained main-scene-window reference (never key window); capture screen composites ARView.snapshot beneath ImageRenderer chrome
@@ -76,7 +76,7 @@ references:
   - Stream: 2
   - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [1.6](requirements.md#1.6), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.5](requirements.md#2.5), [3.1](requirements.md#3.1)
 
-- [ ] 10. Wire meal-link surfaces and the refusal outcome stash <!-- id:i6u18bs -->
+- [x] 10. Wire meal-link surfaces and the refusal outcome stash <!-- id:i6u18bs -->
   - Context set by MealReviewView, ResultView/overview, refusal overlay, EstimationOutcomeDetailView, Records meal-row context menu
   - CaptureFlowModel.persistAttemptRecord stashes (outcomeID, timestampMs) on the model so the refusal overlay can link
   - Meal-linked note save calls markOutcomeProtected
@@ -84,7 +84,7 @@ references:
   - Stream: 2
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4), [3.2](requirements.md#3.2)
 
-- [ ] 11. Add spoken entry via SpeechAnalyzer/SpeechTranscriber <!-- id:i6u18bt -->
+- [x] 11. Add spoken entry via SpeechAnalyzer/SpeechTranscriber <!-- id:i6u18bt -->
   - On-device only (no server path exists in this API); AssetInventory locale asset requested at first field launch; check supportedLocales/en_IE mapping; convert to bestAvailableAudioFormat; editable transcript only after finalizeAndFinish; audio discarded
   - Degraded state (1.5) for permission denied / mic unavailable / asset absent / locale unsupported
   - NSMicrophoneUsageDescription + NSSpeechRecognitionUsageDescription in both INFOPLIST_KEY_* blocks
@@ -92,7 +92,7 @@ references:
   - Stream: 2
   - Requirements: [1.3](requirements.md#1.3), [1.5](requirements.md#1.5)
 
-- [ ] 12. Implement FieldMaintenance: manifest processing and slimming triggers <!-- id:i6u18bu -->
+- [x] 12. Implement FieldMaintenance: manifest processing and slimming triggers <!-- id:i6u18bu -->
   - Two-phase manifest (temp name + ready-sentinel with hash/length); runs at launch, foreground, post-capture; hash-gated deletes of pulled bundles/notes, prunes their protected_outcomes rows, then removes manifest+sentinel
   - Slimming: post-capture check + BGProcessingTask; budget 25 GB, low-watermark 20 GB, oldest-first, thermal/battery deferral; manifest processing runs BEFORE slimming and slimming skips manifest-listed stems
   - If watermark unreachable: keep recording, surface condition in next pull summary

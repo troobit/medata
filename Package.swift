@@ -377,7 +377,14 @@ let package = Package(
         .testTarget(
             name: "PipelineTests",
             dependencies: ["Pipeline", "Persistence", "PortableContracts", "SupportPlane", "CaptureKit", "Volume"],
-            path: "MedataCore/Tests/PipelineTests"
+            path: "MedataCore/Tests/PipelineTests",
+            // The miniature hand-encoded capture bundle the wire-level slimmer
+            // is asserted against (ml-feedback-loop Req 3.6). A few hundred
+            // bytes: the real bundles it stands in for are ~390 MB and live on
+            // the device.
+            resources: [
+                .copy("Fixtures")
+            ]
         ),
         .testTarget(
             name: "HarnessCLITests",

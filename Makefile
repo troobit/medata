@@ -23,6 +23,7 @@ BUNDLE_ID   ?= rtob.MeData
 
 DERIVED_DEBUG   ?= /tmp/medata-debug
 DERIVED_RELEASE ?= /tmp/medata-release
+DERIVED_PRODUCT ?= /tmp/medata-product
 LOG_FILE    ?= /tmp/medata-device.log
 LOG_ARCHIVE ?= /tmp/medata-device.logarchive
 LOG_LAST    ?= 30m
@@ -41,7 +42,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell worktree harness-accuracy
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy
 
 help:
 	@echo "MeData targets:"
@@ -60,6 +61,9 @@ help:
 	@echo "  deploy-release-stub  Release build with DEV_STUB_SEGMENTER forced on, install + launch"
 	@echo "                       (capture testing — Debug stub is too slow to arm the shutter;"
 	@echo "                        plain Release crashes until the real model ships)"
+	@echo "  build-product        ProductRelease build (FIELD_LOOP compiled out) + the product"
+	@echo "                       gate; no device needed"
+	@echo "  deploy-product       build-product against the device, install + launch"
 	@echo "  logs-device          collect + filter device logs (subsystem ie.medata.app) to"
 	@echo "                       stdout and $(LOG_FILE)."
 	@echo "                       LIMIT: post-hoc snapshot of the last LOG_LAST=$(LOG_LAST), not a"
@@ -147,6 +151,23 @@ logs-device:
 deploy-release:
 	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
 	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release.sh
+
+# ProductRelease: Release minus FIELD_LOOP (ml-feedback-loop Req 9). Debug and
+# Release both carry FIELD_LOOP — field is the daily default, matching the
+# always-on capture recorder — so this is the only way to build the product
+# profile. Both targets run the `strings` gate before they claim anything.
+# NOTE: no CLI SWIFT_ACTIVE_COMPILATION_CONDITIONS override is used or
+# accepted here; passing it on the xcodebuild command line REPLACES the whole
+# value (silently dropping DEBUG) and implies a control over the SwiftPM
+# package graph that xcodebuild does not have.
+build-product:
+	INSTALL=0 BUILD_STAMP='$(BUILD_STAMP)' DERIVED_PRODUCT=$(DERIVED_PRODUCT) \
+	bash tools/deploy_product.sh
+
+deploy-product:
+	INSTALL=1 DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) \
+	BUILD_STAMP='$(BUILD_STAMP)' DERIVED_PRODUCT=$(DERIVED_PRODUCT) \
+	bash tools/deploy_product.sh
 
 # Release + stub for capture testing (docs/agent-notes/device-build-and-test.md
 # Path B, automated). Edits Package.swift to force DEV_STUB_SEGMENTER on,
