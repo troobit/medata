@@ -102,12 +102,12 @@ references:
 
 ## Overlay and generator
 
-- [ ] 13. Write failing pytest for the loop overlay in generate.py <!-- id:i6u18bv -->
+- [x] 13. Write failing pytest for the loop overlay in generate.py <!-- id:i6u18bv -->
   - tools/food_db/tests/: bounds per allowlisted column, *_source rewritten to LOOP_OVERLAY, beta_status/beta_provenance invalidated to uncalibrated_overlay_base on touched classes, overlay applied to in-memory rows before INSERT and before _apply_calibration, default committed path + fail-closed inverse guard (prior DB has LOOP_OVERLAY provenance but overlay absent aborts), palette-lock interaction, idempotent re-bake, meta overlay_json lineage
   - Stream: 3
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
 
-- [ ] 14. Implement _load_overlay in generate.py and the make food-db target <!-- id:i6u18bw -->
+- [x] 14. Implement _load_overlay in generate.py and the make food-db target <!-- id:i6u18bw -->
   - Mirrors _load_calibration's fail-before-write contract; allowlist: density (0.05-2.0), solid_servings.grams_per_unit (5-500, respecting the <100 precision rule), liquid_servings.serving_ml, composition columns (0-100)
   - make food-db = python3 tools/food_db/generate.py && python3 -m pytest tools/food_db/tests/ -q (closes the no-make-entry gap)
   - Blocked-by: i6u18bv (Write failing pytest for the loop overlay in generate.py)

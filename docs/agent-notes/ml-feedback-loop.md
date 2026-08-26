@@ -126,6 +126,92 @@ wire bytes SwiftProtobuf did not write, and one test compares the output to the
 input with exactly the two records excised. `PipelineTests` gained
 `resources: [.copy("Fixtures")]` for it.
 
+## Loop overlay in the food-DB bake
+
+`tools/food_db/loop_overlay.json` is the only file `field_close.py` may write.
+`generate.py` reads it from that fixed path **by default** — there is no flag
+and deliberately no way to turn it off, because an opt-in overlay means every
+plain `python3 tools/food_db/generate.py` quietly ships a database missing
+every landed fix.
+
+The path is anchored to the repo (`_REPO_ROOT / "tools/food_db/..."`), not to
+cwd like `OUTPUT_DIR`. The rule in this script is: **inputs repo-relative,
+outputs cwd-relative**. `EndToEndCalibrateBakeTests` runs `generate.py` from a
+temp directory precisely so the baked DBs land there; a cwd-relative overlay
+path would have made that bake silently overlay-free while `make food-db`
+baked with it.
+
+Ordering (the part that breaks quietly if you get it wrong):
+
+1. `verify_palette_lock`
+2. `_load_overlay` — or, when the file is absent, the inverse guard
+3. `_apply_overlay` onto **copies** of `FOOD_DATA` / `SOLID_SERVINGS` /
+   `LIQUID_SERVINGS`
+4. `verify_solid_servings(foods, solid_servings)` on the post-overlay rows
+5. `_load_calibration` with the post-overlay densities
+6. INSERT, then `_apply_calibration`
+
+Copies, not mutation: the module tables must still read as source values after
+a bake, or a second `bake()` in the same process would stack overlays and the
+idempotence test would go red.
+
+The β interaction is the subtle one. A class whose `density` or a composition
+column the overlay moves has its `beta`/`beta_status`/`beta_provenance` set to
+`1.0` / `uncalibrated_overlay_base` / `uncalibrated_overlay_base` — **and
+`_apply_calibration` skips it**. Without that skip the calibration pass simply
+overwrites the invalidation, since it runs after. Serving overrides
+(`grams_per_unit`, `serving_ml`) are not terms in the β fit and do not
+invalidate anything.
+
+`uncalibrated_overlay_base` is not a `BetaCalibrationStatus` case in Swift.
+`GRDBFoodDatabase.rowToEntry`'s `?? .uncalibratedUnity` fallback reads it as
+uncalibrated, which is what it is — the DB just records the more specific
+reason. No Swift change was needed and none should be added.
+
+Two things the allowlist does that read as arbitrary until you hit them:
+
+- `grams_per_unit` bounds are 5–500 g, but `verify_solid_servings` separately
+  refuses `>= 100` (the `ServingNote` 2-dp round-trip lock). Both fire; the
+  overlay does not get to bypass the second.
+- `energy_kj_100` is deliberately off the allowlist. It is not a "composition
+  column (0–100 g)" and nothing in the carb path reads it.
+
+`liquid_servings` is keyed `(class_id, region, vessel)`, so those entries carry
+`region` and `vessel`. Everything else is keyed by class alone.
+
+### Two inverse guards, same shape
+
+The bake has two inputs it cannot reconstruct from the repo, and both fail
+closed when a prior database shows they were once applied:
+
+- **Overlay**: prior DB carries `LOOP_OVERLAY` provenance (or an `overlay_json`
+  meta row) and the file is gone ⇒ abort. The meta check matters — a
+  servings-only overlay rewrites no `foods` row, so the provenance columns
+  alone would miss it.
+- **Calibration**: prior DB carries `calibration_*` meta and no
+  `--calibration-json` was named ⇒ abort. The calibrate artifact is fitted
+  from the N5k corpus and is **not in this repo**, so a bare re-bake strips
+  nineteen lineage rows off the committed artifacts. That is why
+  `make food-db` currently aborts here with no `CALIBRATION=` — it is the
+  guard working, not a broken target.
+
+### `make food-db`
+
+`make food-db [CALIBRATION=<artifact>] [PYTHON=<interpreter>]` — bake, then run
+`tools/food_db/tests/`. The pytest availability check runs **before** the bake
+so a missing pytest cannot leave freshly regenerated databases behind a gate
+that never ran. `PYTHON` exists because `/usr/bin/python3` is 3.9.6 here (see
+below) and has no pytest; `/opt/homebrew/bin/python3` does.
+
+`conftest.py` has an autouse `overlay_absent` fixture pointing `OVERLAY_JSON`
+at a nonexistent path for every test in the directory. Without it, the first
+landed overlay would start failing source-value assertions in
+`test_calibrated_bake.py`, `test_solid_servings.py`, and friends on a change
+that is not theirs. `test_loop_overlay.py` names it as a fixture dependency and
+redirects again, so the ordering is stated rather than inherited from autouse
+rules.
+
+
 ## Environment gotcha
 
 `make test`'s `EndToEndCalibrateBakeTests` "Synthetic MetaFood3D fixtures →

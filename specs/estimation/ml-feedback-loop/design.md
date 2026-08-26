@@ -81,12 +81,14 @@ Adapters: `anthropic` (pinned model id), `openai` (configurable base URL, so any
 **Overlay.** `tools/food_db/loop_overlay.json` at a fixed committed path, read by `generate.py` **by default** — not behind an opt-in flag, because an opt-in overlay silently regenerates without landed fixes on any plain invocation. Fail-closed inverse guard: if the prior DB carries `LOOP_OVERLAY` provenance and no overlay file is present, the bake aborts. `_load_overlay()` mirrors `_apply_calibration`'s fail-before-write contract, but the overlay applies to the in-memory `FOOD_DATA`/side-table rows **before INSERT and before `_apply_calibration`** — order matters: β is fitted against the source densities, so any class whose `density` or composition the overlay touches gets its `beta_status`/`beta_provenance` invalidated to `uncalibrated_overlay_base` until refit, and the density spot-check reads the post-overlay value. Entry shape:
 
 ```json
-{"class_id": "toast", "column": "density", "value": 0.27,
+{"class_id": "bread_white", "column": "density", "value": 0.27,
  "basis": {"notes": ["…"], "captures": ["…"], "cause": "wrong_density", "rationale": "…"},
- "fix_id": "cycle3-density-toast", "applied_at": "2026-08-30"}
+ "fix_id": "cycle3-density-bread_white", "applied_at": "2026-08-30"}
 ```
 
-Allowlisted columns with declared physical bounds: `density` (0.05–2.0 g/cm³), `solid_servings.grams_per_unit` (5–500, `< 100` precision rule respected), `liquid_servings.serving_ml`, and composition columns (0–100 g) — an overridden value rewrites the row's `density_source`/`composition_source` to `LOOP_OVERLAY`, so no row ever claims CoFID/AFCD for a value it no longer carries. β, the palette, and the class set are outside the overlay by construction. Overlay entries and lineage are also written to `meta` (`overlay_json`), following the `calibration_*` keys precedent.
+`liquid_servings` is keyed `(class_id, region, vessel)`, so an entry targeting `liquid_servings.serving_ml` carries `region` and `vessel` beside `class_id`; naming a row that does not exist aborts, as does targeting the same cell twice.
+
+Allowlisted columns with declared physical bounds: `density` (0.05–2.0 g/cm³), `solid_servings.grams_per_unit` (5–500, `< 100` precision rule respected), `liquid_servings.serving_ml`, and composition columns (0–100 g) — an overridden value rewrites the row's `density_source`/`composition_source` to `LOOP_OVERLAY`, so no row ever claims CoFID/AFCD for a value it no longer carries. β, the palette, and the class set are outside the overlay by construction. Overlay entries and lineage are also written to `meta` (`overlay_json`, `overlay_fix_ids`, `overlay_beta_invalidated_classes`), following the `calibration_*` keys precedent. The invalidation is enforced by `_apply_calibration` skipping every overlay-touched class and recording them in `calibration_overlay_invalidated_classes` — without the skip the calibration pass would simply overwrite the invalidation it exists to respect.
 
 **Guards on every auto-commit (5.2–5.3), enforced in `field_close.py` code, in order:**
 
@@ -95,7 +97,7 @@ Allowlisted columns with declared physical bounds: `density` (0.05–2.0 g/cm³)
 3. *Bounds*: per-column physical bounds; per-cycle symmetric drift ceiling |Δ| ≤ 15 % of the prior value; **and a lifetime absolute bound anchored to the original CoFID/AFCD source value (default total |Δ| ≤ 30 %)** — the per-cycle ceiling alone is a rate limiter, not a bound (1.15¹⁰ ≈ 4×). Beyond any bound ⇒ proposal.
 4. *One degree of freedom per class per cycle*, plus a touched-column cooldown (a class whose `density` moved this cycle cannot have `grams_per_unit` moved next cycle) — `fix_id`-keyed denylisting cannot see cross-column oscillation on the same class.
 5. *Weighed-truth guard*: `benchmark_meals` captures (SNAQ Parity) whose classes a fix touches are replayed before/after the overlay change; any worsening of weighed-carb error ⇒ demoted, recorded in the verdict. Stated values steer, weighed values veto — this is what keeps a loop trained on human estimates falsifiable.
-6. *Build gates*: `make food-db` (new target: `python3 tools/food_db/generate.py && python3 -m pytest tools/food_db/tests/ -q` — closes the existing gap that generation has no make entry) and `make test` (both totals). Any failure ⇒ proposal.
+6. *Build gates*: `make food-db` (new target: `python3 tools/food_db/generate.py && python3 -m pytest tools/food_db/tests/ -q` — closes the existing gap that generation has no make entry) and `make test` (both totals). Any failure ⇒ proposal. The target takes `CALIBRATION=<artifact>`, and a bare re-bake over a database that carries calibration lineage aborts: the calibrate artifact is fitted from the N5k corpus and is not in this repo, so regenerating without it would strip every `calibration_*` meta row — the same fail-closed shape as the overlay's inverse guard, on the other input the bake cannot reconstruct. `field_close` therefore carries the artifact path in `loop_config.json`; with no artifact configured the gate fails and every fix demotes to a proposal, which is the safe direction.
 
 Regression judgement feeding the denylist uses weighed benchmarks first and fresh post-change captures second — never the captures the fix was derived from (the derivation corpus would judge its own fix).
 

@@ -21,6 +21,11 @@ DEVICE_UDID ?= 6AD781BA-89FF-5A82-A2A1-B5EC9469F465
 DEVICE_NAME ?= you
 BUNDLE_ID   ?= rtob.MeData
 
+# Interpreter for the Python tooling (food-DB bake + its pytest gate).
+# Override when the default python3 on PATH has no pytest:
+#   make food-db PYTHON=/opt/homebrew/bin/python3
+PYTHON ?= python3
+
 DERIVED_DEBUG   ?= /tmp/medata-debug
 DERIVED_RELEASE ?= /tmp/medata-release
 DERIVED_PRODUCT ?= /tmp/medata-product
@@ -42,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy
 
 help:
 	@echo "MeData targets:"
@@ -51,6 +56,9 @@ help:
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
+	@echo "  food-db              regenerate the bundled food databases (CoFID + AFCD,"
+	@echo "                       loop overlay applied) and run the generator test suite"
+	@echo "                       [CALIBRATION=<calibrate artifact> PYTHON=$(PYTHON)]"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
 	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
@@ -98,6 +106,30 @@ test:
 
 spell:
 	bash tools/check_spelling.sh
+
+# Regenerate the bundled food databases and hold the generator's own gates.
+# Both halves matter: generate.py aborts before writing on a palette drift, a
+# serving-coverage gap, a bad calibration artifact, or a bad loop overlay, and
+# the pytest suite is what proves those gates still fire. The loop overlay at
+# tools/food_db/loop_overlay.json is read by default — no flag — so a plain
+# `make food-db` regenerates WITH every landed loop fix (ml-feedback-loop
+# Req 5.1).
+#
+# CALIBRATION names the HarnessCLI calibrate artifact. The committed databases
+# carry calibration lineage and that artifact is NOT in this repo (it is fitted
+# from the N5k corpus), so a bare `make food-db` aborts rather than silently
+# re-baking the lineage away:
+#   make food-db CALIBRATION=<path to the calibrate artifact>
+#
+# The pytest check runs BEFORE the bake, not after: a missing pytest must not
+# leave freshly regenerated databases sitting behind a gate that never ran.
+food-db:
+	@$(PYTHON) -c 'import pytest' 2>/dev/null || { \
+	  echo "$(PYTHON) has no pytest — rerun as: make food-db PYTHON=<interpreter>"; \
+	  exit 1; }
+	$(PYTHON) tools/food_db/generate.py \
+	  $(if $(CALIBRATION),--calibration-json "$(CALIBRATION)",)
+	$(PYTHON) -m pytest tools/food_db/tests/ -q
 
 # Replay recorded capture bundles through the offline accuracy harness.
 # Pull bundles off the device first (Files app, or the devicectl recipe in
