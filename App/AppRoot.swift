@@ -44,6 +44,11 @@ struct AppRoot: View {
     // the home Activity control and `medata://activity/add` raise one surface
     // from any app state.
     @State private var showActivitySheet = false
+    // The glucose-entry sheet (fingerprick-glucose Req 2.1), owned here for
+    // the same reason the other two are: the home BSL control, the launcher
+    // widget and `medata://glucose/add` must raise one surface from any app
+    // state.
+    @State private var showGlucoseSheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
     // The home page's latest-reading header (Req 4). Owned here rather than by
     // HomeView so the subscription survives every cover present/dismiss —
@@ -82,6 +87,7 @@ struct AppRoot: View {
         case activitySheet  // medata://activity/add
         case captureCover  // medata://capture
         case graphCover  // medata://graph — the glucose widget's tap target
+        case glucoseSheet  // medata://glucose/add
     }
 
     init(
@@ -143,6 +149,7 @@ struct AppRoot: View {
             },
             onIntake: { activeSheet = .intake },
             onDose: { presentInsulinSheet() },
+            onBsl: { showGlucoseSheet = true },
             onActivity: { showActivitySheet = true },
             onRecords: { activeSheet = .records },
             onGraph: { activeSheet = .graph },
@@ -166,6 +173,8 @@ struct AppRoot: View {
                 activeSheet = .capture
             case .graphCover:
                 activeSheet = .graph
+            case .glucoseSheet:
+                showGlucoseSheet = true
             case nil:
                 break
             }
@@ -259,6 +268,9 @@ struct AppRoot: View {
             case .activitySheet:
                 pendingDeepLink = nil
                 showActivitySheet = true
+            case .glucoseSheet:
+                pendingDeepLink = nil
+                showGlucoseSheet = true
             case .insulinSheet, nil:
                 break
             }
@@ -302,11 +314,39 @@ struct AppRoot: View {
             case .insulinSheet:
                 pendingDeepLink = nil
                 presentInsulinSheet()
+            case .glucoseSheet:
+                pendingDeepLink = nil
+                showGlucoseSheet = true
             case .activitySheet, nil:
                 break
             }
         }) {
             LogSheet(store: store, mode: .activity)
+        }
+        // The glucose-entry sheet resumes a pending target exactly as the other
+        // two do (fingerprick-glucose Req 2.1: "from any app state"). It is a
+        // separate sheet rather than a fourth `LogSheet` mode because it opens
+        // with the keypad up and therefore at a different detent — see
+        // `GlucoseEntrySheet`.
+        .sheet(isPresented: $showGlucoseSheet, onDismiss: {
+            switch pendingDeepLink {
+            case .captureCover:
+                pendingDeepLink = nil
+                activeSheet = .capture
+            case .graphCover:
+                pendingDeepLink = nil
+                activeSheet = .graph
+            case .insulinSheet:
+                pendingDeepLink = nil
+                presentInsulinSheet()
+            case .activitySheet:
+                pendingDeepLink = nil
+                showActivitySheet = true
+            case .glucoseSheet, nil:
+                break
+            }
+        }) {
+            GlucoseEntrySheet(store: store)
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
@@ -364,6 +404,8 @@ struct AppRoot: View {
     //   medata://insulin/add  — the dose-entry sheet
     //   medata://activity/add — the activity-entry sheet
     //                           (specs/data/activity-events Req 3.5)
+    //   medata://glucose/add  — the glucose-entry sheet
+    //                           (fingerprick-glucose Req 2.1)
     //   medata://capture      — the Capture cover
     //   medata://graph        — the Graph cover (glucose widget tap, Req 7.1).
     //                           From a locked device iOS defers the open until
@@ -388,6 +430,9 @@ struct AppRoot: View {
             if showActivitySheet {
                 pendingDeepLink = .insulinSheet
                 showActivitySheet = false
+            } else if showGlucoseSheet {
+                pendingDeepLink = .insulinSheet
+                showGlucoseSheet = false
             } else if activeSheet == nil {
                 presentInsulinSheet()
             } else {
@@ -398,6 +443,9 @@ struct AppRoot: View {
             if showInsulinSheet {
                 pendingDeepLink = .activitySheet
                 showInsulinSheet = false
+            } else if showGlucoseSheet {
+                pendingDeepLink = .activitySheet
+                showGlucoseSheet = false
             } else if activeSheet == nil {
                 showActivitySheet = true
             } else {
@@ -411,6 +459,9 @@ struct AppRoot: View {
             } else if showActivitySheet {
                 pendingDeepLink = .captureCover
                 showActivitySheet = false
+            } else if showGlucoseSheet {
+                pendingDeepLink = .captureCover
+                showGlucoseSheet = false
             } else if activeSheet == nil {
                 activeSheet = .capture
             } else if activeSheet != .capture {
@@ -424,10 +475,26 @@ struct AppRoot: View {
             } else if showActivitySheet {
                 pendingDeepLink = .graphCover
                 showActivitySheet = false
+            } else if showGlucoseSheet {
+                pendingDeepLink = .graphCover
+                showGlucoseSheet = false
             } else if activeSheet == nil {
                 activeSheet = .graph
             } else if activeSheet != .graph {
                 pendingDeepLink = .graphCover
+                activeSheet = nil
+            }
+        case ("glucose", "/add"):
+            if showInsulinSheet {
+                pendingDeepLink = .glucoseSheet
+                showInsulinSheet = false
+            } else if showActivitySheet {
+                pendingDeepLink = .glucoseSheet
+                showActivitySheet = false
+            } else if activeSheet == nil {
+                showGlucoseSheet = true
+            } else {
+                pendingDeepLink = .glucoseSheet
                 activeSheet = nil
             }
         default:

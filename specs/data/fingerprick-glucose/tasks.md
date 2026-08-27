@@ -150,7 +150,7 @@ references:
   - Requirements: [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [3.8](requirements.md#3.8)
   - References: MedataCore/Sources/GlucoseWidgetShared/GlucoseTimeline.swift, MeData/MeDataWidgets/GlucoseWidget.swift
 
-- [ ] 16. Build the glucose entry sheet and its model <!-- id:3sphmgr -->
+- [x] 16. Build the glucose entry sheet and its model <!-- id:3sphmgr -->
   - New App/GlucoseEntryModel.swift and App/GlucoseEntrySheet.swift, both needing the four-place project.pbxproj registration (docs/agent-notes/ui-capture-flow.md).
   - Autofocused numeric pad with implicit tenths: digits shift in from the right and the value is formatted live so the decimal point is visible rather than remembered. Every value in 1.0-30.0 takes at most three digits plus Save.
   - Back-dating reuses the compact DatePicker(selection:in:...Date()) row from App/InsulinDoseSheet.swift and is not on the path to Save.
@@ -161,7 +161,7 @@ references:
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6)
   - References: App/GlucoseEntrySheet.swift, App/GlucoseEntryModel.swift, App/InsulinDoseSheet.swift, MeData/MeData.xcodeproj/project.pbxproj
 
-- [ ] 17. Add the BSL control to the Dose row and route the reading to Graph <!-- id:3sphmgs -->
+- [x] 17. Add the BSL control to the Dose row and route the reading to Graph <!-- id:3sphmgs -->
   - A BSL Button joins doseRoute's row, the pair echoing ingestRow with the prominent and plain treatments inverted — Dose plain in the leading slot, BSL accent-prominent in the trailing slot; it presents the entry sheet (Decision 5). With dose-schedule's attempt-2 OutstandingDoseControl active, that control occupies the Dose slot beside BSL.
   - The glucose header becomes a route to Graph via onGraph, matching the lock-screen widget's tap destination, and is no longer display-only (home-router Req 4.8 redefined by Decision 5).
   - Renders snapshot.provenance beside the value.
@@ -171,7 +171,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1), [2.7](requirements.md#2.7), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7)
   - References: App/HomeView.swift, App/HomeGlucoseModel.swift
 
-- [ ] 18. Add the medata://glucose/add deep link <!-- id:3sphmgt -->
+- [x] 18. Add the medata://glucose/add deep link <!-- id:3sphmgt -->
   - A .glucoseSheet case joins DeepLinkTarget and handleDeepLink's (glucose, /add) match, reusing the pendingDeepLink dismiss-and-resume sequencing the insulin sheet already uses so it works from any app state, including with another sheet or full-screen cover up.
   - Wiring only — no preceding test.
   - Blocked-by: 3sphmgr (Build the glucose entry sheet and its model)
@@ -179,7 +179,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1)
   - References: App/AppRoot.swift
 
-- [ ] 19. Add the glucose launcher widget <!-- id:3sphmgu -->
+- [x] 19. Add the glucose launcher widget <!-- id:3sphmgu -->
   - A fourth Widget mirroring InsulinDoseWidget: LauncherProvider, LauncherView, widgetURL medata://glucose/add, kind ie.medata.widget.glucose.add — distinct from the data-driven ie.medata.widget.glucose — and the same supportedFamilies. Add it to MeDataWidgetBundle.
   - Wiring only — no preceding test.
   - Blocked-by: 3sphmgt (Add the medata://glucose/add deep link)
