@@ -215,9 +215,14 @@ struct ResultView: View {
     // visible, mirroring MealOverviewView (Decision 18).
     @State private var isCorrected = false
     @State private var correctedTotal: Float?
-    // The recorded dose suggestion for this meal (insulin-dosing Req 6.10),
-    // loaded once per push; nil for meals that never produced one.
-    @State private var suggestion: DoseSuggestionRecord?
+    // The dose for this meal, RECOMPUTED for the meal's own instant — its band,
+    // its window — from recorded events and the settings in force at read time
+    // (insulin-dosing Req 6.10/6.11). No recorded row exists to read
+    // (Decision 18), so every meal with a carbohydrate total has its line.
+    // `givenUnits` is the bolus paired by the ±45-minute window, not a link.
+    @State private var doseReadout: DoseReadout?
+    @State private var givenUnits: Double?
+    @State private var showingWorking = false
     // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
     // ellipsis-menu action, presented as the same edit sheet a hand-authored
     // preset uses (Req 8.2).
@@ -404,7 +409,7 @@ struct ResultView: View {
             if !focused { editingClassId = nil }
         }
         .task { await loadPhoto() }
-        .task { suggestion = try? await store.doseSuggestion(forSourceEventID: record.id) }
+        .task(id: heroCarbsG) { await refreshDose() }
         .task {
             loadServings()
             await observeCorrections()
@@ -472,18 +477,26 @@ struct ResultView: View {
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .animation(reduceMotion ? nil : .smooth, value: pendingTotalMassG)
                 .accessibilityIdentifier("result.massLine")
-            // History readout (insulin-dosing Req 6.10/6.11): the RECORDED
-            // suggestion for this meal, verbatim from its ledger row — never a
-            // recomputation, because the band, ratio and insulin-on-board
-            // belong to the moment the number was produced. Absent row,
-            // absent line; "suggested" labels a past hypothesis
-            // (design-direction §6.3) and is not counsel.
-            if let line = RecordedSuggestion.line(suggestion) {
-                Text(line)
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(Color.captureChromeText.opacity(0.75))
-                    .accessibilityLabel(RecordedSuggestion.spokenLine(suggestion) ?? line)
-                    .accessibilityIdentifier("result.doseSuggestion")
+            // History readout (insulin-dosing Req 6.10/6.11): the suggestion
+            // RECOMPUTED for this meal's own instant, in the same derived
+            // register and middle-dot grammar as the review surface. A later
+            // ratio change re-renders past meals at the new ratio — accepted:
+            // the line is a present-tense statement of the rule applied to
+            // that meal, not a record of what was once shown. A tap opens the
+            // same working the live surfaces open (Req 6.12).
+            if let doseReadout {
+                MiddleDotLine(
+                    runs: DoseHistoryLine.runs(doseReadout, givenUnits: givenUnits),
+                    textColour: Color.captureChromeText.opacity(0.75),
+                    separatorColour: Color.captureChromeText.opacity(0.45)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { showingWorking = true }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    DoseHistoryLine.spokenLine(doseReadout, givenUnits: givenUnits) ?? "")
+                .accessibilityAction(named: "Show working") { showingWorking = true }
+                .accessibilityIdentifier("result.doseLine")
             }
             if showsEstimatedLine {
                 Text("estimated \(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g")
@@ -493,7 +506,32 @@ struct ResultView: View {
             }
         }
         .accessibilityElement(children: .combine)
+        // The working is reachable without focusing the segment, which the
+        // combined element makes unfocusable (design-direction §2.6).
+        .accessibilityAction(named: "Show working") {
+            if doseReadout != nil { showingWorking = true }
+        }
         .accessibilityIdentifier("result.carbsTotal")
+        .sheet(isPresented: $showingWorking) {
+            if let doseReadout {
+                DoseWorkingSheet(readout: doseReadout)
+            }
+        }
+    }
+
+    // The dose is a pure function of recorded events and the settings in
+    // force, so history recomputes rather than reads (Req 6.11): one code
+    // path, so a live surface and this one cannot disagree. Re-runs when a
+    // correction moves the total, because the number must match the figure
+    // above it.
+    private func refreshDose() async {
+        let subject = DoseSubject(
+            carbsG: Double(heroCarbsG),
+            instant: record.createdAt,
+            sourceEventID: record.id
+        )
+        doseReadout = await DoseComputation.readout(for: subject, store: store)
+        givenUnits = await DoseComputation.givenUnits(at: record.createdAt, store: store)
     }
 
     // MARK: - Plate card (serving-adjust PRD, iOS Req 1–4)
