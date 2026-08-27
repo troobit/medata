@@ -660,12 +660,16 @@ per file**. That is the honest cost; a two-day session is still several GB,
 because a two-view success is ~390 MB and even a refusal can be ~200 MB. The
 first pull ran silent, read as a hang, and was interrupted twice, re-copying
 everything each time (9+ GB of repeats across sibling dirs).
-`field_pull.py` now prints one key=value line per copy carrying **bytes,
-percent, MB/s and an ETA** (progress is measured in bytes — a file count means
-nothing when files span 2-400 MB, and the ETA waits for three copies because a
-rate off one small file is mostly devicectl's per-invocation overhead), lands
-copies as `.partial` + rename, resumes the newest same-day dir lacking its
-`pull_complete.json` marker by skipping files present at listed size, and
+`field_pull.py` reports progress in **bytes, percent, MB/s and an ETA**
+(bytes, because a file count means nothing when files span 2-400 MB, and the
+ETA waits for three copies because a rate off one small file is mostly
+devicectl's per-invocation overhead). On a TTY that is a single redrawn
+Homebrew-style bar (`_ProgressBar`, stdlib-only, threads a poll of the
+in-flight `.partial` size so a 400 MB copy visibly moves); piped or captured
+output keeps one key=value line per copy — the parseable record, and what the
+tests see. Failed-copy lines print above the bar and survive it. The pull
+lands copies as `.partial` + rename, resumes the newest same-day dir lacking
+its `pull_complete.json` marker by skipping files present at listed size, and
 times out wedged `devicectl` calls per-file. Do not "clean up" the marker
 file: its absence is the resume signal.
 
