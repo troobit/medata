@@ -156,6 +156,22 @@ struct TrendsView: View {
                     .foregroundStyle(Color.seriesGlucose)
                     .interpolationMethod(.catmullRom)
                 }
+                // Blood readings as their own series (fingerprick-glucose
+                // Req 4.2). The line above holds sensor readings alone, so it
+                // runs unbroken THROUGH this instant rather than detouring to
+                // it: the two are separate measurements of the same quantity,
+                // and a fingerstick that disagrees with the sensor is the
+                // signal, not a glitch in the trace. Hollow circle so the trace
+                // stays readable where a marker sits on it.
+                ForEach(model.bloodPoints) { point in
+                    PointMark(
+                        x: .value("Time", point.date),
+                        y: .value("Glucose", point.value)
+                    )
+                    .symbol(.circle)
+                    .symbolSize(70)
+                    .foregroundStyle(Color.seriesGlucoseBlood)
+                }
             }
             // Insulin band (App 6): small glyphs pinned just above the x-axis
             // — the established CGM-app pattern — clear of the glucose plot

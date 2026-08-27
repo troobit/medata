@@ -48,8 +48,16 @@ extension Color {
 
     // MARK: - Trends chart (Decision 12, design-handoff-00)
 
-    // Glucose line series on the Trends chart.
+    // Glucose line series on the Trends chart — sensor readings only, since
+    // fingerprick-glucose Req 4.2 draws blood readings as a separate series.
     static let seriesGlucose = Color(uiColor: .systemOrange)
+    // Blood readings on the same chart. `systemBrown` is the system's deep,
+    // low-chroma orange, chosen for that: a blood reading is the SAME quantity
+    // measured another way, so it must read as a member of the glucose series
+    // rather than as a fifth metric beside carbs, insulin and activity — while
+    // still separating from the trace where a marker lands on the line. It also
+    // stays clear of the teal, purple and pink the other marker series own.
+    static let seriesGlucoseBlood = Color(uiColor: .systemBrown)
     // 3.9–10.0 mmol/L target range band fill.
     static let bandTarget = medataAccent.opacity(0.10)
     // Insulin dose markers (PRD regression-suggestion-integration App 6):

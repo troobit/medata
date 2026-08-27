@@ -25,6 +25,11 @@ struct AppRoot: View {
     // Set by the ADJUST notification action, which is `.foreground` and so
     // arrives with the app coming to the front (dose-schedule Decision 2).
     let adjustRouter: DoseAdjustRouter
+    // Handed on to Records and used for one thing only: telling the published
+    // snapshot which glucose instants a deletion just removed, so a rollback
+    // past the monotonic guard is authorised for those and nothing else
+    // (fingerprick-glucose Req 6.2). nil under the UI-test harness.
+    let glucoseWidget: GlucoseWidgetPublisher?
 
     @State private var activeSheet: ActiveSheet?
     // The insulin dose sheet is a plain sheet, not a cover (Decision 10),
@@ -86,7 +91,8 @@ struct AppRoot: View {
         glucoseConnections: GlucoseConnectionsModel,
         visionCardDetector: VisionCardDetector? = nil,
         preShutterSegmenter: PreShutterSegmenter? = nil,
-        adjustRouter: DoseAdjustRouter
+        adjustRouter: DoseAdjustRouter,
+        glucoseWidget: GlucoseWidgetPublisher? = nil
     ) {
         self.captureModel = captureModel
         self.engine = engine
@@ -95,6 +101,7 @@ struct AppRoot: View {
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
         self.adjustRouter = adjustRouter
+        self.glucoseWidget = glucoseWidget
         _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
         _doseSchedule = State(initialValue: DoseScheduleModel(store: store))
     }
@@ -199,7 +206,7 @@ struct AppRoot: View {
                 .fieldScreen("intake")
                 #endif
             case .records:
-                RecordsView(store: store)
+                RecordsView(store: store, glucoseWidget: glucoseWidget)
                 #if FIELD_LOOP
                 .fieldScreen("records")
                 #endif
