@@ -160,6 +160,28 @@ public enum GlucoseSnapshotStore {
         return true
     }
 
+    /// The longest hold any setting may express (the app clamps its control to
+    /// this). A `holdsUntil` further than this past its own reading cannot have
+    /// been produced by the derivation, so it is not a hold — it is a bad date.
+    static let maxHoldSeconds: TimeInterval = 60 * 60
+
+    /// Whether a stored snapshot is still holding its displayed reading.
+    ///
+    /// The hold is bounded by the reading it belongs to, not trusted as an
+    /// absolute date on its own. `holdsUntil` is always `readingDate +
+    /// holdWindow` at the moment it is written, so a device clock that ran
+    /// fast — a reading entered while the clock was days ahead, the clock then
+    /// corrected — leaves a hold that would otherwise pin a stale glucose value
+    /// on the Lock Screen until that future date arrived. On a surface a person
+    /// reads before dosing, an old number that refuses to move is the worst
+    /// failure available, so a hold that outruns its own reading by more than
+    /// any setting could ask for is treated as expired.
+    static func isHolding(_ stored: GlucoseSnapshot, now: Date) -> Bool {
+        guard let holdsUntil = stored.holdsUntil, holdsUntil > now else { return false }
+        guard let readingDate = stored.readingDate else { return false }
+        return holdsUntil <= readingDate.addingTimeInterval(maxHoldSeconds)
+    }
+
     // The write policy, and the one place it lives. There are TWO writers: the
     // app publishes what the database holds, and the widget publishes what it
     // fetched for itself while the app was suspended (glucose-lock-widget
@@ -199,17 +221,31 @@ public enum GlucoseSnapshotStore {
     static func merged(
         _ candidate: GlucoseSnapshot, into stored: GlucoseSnapshot, now: Date
     ) -> GlucoseSnapshot? {
-        if let holdsUntil = stored.holdsUntil, holdsUntil > now,
-            candidate.provenance == .sensor {
+        if isHolding(stored, now: now), candidate.provenance == .sensor {
             return GlucoseSnapshot(
                 version: stored.version, mmolL: stored.mmolL,
                 readingDate: stored.readingDate, trend: candidate.trend,
                 status: stored.status, provenance: stored.provenance,
                 holdsUntil: stored.holdsUntil)
         }
-        if let candidateDate = candidate.readingDate, candidateDate == stored.readingDate,
-            candidate.provenance == stored.provenance {
-            return candidate.trend == stored.trend ? nil : candidate
+        if let candidateDate = candidate.readingDate, candidateDate == stored.readingDate {
+            if candidate.provenance == stored.provenance {
+                return candidate.trend == stored.trend ? nil : candidate
+            }
+            // Case 2b — blood displaces sensor at an EQUAL instant. Neither of
+            // the rules either side admits it: case 2 wanted matching
+            // provenance and case 3 wants a strictly newer date, so a blood
+            // reading recorded on the same instant as the stored sensor one
+            // never reached the App Group. Home derives locally and showed the
+            // blood value while the Lock Screen kept the sensor one, and the
+            // divergence did not clear on republish: for as long as the hold
+            // runs the app's candidate carries the blood instant, so it stays
+            // equal rather than becoming newer. Precedence is the derivation's
+            // rule (Req 3.9) and it has to survive the store.
+            if candidate.provenance == .blood, stored.provenance == .sensor {
+                return candidate
+            }
+            return nil
         }
         guard let candidateDate = candidate.readingDate,
             let storedDate = stored.readingDate
