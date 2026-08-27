@@ -18,7 +18,7 @@ references:
   - Requirements: [2.5](requirements.md#2.5), [3.5](requirements.md#3.5), [7.1](requirements.md#7.1)
   - References: MedataCore/Sources/GlucoseWidgetShared/GlucoseDerivation.swift, MedataCore/Sources/GlucoseWidgetShared/GlucoseSnapshot.swift
 
-- [ ] 2. Write GlucoseDerivation precedence and trend-exclusion tests (Red) <!-- id:3sphmgd -->
+- [x] 2. Write GlucoseDerivation precedence and trend-exclusion tests (Red) <!-- id:3sphmgd -->
   - Blood inside the window is displayed over a strictly newer sensor reading; blood outside it is not; the later of two in-window blood readings wins; a reading back-dated beyond the window never displays — assert it falls out of the same comparison rather than a separate branch.
   - holdsUntil equals the blood instant + holdWindow while a blood reading is displayed and is nil otherwise; provenance names the displayed reading.
   - Trend: a blood reading offset from a flat sensor trace leaves the sensor-derived rate unchanged; the count and span rules are unchanged; a blood-only series satisfying those rules yields a blood-derived trend and one failing them yields none; a mixed series is never regressed — with the sensor series short of the span, qualifying blood readings take over.
@@ -28,7 +28,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.9](requirements.md#3.9), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 3. Implement precedence and the sensor-only trend in GlucoseDerivation (Green) <!-- id:3sphmge -->
+- [x] 3. Implement precedence and the sensor-only trend in GlucoseDerivation (Green) <!-- id:3sphmge -->
   - snapshot(from:now:holdWindow:) — the latest blood reading whose timestamp is within holdWindow of now, else the latest reading of any provenance; status is the band of whichever was displayed.
   - Trend derives from one provenance at a time: the sensor series when it satisfies the count-and-span rules, else the blood series alone under the same rules — never a mixed regression, so a modality offset can never be reported as a rate (Decision 7).
   - No default for holdWindow: the widget extension passes 0 because it holds no blood readings, the app passes the setting. GlucoseSnapshotSource.snapshot keeps forwarding for app-side callers.
@@ -37,7 +37,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.9](requirements.md#3.9), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
   - References: MedataCore/Sources/GlucoseWidgetShared/GlucoseDerivation.swift
 
-- [ ] 4. Write GlucoseSnapshotStore.merged and replacingDeleted write tests (Red) <!-- id:3sphmgf -->
+- [x] 4. Write GlucoseSnapshotStore.merged and replacingDeleted write tests (Red) <!-- id:3sphmgf -->
   - Case 1: a sensor candidate while stored.holdsUntil > now keeps stored's value, readingDate and provenance and adopts only the candidate's trend.
   - Case 2: a candidate carrying the same readingDate and provenance is admitted only when its trend differs — without it the arrow freezes for the whole window, foreground included.
   - Case 3: the Decision 19 rule unchanged, including a candidate carrying no reading always writing.
@@ -48,7 +48,7 @@ references:
   - Requirements: [3.7](requirements.md#3.7), [3.8](requirements.md#3.8), [6.2](requirements.md#6.2)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 5. Implement merged and the deletion-authorised write (Green) <!-- id:3sphmgg -->
+- [x] 5. Implement merged and the deletion-authorised write (Green) <!-- id:3sphmgg -->
   - Replaces supersedesStored; write(_:replacingDeleted:to:) defaults the array to empty so existing callers are unchanged.
   - Policy stays inside the store rather than in either writer, per glucose-lock-widget Decision 19 — any future writer inherits the rule by construction.
   - Blocked-by: 3sphmgf (Write GlucoseSnapshotStore.merged and replacingDeleted write tests Red)
@@ -58,7 +58,7 @@ references:
 
 ## Storage and ingestion (MedataCore)
 
-- [ ] 6. Write recordBloodBsl store tests (Red) <!-- id:3sphmgh -->
+- [x] 6. Write recordBloodBsl store tests (Red) <!-- id:3sphmgh -->
   - A 13:02:37 instant stores as 13:02:37 — not snapped to a 5-minute mark.
   - Metadata carries provenance blood and source_id, and native_id only when non-nil: key absent, never null, mirroring liveBslMetadataJSON.
   - Re-delivering the same (source_id, native_id) writes no second row and emits no eventsDidChange; two hand entries at the same instant with no native id both persist.
@@ -70,7 +70,7 @@ references:
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
   - References: MedataCore/Tests/PersistenceTests/LiveBslIngestTests.swift
 
-- [ ] 7. Implement BloodBslReading and recordBloodBsl (Green) <!-- id:3sphmgi -->
+- [x] 7. Implement BloodBslReading and recordBloodBsl (Green) <!-- id:3sphmgi -->
   - BloodBslReading (instant, mmolL, sourceID, nativeID?) on PersistenceStore; the GRDB implementation is one INSERT in one transaction returning the new UUID, matching saveInsulinDose's shape.
   - Dedup is a json_extract(metadata, '$.native_id') lookup gated on source_id — a scan over the candidate range rather than an indexed key lookup (Decision 10).
   - The same transaction reads the latest sensor-provenance row within the preceding 15 minutes for the pairing stamp before the INSERT — a read, never an UPDATE, so the path stays insert-only (Decision 12).
@@ -80,7 +80,7 @@ references:
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
   - References: MedataCore/Sources/Persistence/PersistenceStore.swift, MedataCore/Sources/Persistence/GRDBPersistenceStore.swift
 
-- [ ] 8. Write IngestionCoordinator provenance-routing tests (Red) <!-- id:3sphmgj -->
+- [x] 8. Write IngestionCoordinator provenance-routing tests (Red) <!-- id:3sphmgj -->
   - A mixed batch splits: sensor samples reach ingestLiveBsl grid-snapped with the keep-first bucket collapse intact, blood samples reach recordBloodBsl at exact instants and never enter the bucketing.
   - A blood-only batch performs no grid work; the returned BslIngestSummary accounts for both halves; lastReadingMs and the .connected transition still advance.
   - A batch with provenance unset behaves exactly as today — the structural half of Req 7.2.
@@ -89,7 +89,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [7.2](requirements.md#7.2)
   - References: MedataCore/Tests/GlucoseIngestionTests/IngestionCoordinatorTests.swift
 
-- [ ] 9. Implement GlucoseSample.provenance and the coordinator partition (Green) <!-- id:3sphmgk -->
+- [x] 9. Implement GlucoseSample.provenance and the coordinator partition (Green) <!-- id:3sphmgk -->
   - GlucoseSample.provenance defaulted .sensor so LibreLinkUp, screenshot import and the heartbeat source are untouched; the coordinator partitions and routes, sources stay unaware of the split.
   - Durable-ack ordering unchanged: a throw from either path propagates so the source does not advance its cursor.
   - Blocked-by: 3sphmgj (Write IngestionCoordinator provenance-routing tests Red)
@@ -97,7 +97,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [7.2](requirements.md#7.2)
   - References: MedataCore/Sources/GlucoseIngestion/GlucoseSource.swift, MedataCore/Sources/GlucoseIngestion/IngestionCoordinator.swift
 
-- [ ] 10. Write HealthKit writer-registry tests (Red) <!-- id:3sphmgl -->
+- [x] 10. Write HealthKit writer-registry tests (Red) <!-- id:3sphmgl -->
   - An unclassified bundle id yields .sensor — the fail-safe direction, since mistaking a sensor for blood grants it a hold it has not earned.
   - A bundle id classified blood yields .blood; observing a writer records bundle id, display name and HKDevice name/manufacturer when present; re-observing neither duplicates the entry nor overwrites an existing classification.
   - The registry reads and writes an injected UserDefaults defaulting to .standard, so it is testable from a suite-backed instance while HealthKitGlucoseSource stays device-only. This refines design.md, which names UserDefaults.standard directly.
@@ -106,7 +106,7 @@ references:
   - Requirements: [1.2](requirements.md#1.2), [1.5](requirements.md#1.5)
   - References: MedataCore/Tests/GlucoseIngestionTests/
 
-- [ ] 11. Implement the writer registry and classify HealthKit samples (Green) <!-- id:3sphmgm -->
+- [x] 11. Implement the writer registry and classify HealthKit samples (Green) <!-- id:3sphmgm -->
   - Writers live under glucose.healthkit.writers in UserDefaults.standard; HealthKitGlucoseSource.glucoseSample records the observed writer and maps sample.sourceRevision.source.bundleIdentifier through the registry to provenance. nativeID stays sample.uuid.uuidString.
   - Keys on the bundle identifier, not HKDevice, which any writer may leave nil.
   - No Contour bundle id is hard-coded: the literal is read off a real sample on device (prerequisites.md) and set through Settings in task 23.
