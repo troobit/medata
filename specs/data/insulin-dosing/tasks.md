@@ -338,7 +338,7 @@ metadata:
   - Stream: 1
   - Requirements: [4.8](requirements.md#4.8), [10.3](requirements.md#10.3)
 
-- [ ] 33. Drop dose_suggestions — migration test then removal <!-- id:idz0012 -->
+- [x] 33. Drop dose_suggestions — migration test then removal <!-- id:idz0012 -->
   - Persistence test first: a database at the current version with dose_suggestions rows migrates clean, the table is gone, the version stamp bumps once — the literal lives in three places in GRDBPersistenceStore.swift (docs/agent-notes/persistence.md)
   - Delete saveDoseSuggestion / linkDose / doseSuggestion(forSourceEventID:) / doseSuggestions(limit:) and the DoseSuggestionRecord DTO; export path no longer carries rows
   - Requirement 7 is superseded in full — no replacement API of any kind
