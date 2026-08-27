@@ -30,6 +30,9 @@ struct HomeView: View {
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
+    // Raises the glucose entry sheet (fingerprick-glucose Req 2.1) — the same
+    // surface `medata://glucose/add` and the launcher widget reach.
+    let onBsl: () -> Void
     let onActivity: () -> Void
     let onRecords: () -> Void
     let onGraph: () -> Void
@@ -96,8 +99,22 @@ struct HomeView: View {
     // changes what it does. With more than one dose outstanding the oldest
     // takes the control and the rest wait, which is the honest limit of not
     // adding a surface.
-    @ViewBuilder
+    // Dose and BSL share one row (fingerprick-glucose Req 2.1, Decision 5).
+    // The pair echoes `ingestRow` with the treatments INVERTED — Dose plain in
+    // the leading slot, BSL accent-prominent in the trailing one — so the
+    // column carries one accent per row rather than stacking two. They are
+    // grouped because they are the same kind of act: the two record-creating
+    // taps, dose taken and blood measured, and the Dose control is the only
+    // full-width one with the width to give up half.
     private var doseRoute: some View {
+        HStack(spacing: 12) {
+            doseSlot
+            bslButton
+        }
+    }
+
+    @ViewBuilder
+    private var doseSlot: some View {
         if surfaceStyle == .doseRoute, let dose = outstandingDoses.first {
             OutstandingDoseControl(
                 dose: dose,
@@ -113,19 +130,48 @@ struct HomeView: View {
         }
     }
 
-    // The most recent reading, the one thing on home that is not a route
-    // (Req 4.1). `TimelineView(.periodic)` re-evaluates once a minute so the
-    // age label ages while the page is open — the snapshot itself only changes
-    // when a `bsl` row lands, which the model handles.
-    private var glucoseHeader: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            glucoseReadout(at: context.date)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
+    // The labelled entry control Decision 5 chose over overloading the
+    // reading's own tap: an unlabelled interactive number is undiscoverable,
+    // and spending the reading's one tap on entry would leave no route from the
+    // number to its own history.
+    private var bslButton: some View {
+        Button(action: onBsl) {
+            Label("BSL", systemImage: "drop.fill")
+                .font(.headline)
+                .foregroundStyle(Color.captureBackground)
+                .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.borderedProminent)
+        .tint(.medataAccent)
+        .accessibilityIdentifier("home.bsl")
+    }
+
+    // The most recent reading — and, since fingerprick-glucose Decision 5, a
+    // route to Graph rather than the one display-only element on the page
+    // (Req 2.7, redefining home-router Req 4.8). A tap on a reading most
+    // plausibly means "show me this number in context", which is the meaning
+    // the lock-screen widget's own tap already carries; entry got a labelled
+    // control of its own instead.
+    //
+    // `TimelineView(.periodic)` re-evaluates once a minute so the age label
+    // ages while the page is open — the snapshot itself only changes when a
+    // `bsl` row lands, which the model handles.
+    private var glucoseHeader: some View {
+        Button(action: onGraph) {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                glucoseReadout(at: context.date)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
+                    .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("home.glucose")
+        .accessibilityHint("Opens the glucose graph")
     }
 
     // Unlike the lock-screen widget — which drops the number past 30 minutes
@@ -162,7 +208,13 @@ struct HomeView: View {
                         .foregroundStyle(Color.textSecondary)
                     Spacer(minLength: 0)
                 }
-                Text(ageLabel(age))
+                // Provenance shares the quiet second line with the age
+                // (Req 3.5). Both provenances are named here, unlike the Lock
+                // Screen, which marks blood alone: home has the width, and a
+                // line reading only "3 min ago" beside one reading and
+                // "Blood · 3 min ago" beside another would make sensor the
+                // unnamed default rather than a stated fact.
+                Text("\(provenanceLabel(glucose.snapshot.provenance)) · \(ageLabel(age))")
                     .font(.caption)
                     .foregroundStyle(Color.textSecondary)
             }
@@ -184,6 +236,16 @@ struct HomeView: View {
         if age < 3600 { return "\(Int(age / 60)) min ago" }
         let hours = Int(age / 3600)
         return "\(hours) h ago"
+    }
+
+    // A snapshot written before this feature carries no provenance, and an
+    // absent value is a sensor reading (Req 7.1) — the same coalescing the
+    // render layer does.
+    private func provenanceLabel(_ provenance: GlucoseProvenance?) -> String {
+        switch provenance ?? .sensor {
+        case .sensor: return "Sensor"
+        case .blood: return "Blood"
+        }
     }
 
     // Colour is a secondary channel here as on the widget: the number carries
