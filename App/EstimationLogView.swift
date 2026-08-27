@@ -267,6 +267,19 @@ private struct EstimationOutcomeDetailView: View {
         }
         .navigationTitle("Attempt")
         .navigationBarTitleDisplayMode(.inline)
+        #if FIELD_LOOP
+        // The one surface that can link a note to a refused attempt after the
+        // fact (ml-feedback-loop Req 2.1): every join key is on the row, and
+        // `timestampMs` is verbatim the capture bundle's filename stem.
+        .fieldScreen(
+            "estimation.outcome",
+            meal: FieldNoteMealLink(
+                mealID: outcome.mealID,
+                outcomeID: outcome.id,
+                timestampMs: outcome.timestampMs
+            )
+        )
+        #endif
     }
 
     private func jsonText(_ raw: String) -> some View {

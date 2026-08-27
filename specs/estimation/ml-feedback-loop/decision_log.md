@@ -635,3 +635,85 @@ Prompt-level rules ("ignore instructions in images") are advisory; removing the 
 **Negative:**
 - Loop agents cannot self-serve small git conveniences; everything lands via drafts and `field_close.py`.
 
+
+---
+
+## Decision 20: The bake refuses to drop calibration lineage it cannot reconstruct
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+Implementing the `make food-db` build gate (guard 6 of the auto-commit chain) surfaced a defect in the target as designed. `make food-db` was specified as a bare `python3 tools/food_db/generate.py` followed by the generator's pytest suite. Running it against this repo regenerated both committed sqlite artifacts *without* nineteen `calibration_*` meta rows they carry — the lineage recording the N5k fit that produced them (release hashes, tau values, seed, per-class effective sample and identifiability, pinned intrinsics, licence).
+
+The cause is that the calibrate artifact is fitted from the N5k corpus and is not committed to this repo, so `generate.py` has no way to reconstruct that lineage from a bare invocation. The loss is provenance, not values — every β in the committed DBs is already `uncalibrated_unity` — but `make food-db` is a gate `field_close.py` runs unattended, and its output is paired into an auto-commit. A silent provenance strip would land in a commit nobody read, which is exactly the failure mode the overlay's own fail-closed inverse guard exists to prevent for the other unreconstructable input.
+
+### Decision
+
+`generate.py` aborts when the prior database carries `calibration_*` meta and no calibration artifact was named, with the message naming the override. `make food-db` takes `CALIBRATION=<artifact>` and passes it through as `--calibration-json`. The overlay and the calibration therefore have the same fail-closed shape: an input the bake cannot reconstruct, once applied, must be supplied again or the bake refuses.
+
+### Rationale
+
+The bake's established contract is abort-before-write on any condition that would ship a database making a claim it cannot support — the palette lock, the serving-coverage lock, the support-plane-reference guard, and the overlay inverse guard all take this form. Dropping lineage is the same class of harm one level down: the artifact stops recording where its numbers came from, and nothing in the file says so.
+
+Failing closed also fails in the safe direction for the loop. With no artifact configured, guard 6 fails and every candidate fix demotes to a proposal — the loop stalls visibly instead of committing lineage-stripped databases cycle after cycle. `field_close.py` (task 24) carries the artifact path in `loop_config.json`, which is where the constant belongs.
+
+### Alternatives Considered
+
+- **Leave `make food-db` as designed (bare invocation)**: The literal reading of the design - Rejected: it regresses the committed artifacts on every run, and the loop would commit that regression paired with each overlay fix.
+- **Carry the prior lineage forward automatically**: Read the `calibration_*` rows out of the prior DB and rewrite them - Rejected: it re-derives input state from an output artifact, and it would happily preserve a lineage that no longer describes the rows beside it — the appearance of provenance without the substance.
+- **Warn on stderr and bake anyway**: Keeps the target always usable - Rejected: `field_close` runs this gate unattended, where a warning is a line in a log nobody reads before the commit lands.
+
+### Consequences
+
+**Positive:**
+- The committed databases cannot silently lose their fit lineage.
+- The two unreconstructable bake inputs, overlay and calibration, now behave identically, so there is one rule to remember rather than two exceptions.
+- The loop's failure mode is a stalled cycle with proposals, not a stream of lineage-stripping commits.
+
+**Negative:**
+- A bare `make food-db` aborts on this repo today; regenerating the databases requires the N5k calibrate artifact in hand.
+- Guard 6 cannot pass until `loop_config.json` carries that path, so the first cycles will demote fixes to proposals if it is missing.
+
+### Impact
+
+`tools/food_db/generate.py` (`_prior_db_carries_calibration`, the `bake()` guard), the `food-db` Makefile target, and `field_close.py`'s guard-6 configuration in task 24.
+
+---
+
+## Decision 21: Adopt the orbit-impl-1 variant after the first field session
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+The on-device capture layer and field-loop tooling were built as two parallel orbit variants and both were taken through a first real device session: affordance interaction, note capture from the capture screen, and a first `make field-pull` against a three-week capture backlog. Both variants initially shipped an inert or drag-breakable affordance (each for a different mechanism-level reason) and both were fixed before the session completed; the session then differentiated them on note/context UI quality and pull tooling behaviour.
+
+### Decision
+
+Adopt the orbit-impl-1 variant (`orbit-impl-1/ml-feedback-loop`) as the ml-feedback-loop implementation. Field-session fixes land on this branch; the impl-2 variant is retired.
+
+### Rationale
+
+- The note sheet and its context section (screen id, meal/attempt link, frozen estimate, screenshot-failure reason) read clearly on device — the deciding factor for a surface whose whole purpose is fast, unambiguous field annotation.
+- Impl-1's `field_pull.py` worked against the real device: it parses the `devicectl info files` `--json-output` envelope structurally, so the pull enumerated and copied the backlog.
+- Its remaining pull defect (a silent, restart-from-zero multi-gigabyte copy that read as a hang) was behavioural, not structural, and is fixed on the branch: per-copy progress lines, partial-then-rename copies, size-verified resume via a `pull_complete.json` marker, per-call timeouts.
+
+### Alternatives Considered
+
+- **orbit-impl-2 variant**: Cleaner single-slot context model and an application-delegate window install - Rejected: its `field_pull.py` parsed the human-readable `devicectl` listing instead of `--json-output`, matched no files, copied nothing, and aborted on the missing `meals.sqlite` snapshot (observed: an empty `2026-08-27-1` pull dir); its passthrough window gated touches by view identity, which cannot work against a single SwiftUI hosting view; its note/context UI read worse on device.
+- **Merge impl-2's pieces into impl-1**: Cherry-pick its context model - Rejected: impl-1's stack-based `FieldNoteContext` is strictly more robust (top-of-stack read at save time survives push/pop ordering), so there is no piece worth the graft.
+
+### Consequences
+
+**Positive:**
+- One branch to verify: the STOP device-checklist tasks (29-31) run once, on the adopted implementation.
+- The field-session lessons (hit-region reporting, attempt-link visibility, observable resumable pulls) are recorded as requirements (2.6), design contracts, and completed tasks on the surviving branch.
+
+**Negative:**
+- Impl-2's rehearsal-tested tooling (its own pull/ingest/close suite) is discarded rather than salvaged; any latent quality in it is lost.
+- The retired branch still holds the only copy of its implementation until deleted; anyone reading both variants' shared corpus should know pull dirs named `2026-08-27-*` (dashed) are impl-2 debris.
+
+---

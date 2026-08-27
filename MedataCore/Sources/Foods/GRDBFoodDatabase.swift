@@ -18,9 +18,12 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
     private let _version: String
     private let _editions: [String]
 
-    // Production factory — opens the bundled CoFID + AFCD databases from the
-    // module bundle. Both are always present per Decision 39; no user toggle.
-    public static func bundled() throws -> GRDBFoodDatabase {
+    // The two bundled artifacts, in bake order (CoFID first — CoFID-wins
+    // merge). Exposed so tooling can content-address the pair it is actually
+    // reading rather than a path it was told about: the ml-feedback-loop
+    // diagnosis stamps a DB hash beside every replay, and a hash of the wrong
+    // file is worse than no hash.
+    public static func bundledResourceURLs() throws -> [URL] {
         let bundle = Bundle.module
         guard let cofidURL = bundle.url(forResource: "cofid_db", withExtension: "sqlite") else {
             throw FoodDatabaseError.bundleResourceMissing("cofid_db.sqlite")
@@ -28,7 +31,14 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
         guard let afcdURL = bundle.url(forResource: "afcd_db", withExtension: "sqlite") else {
             throw FoodDatabaseError.bundleResourceMissing("afcd_db.sqlite")
         }
-        return try GRDBFoodDatabase(cofidPath: cofidURL.path, afcdPath: afcdURL.path)
+        return [cofidURL, afcdURL]
+    }
+
+    // Production factory — opens the bundled CoFID + AFCD databases from the
+    // module bundle. Both are always present per Decision 39; no user toggle.
+    public static func bundled() throws -> GRDBFoodDatabase {
+        let urls = try bundledResourceURLs()
+        return try GRDBFoodDatabase(cofidPath: urls[0].path, afcdPath: urls[1].path)
     }
 
     // Designated init. Tests pass file-based temp paths; production uses bundled paths.

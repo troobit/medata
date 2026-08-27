@@ -38,6 +38,12 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.medata.librelinkup.refresh</string>
+		<!-- ml-feedback-loop Req 3.6: the field-profile capture-slimming sweep
+		     (BGProcessingTask, registered in App/FieldMaintenance.swift). A
+		     product build compiles that file out and registers nothing; a
+		     permitted identifier nothing registers is inert, the same reasoning
+		     as the bluetooth-central mode above. -->
+		<string>com.medata.fieldloop.maintenance</string>
 	</array>
 	<!-- cgm-direct Req 6.3: bluetooth-central lets a CoreBluetooth connect or
 	     notify event wake (and state-restore relaunch) the app for the BLE
