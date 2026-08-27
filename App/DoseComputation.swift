@@ -228,8 +228,21 @@ enum DoseComputation {
     ) async -> [DatedBolus] {
         let rows = (try? await store.events(in: span, type: EventType.insulin)) ?? []
         return rows.compactMap { event in
-            guard let units = event.value, classify(event) == .bolus else { return nil }
-            return DatedBolus(instant: event.timestamp, units: units)
+            guard let units = event.value else { return nil }
+            switch classify(event) {
+            case .bolus:
+                return DatedBolus(instant: event.timestamp, units: units)
+            case .basal:
+                return nil          // Req 4.2: a CLASSIFIED exclusion.
+            case nil:
+                // Req 4.9: an unclassifiable event must not vanish from the
+                // sum, and `assertionFailure` is a no-op in Release — the very
+                // build the developer carries. Counting it raises insulin on
+                // board and so LOWERS the suggestion, the only direction a
+                // mistake here is safe to make: dropping it would understate
+                // insulin already given and suggest too much on top of it.
+                return DatedBolus(instant: event.timestamp, units: units)
+            }
         }
     }
 
@@ -237,7 +250,8 @@ enum DoseComputation {
     // exclusion and returns normally; an event whose metadata cannot be
     // classified at all is a defect — the app writes its own insulin events, so
     // an unclassifiable one is a bug, not data, and it must not simply vanish
-    // from the sum.
+    // from the sum. `nil` here means "unclassifiable", NOT "ignore": the caller
+    // counts it toward insulin on board. Debug builds trap on it as well.
     private static func classify(_ event: Event) -> InsulinKind? {
         guard
             let data = event.metadata.data(using: .utf8),

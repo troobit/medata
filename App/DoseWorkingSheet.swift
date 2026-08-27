@@ -71,9 +71,17 @@ enum DoseWorking {
         return lines
     }
 
-    /// Grams, to the nearest whole gram — the figure the surface already shows.
+    /// Grams, faithful to one decimal when the value carries a fraction.
+    ///
+    /// NOT rounded to whole grams: this is the numerator of a division the
+    /// reader is invited to check, so 4.9 g shown as "5 g" makes the next line
+    /// read as 0.5 rounding DOWN to 0 — the opposite of the half-away-from-zero
+    /// rule (Req 5.2), on the one surface whose whole job is showing the rule.
     private static func grams(_ value: Double) -> String {
-        "\(Int(value.rounded())) g"
+        let rounded = (value * 10).rounded() / 10
+        return rounded == rounded.rounded()
+            ? "\(Int(rounded)) g"
+            : String(format: "%.1f g", rounded)
     }
 
     /// The base line states the divisor to one decimal too — `5.0 g/U`, not
@@ -91,12 +99,22 @@ enum DoseWorking {
     /// decimal place, so the rounding error stays inspectable (Req 5.3). They
     /// are arithmetic facts, not dose figures, so the whole-unit rule of
     /// Req 5.1 does not govern them.
+    /// At least one decimal, and a second one when the first would round the
+    /// figure across the half-unit boundary the next line turns on: 0.49 U
+    /// shown as "0.5 U" makes "→ 0 U" read as a contradiction of Req 5.2.
     private static func decimalUnits(_ value: Double) -> String {
-        String(format: "%.1f U", value)
+        String(format: "%@ U", decimals(value))
     }
 
     private static func spokenDecimalUnits(_ value: Double) -> String {
-        String(format: "%.1f units", value)
+        String(format: "%@ units", decimals(value))
+    }
+
+    private static func decimals(_ value: Double) -> String {
+        let oneDecimal = String(format: "%.1f", value)
+        return Double(oneDecimal) == (value * 100).rounded() / 100
+            ? oneDecimal
+            : String(format: "%.2f", value)
     }
 }
 
