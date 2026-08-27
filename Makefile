@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -62,6 +62,8 @@ help:
 	@echo "                       the corpus, and push the cleanup manifest back"
 	@echo "  field-notes          pull just the notes (and the DB snapshot) — seconds,"
 	@echo "                       for feedback on work still in flight"
+	@echo "  field-triage         regenerate the rolling triage ledger from the corpus;"
+	@echo "                       routing its unchecked items is the agent step"
 	@echo "  field-diagnose       replay the annotated captures and generate the"
 	@echo "                       cycle task file the agent phase executes"
 	@echo "  field-report         alignment report across pulls (key=value, every"
@@ -175,6 +177,14 @@ field-pull:
 field-notes:
 	$(PYTHON) tools/field_loop/field_pull.py --notes-only \
 	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID)
+
+# ml-feedback-loop Reqs 7.2-7.4 (Decision 23): rebuild the rolling triage
+# ledger at specs/estimation/ml-feedback-loop/triage.md from the corpus index.
+# Merge-preserving — checked items keep their `routed:` record — and it
+# refuses a ledger with uncommitted edits. Routing the unchecked items is the
+# agent step; the contract is in the spec's design.md.
+field-triage:
+	$(PYTHON) tools/field_loop/field_triage.py
 
 # ml-feedback-loop Reqs 4.1-4.4: replay every annotated capture in the corpus
 # through `HarnessCLI diagnose`, attribute each estimation-vs-stated gap, and

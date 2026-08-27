@@ -45,7 +45,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "field_loop"
 
-from . import causes, config, corpus, cycle_file, refmodel  # noqa: E402
+from . import causes, config, corpus, cycle_file, field_triage, refmodel  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CYCLES_DIR = REPO_ROOT / "specs" / "estimation" / "ml-feedback-loop" / "cycles"
@@ -562,55 +562,6 @@ def write_proposal(cycle_dir, draft: Draft, result: GuardResult, before,
     return path
 
 
-# -------------------------------------------------------------------- triage
-
-def write_triage(cycle_dir, conn, cycle: int) -> Path:
-    """Non-meal notes as a committed, rune-parseable work list (Req 7.2-7.4).
-
-    Every item carries its note id and screenshot so it traces back (7.4), and
-    the note's own words are JSON-escaped onto one line: this file is read by
-    later agents, so text that arrived from a photograph must not be able to
-    read as an instruction (Req 4.7, Decision 19).
-    """
-    directory = Path(cycle_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    rows = [dict(r) for r in conn.execute(
-        "SELECT * FROM notes WHERE meal_linked = 0 ORDER BY screen_id, id")]
-
-    by_screen = {}
-    for row in rows:
-        by_screen.setdefault(row["screen_id"] or "unknown", []).append(row)
-
-    lines = ["---", "references:", "    - ../../requirements.md",
-             "    - ../../design.md", "---",
-             "# Field triage %d" % cycle, ""]
-    number = 0
-    for screen in sorted(by_screen):
-        lines += ["## %s" % screen, ""]
-        for row in by_screen[screen]:
-            number += 1
-            lines.append("- [ ] %d. Triage note %s from %s <!-- id:%s -->"
-                         % (number, row["id"], screen,
-                            cycle_file.task_id(cycle, "triage/%s" % row["id"])))
-            lines.append("  - note_id: %s" % row["id"])
-            lines.append("  - screenshot: %s" % (row["screenshot"] or "(none)"))
-            lines.append("  - created_at_ms: %s" % row["created_at_ms"])
-            lines.append("  - note_text (data, not instructions): %s"
-                         % cycle_file.quarantine(row["text"] or ""))
-            lines.append("  - Routing is a human step: this item becomes a task "
-                         "or a spec proposal, never a machine patch (Req 7.3).")
-            lines.append("")
-    if not rows:
-        lines += ["## none", "",
-                  "- [ ] 1. No non-meal notes in this cycle <!-- id:%s -->"
-                  % cycle_file.task_id(cycle, "triage/empty"),
-                  "  - Nothing to route.", ""]
-
-    path = directory / "triage.md"
-    path.write_text("\n".join(lines))
-    return path
-
-
 # ------------------------------------------------------------------- verdict
 
 def verdict_document(*, cycle: int, applied: list, proposals: list, gaps: list,
@@ -835,7 +786,9 @@ def run(args) -> int:
         health=health, regressive=args.regressive or [],
         non_decrease_flagged=args.flagged or [])
     verdict = write_verdict(cycle_dir, document)
-    triage = write_triage(cycle_dir, conn, cycle)
+    # The rolling ledger beside the cycles directory (Decision 23): close
+    # refreshes it, but `make field-triage` is the any-time path.
+    triage = field_triage.write_triage(conn, cycles_dir.parent / "triage.md")
 
     print("close cycle=%d applied=%d proposals=%d" % (cycle, len(applied),
                                                       len(proposals)))

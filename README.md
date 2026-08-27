@@ -199,9 +199,16 @@ Both land in `../medata-corpus/`. To read what came across:
 
 ```sh
 make field-report          # alignment metrics across the whole corpus
+make field-triage          # rebuild the rolling triage ledger from the notes
 sqlite3 ../medata-corpus/index.sqlite \
   "SELECT screen_id, text, meal_linked FROM notes ORDER BY created_at_ms DESC LIMIT 10;"
 ```
+
+`field-triage` writes `specs/estimation/ml-feedback-loop/triage.md`: every
+non-meal note as an unchecked item until it is routed — to a spec task, a
+requirement amendment, a bugfix, or the backlog — and checked off with a
+`routed:` line that survives regeneration. The routing contract lives in that
+spec's `design.md`.
 
 **Adding a screen.** A new surface reports whatever screen it was pushed from
 until it names itself. One line at its root fixes that:
