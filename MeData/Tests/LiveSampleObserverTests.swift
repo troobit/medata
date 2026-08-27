@@ -42,10 +42,10 @@ struct LiveSampleObserverTests {
 
     // MARK: - Distance (Req §3.1)
 
-    @Test("median centre-crop depth of 0.35 m → 35 cm")
-    func distanceMedian() {
+    @Test("uniform centre-crop depth of 0.35 m → 35 cm")
+    func distanceUniform() {
         let depth = makeDepthBuffer(width: 40, height: 40, metres: 0.35)
-        let cm = LiveSampleMath.medianDistanceCm(depthMap: depth)
+        let cm = LiveSampleMath.nearSurfaceDistanceCm(depthMap: depth)
         #expect(cm != nil)
         #expect(abs((cm ?? 0) - 35) < 0.01)
     }
@@ -53,7 +53,7 @@ struct LiveSampleObserverTests {
     @Test("all-zero depth crop → nil (no usable depth)")
     func distanceEmpty() {
         let depth = makeDepthBuffer(width: 40, height: 40, metres: 0)
-        #expect(LiveSampleMath.medianDistanceCm(depthMap: depth) == nil)
+        #expect(LiveSampleMath.nearSurfaceDistanceCm(depthMap: depth) == nil)
     }
 
     // MARK: - LiDAR coverage (Req §3.1, §4.1)
