@@ -15,7 +15,8 @@ import UIKit
 // Passthrough is explicit rather than inherited: the window is full-screen, so
 // without an override it would swallow every touch in the app. `hitTest`
 // returns nil everywhere outside the button's current frame, which the SwiftUI
-// overlay reports on every layout pass.
+// overlay reports on every layout pass and on every change of its drag offset
+// (`.offset` moves only the rendering, so layout callbacks alone go stale).
 //
 // Being a separate window, the button is absent from screenshots of the main
 // window by construction (Req 1.4) — no hide-then-render dance.
@@ -221,6 +222,13 @@ private struct FieldNoteOverlay: View {
     @Bindable var controller: FieldNoteController
 
     @State private var dragOffset: CGSize = .zero
+    // The button's layout frame BEFORE `.offset` is applied. `.offset` is a
+    // render-time translation that geometry callbacks never see, so the hit
+    // region handed to the window must add the current offset itself — and
+    // re-report on every offset change, which `onGeometryChange` alone never
+    // fires for. Missing this left the hit region parked at the home corner
+    // after the first drag: the visible button was outside it and dead.
+    @State private var homeFrame: CGRect = .zero
 
     private var offset: CGSize {
         CGSize(
@@ -249,13 +257,18 @@ private struct FieldNoteOverlay: View {
             .background(Color.black.opacity(0.55), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
             .offset(offset)
-            // The hit area the window's `hitTest` allows through. Reported on
-            // every layout pass, so a dragged button stays live and the rest of
-            // the screen stays passthrough.
+            // The hit area the window's `hitTest` allows through: the layout
+            // frame shifted by the live offset, re-reported both when layout
+            // moves and when the offset does, so a dragged button stays live
+            // and the rest of the screen stays passthrough.
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .global)
             } action: { frame in
-                controller.reportButtonFrame(frame)
+                homeFrame = frame
+                reportFrame()
+            }
+            .onChange(of: offset) {
+                reportFrame()
             }
             .onTapGesture { controller.invoke() }
             .gesture(
@@ -264,15 +277,39 @@ private struct FieldNoteOverlay: View {
                 DragGesture(minimumDistance: 10)
                     .onChanged { dragOffset = $0.translation }
                     .onEnded { value in
-                        controller.buttonOffset = CGSize(
+                        controller.buttonOffset = clampedOffset(CGSize(
                             width: controller.buttonOffset.width + value.translation.width,
                             height: controller.buttonOffset.height + value.translation.height
-                        )
+                        ))
                         dragOffset = .zero
                     }
             )
             .accessibilityIdentifier("fieldNote.button")
             .accessibilityLabel("Field note")
+    }
+
+    private func reportFrame() {
+        controller.reportButtonFrame(
+            homeFrame.offsetBy(dx: offset.width, dy: offset.height)
+        )
+    }
+
+    // A committed park must keep the whole button on screen — an offset that
+    // pushes it off-screen (or mostly off) leaves nothing to grab back.
+    private func clampedOffset(_ proposed: CGSize) -> CGSize {
+        guard homeFrame != .zero, let bounds = controller.mainWindow?.bounds else {
+            return proposed
+        }
+        return CGSize(
+            width: min(
+                max(proposed.width, bounds.minX - homeFrame.minX),
+                bounds.maxX - homeFrame.maxX
+            ),
+            height: min(
+                max(proposed.height, bounds.minY - homeFrame.minY),
+                bounds.maxY - homeFrame.maxY
+            )
+        )
     }
 }
 #endif

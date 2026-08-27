@@ -181,12 +181,15 @@ struct AppRoot: View {
                 // themselves; a sheet that mounts nothing keeps its host
                 // cover's id, which is the intended fallback.
                 //
-                // The capture cover carries a state-derived id, and — while the
-                // refusal overlay is up — the outcome row the refused attempt
-                // wrote, which is the only join key a refusal has (Req 2.1).
+                // The capture cover carries a state-derived id and the outcome
+                // row of the most recent attempt — not only while the refusal
+                // overlay is up. An attempt can fail without ever rendering a
+                // results surface OR a refusal (Req 2.1); the stash is the only
+                // join key such a failure has, so a note taken from any capture
+                // state records it against the attempt it is about.
                 .fieldScreen(
                     captureModel.state.fieldScreenID,
-                    meal: captureModel.refusal != nil ? captureModel.lastOutcome : nil
+                    meal: captureModel.lastOutcome
                 )
                 #endif
             case .intake:
