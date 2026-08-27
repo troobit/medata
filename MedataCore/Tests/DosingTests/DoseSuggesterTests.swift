@@ -3,7 +3,11 @@ import Testing
 
 @testable import Dosing
 
-// The seven ordered steps (specs/data/insulin-dosing Req 3, 5, Decision 7).
+// The amended rule (specs/data/insulin-dosing Req 3, 5, Decisions 17/18):
+// carbs ÷ ratio − unoffset insulin-on-board, floored at zero, rounded half away
+// from zero ONCE on the final value, in whole units only. Every input with a
+// carbohydrate total returns `.suggested` — `0 U` included.
+//
 // Every instant is built from an explicit UTC calendar so the band is decided
 // by the hour written here and nothing else.
 @Suite("DoseSuggester")
@@ -27,8 +31,7 @@ struct DoseSuggesterTests {
     private func inputs(
         carbsG: Double?,
         hour: Int = 8,
-        iobUnits: Double = 0,
-        incrementUnits: Double = 1.0,
+        unoffsetIOBUnits: Double = 0,
         ratios: CarbRatioTable = CarbRatioTable()
     ) -> DoseInputs {
         DoseInputs(
@@ -36,8 +39,8 @@ struct DoseSuggesterTests {
             mealInstant: at(hour: hour),
             calendar: utc,
             ratios: ratios,
-            iobUnits: iobUnits,
-            increment: DosableIncrement(units: incrementUnits)!,
+            unoffsetIOBUnits: unoffsetIOBUnits,
+            increment: .standard,
             bounds: .doseSheet)
     }
 
@@ -63,6 +66,8 @@ struct DoseSuggesterTests {
         #expect(dose.context.band == .breakfast)
         #expect(dose.context.gramsPerUnit == 5.0)
         #expect(dose.context.ratioIsSeed == true)
+        #expect(abs(dose.baseUnits - 12.0) < 1e-12)
+        #expect(dose.reductionUnits == 0)
         #expect(abs(dose.exactUnits - 12.0) < 1e-12)
         #expect(dose.roundedUnits == 12.0)
         #expect(dose.seedUnits == 12)
@@ -80,115 +85,92 @@ struct DoseSuggesterTests {
         #expect(dose.seedUnits == 6)
     }
 
-    // MARK: - No carbohydrate total (Req 3.5)
+    // MARK: - No carbohydrate total, the sole suppression (Req 3.5)
 
     @Test("An absent carbohydrate total suppresses rather than defaulting")
     func absentCarbsSuppress() {
-        guard case .suppressed(let reason, let context) =
-            DoseSuggester.suggest(inputs(carbsG: nil, hour: 8, iobUnits: 2.5))
-        else {
-            Issue.record("expected a suppression")
-            return
-        }
-        #expect(reason == .noCarbTotal)
-        // A suppression is recorded as fully as a suggestion (Req 7.1).
-        #expect(context.band == .breakfast)
-        #expect(context.localHour == 8)
-        #expect(context.utcHour == 8)
-        #expect(context.utcOffsetSeconds == 0)
-        #expect(context.gramsPerUnit == 5.0)
-        #expect(context.ratioIsSeed == true)
-        #expect(context.iobUnits == 2.5)
-        #expect(context.incrementUnits == 1.0)
+        let outcome = DoseSuggester.suggest(
+            inputs(carbsG: nil, hour: 8, unoffsetIOBUnits: 2.5))
+
+        // The suppression carries its typed reason and nothing else: no
+        // context payload survives Decision 18.
+        #expect(outcome == .suppressed(.noCarbTotal))
     }
 
-    // MARK: - The half-unit floor, tested unrounded (Req 3.4)
-
-    @Test("An exact 0.49 U is suppressed")
-    func justBelowTheFloorSuppressed() {
-        guard case .suppressed(let reason, _) =
-            DoseSuggester.suggest(inputs(carbsG: 4.9, hour: 13))
-        else {
-            Issue.record("expected a suppression")
-            return
-        }
-        #expect(reason == .belowMeaningfulDose)
+    @Test("noCarbTotal is the only suppression reason there is")
+    func oneSuppressionReasonOnly() {
+        #expect(Set(SuppressionReason.allCases) == [.noCarbTotal])
     }
 
-    @Test("An exact 0.50 U is suggested and rounds up to the control floor")
-    func exactlyAtTheFloorSuggested() throws {
-        let dose = try suggested(DoseSuggester.suggest(inputs(carbsG: 5.0, hour: 13)))
+    // MARK: - Every carbohydrate total renders a number (Req 3.4)
 
-        #expect(abs(dose.exactUnits - 0.5) < 1e-12)
-        #expect(dose.roundedUnits == 1.0)
-        #expect(dose.seedUnits == 1)
+    // The case that used to be `.belowMeaningfulDose`. A 3 g quick-add at
+    // 10 g/U is 0.30 U: it renders `0 U` with its working inspectable, and it
+    // arms no seed. Neither an absent readout nor a 1 U dose invented by the
+    // stepper's floor.
+    @Test("A 3 g quick-add at 10 g/U suggests 0 U and seeds nothing")
+    func smallQuickAddRendersZero() throws {
+        let dose = try suggested(DoseSuggester.suggest(inputs(carbsG: 3, hour: 13)))
+
+        #expect(abs(dose.exactUnits - 0.3) < 1e-12)
+        #expect(dose.roundedUnits == 0)
+        #expect(dose.seedUnits == 0)
+        #expect(dose.context.gramsPerUnit == 10.0)
     }
 
-    // The dangerous case: 0.30 U must produce nothing, not a 1 U dose invented
-    // by the stepper's floor.
-    @Test("A 3 g quick-add at 10 g/U is suppressed rather than clamped up")
-    func smallQuickAddSuppressedNotClamped() {
-        let outcome = DoseSuggester.suggest(inputs(carbsG: 3, hour: 13))
+    // The case that used to be `.belowControlMinimum`: 0.49 U rounds to 0 U.
+    @Test("An exact 0.49 U rounds to 0 U rather than suppressing")
+    func justBelowTheHalfUnitRendersZero() throws {
+        let dose = try suggested(DoseSuggester.suggest(inputs(carbsG: 4.9, hour: 13)))
 
-        guard case .suppressed(let reason, let context) = outcome else {
-            Issue.record("expected a suppression, got \(outcome)")
-            return
-        }
-        #expect(reason == .belowMeaningfulDose)
-        #expect(context.gramsPerUnit == 10.0)
+        #expect(abs(dose.exactUnits - 0.49) < 1e-12)
+        #expect(dose.roundedUnits == 0)
+        #expect(dose.seedUnits == 0)
     }
 
-    @Test("Insulin-on-board exceeding the carbohydrate term floors at zero")
-    func iobFloorsAtZero() {
-        guard case .suppressed(let reason, _) =
-            DoseSuggester.suggest(inputs(carbsG: 20, hour: 13, iobUnits: 9))
-        else {
-            Issue.record("expected a suppression")
-            return
-        }
-        #expect(reason == .belowMeaningfulDose)
-    }
-
-    // MARK: - Rounding half away from zero, applied once (Req 5.2)
-
-    @Test("At a 1 U increment a midpoint rounds to the larger increment")
-    func roundsHalfAwayAtWholeUnits() throws {
-        let dose = try suggested(DoseSuggester.suggest(inputs(carbsG: 25, hour: 13)))
-
-        #expect(abs(dose.exactUnits - 2.5) < 1e-12)
-        #expect(dose.roundedUnits == 3.0)
-        #expect(dose.seedUnits == 3)
-    }
-
-    @Test("At a 0.5 U increment a midpoint rounds to the larger increment")
-    func roundsHalfAwayAtHalfUnits() throws {
+    @Test("Unoffset insulin-on-board exceeding the carbohydrate term floors at 0 U")
+    func unoffsetIOBFloorsAtZero() throws {
         let dose = try suggested(
-            DoseSuggester.suggest(inputs(carbsG: 27.5, hour: 13, incrementUnits: 0.5)))
+            DoseSuggester.suggest(inputs(carbsG: 20, hour: 13, unoffsetIOBUnits: 9)))
 
-        #expect(abs(dose.exactUnits - 2.75) < 1e-12)
-        #expect(dose.roundedUnits == 3.0)
-        // Req 5.7: the increment is finer than the control, so the seed rounds
-        // again to what the control can represent while exactUnits is kept.
-        #expect(dose.seedUnits == 3)
+        // The reduction is capped at the base so the working's lines still sum:
+        // 2.0 − 2.0 = 0.0, never 2.0 − 9.0 = −7.0 displayed as 0.
+        #expect(abs(dose.baseUnits - 2.0) < 1e-12)
+        #expect(abs(dose.reductionUnits - 2.0) < 1e-12)
+        #expect(dose.exactUnits == 0)
+        #expect(dose.roundedUnits == 0)
+        #expect(dose.seedUnits == 0)
     }
 
-    @Test("A 0.5 U increment keeps a half-unit result the control cannot show")
-    func halfUnitResultKeepsPrecision() throws {
-        let dose = try suggested(
-            DoseSuggester.suggest(inputs(carbsG: 22.5, hour: 13, incrementUnits: 0.5)))
+    // MARK: - Rounding half away from zero, applied once (Req 5.1, 5.2)
 
-        #expect(abs(dose.exactUnits - 2.25) < 1e-12)
-        #expect(dose.roundedUnits == 2.5)
-        #expect(dose.seedUnits == 3)
+    // Req 5.2's own three examples, driven through the carbohydrate term.
+    @Test("3.5 U rounds to 4 U, 3.4 U to 3 U, and 0.6 U to 1 U")
+    func req52Examples() throws {
+        let midpoint = try suggested(DoseSuggester.suggest(inputs(carbsG: 35, hour: 13)))
+        #expect(abs(midpoint.exactUnits - 3.5) < 1e-12)
+        #expect(midpoint.roundedUnits == 4.0)
+        #expect(midpoint.seedUnits == 4)
+
+        let below = try suggested(DoseSuggester.suggest(inputs(carbsG: 34, hour: 13)))
+        #expect(abs(below.exactUnits - 3.4) < 1e-12)
+        #expect(below.roundedUnits == 3.0)
+
+        // 0.6 U rounds UP to 1 U, and that 1 U renders and seeds: the round-up
+        // at small carb loads is deliberate (Req 5.2, 3.4).
+        let small = try suggested(DoseSuggester.suggest(inputs(carbsG: 6, hour: 13)))
+        #expect(abs(small.exactUnits - 0.6) < 1e-12)
+        #expect(small.roundedUnits == 1.0)
+        #expect(small.seedUnits == 1)
     }
 
-    // 27 g at 10 g/U is 2.7 U and insulin-on-board is 1.4 U. Rounding once, at
-    // the end, gives 1 U. Rounding the two terms separately would give 3 − 1 =
-    // 2 U — a whole extra unit, from the rounding alone.
+    // 27 g at 10 g/U is 2.7 U and the unoffset insulin-on-board is 1.4 U.
+    // Rounding once, at the end, gives 1 U. Rounding the two terms separately
+    // would give 3 − 1 = 2 U — a whole extra unit, from the rounding alone.
     @Test("Rounding is applied once to the final value, not to each term")
     func roundingAppliedOnce() throws {
         let dose = try suggested(
-            DoseSuggester.suggest(inputs(carbsG: 27, hour: 13, iobUnits: 1.4)))
+            DoseSuggester.suggest(inputs(carbsG: 27, hour: 13, unoffsetIOBUnits: 1.4)))
 
         let roundedSeparately =
             (2.7).rounded(.toNearestOrAwayFromZero) - (1.4).rounded(.toNearestOrAwayFromZero)
@@ -199,20 +181,27 @@ struct DoseSuggesterTests {
         #expect(dose.seedUnits == 1)
     }
 
-    // MARK: - The control's floor and ceiling (Req 5.4, 5.5)
+    // MARK: - The working's lines sum exactly (Req 6.12)
 
-    // Reachable only at a 0.5 U increment: 0.6 U clears the half-unit floor,
-    // rounds to 0.5 U, and 0.5 U is below the stepper's minimum of 1 U.
-    @Test("A rounded value below the control minimum suppresses rather than clamping up")
-    func belowControlMinimumSuppresses() {
-        let outcome = DoseSuggester.suggest(inputs(carbsG: 6, hour: 13, incrementUnits: 0.5))
+    // The cap is what makes `base − reduction = exact` true at EVERY input,
+    // not merely where the insulin-on-board happens to be smaller.
+    @Test("base − reduction is exactly the unrounded result at every input")
+    func workingLinesSumAtEveryInput() throws {
+        for carbs in stride(from: 0.0, through: 120.0, by: 3.0) {
+            for iob in stride(from: 0.0, through: 15.0, by: 1.5) {
+                let dose = try suggested(
+                    DoseSuggester.suggest(
+                        inputs(carbsG: carbs, hour: 13, unoffsetIOBUnits: iob)))
 
-        guard case .suppressed(let reason, _) = outcome else {
-            Issue.record("expected a suppression, got \(outcome)")
-            return
+                #expect(abs(dose.baseUnits - dose.reductionUnits - dose.exactUnits) < 1e-12)
+                #expect(dose.reductionUnits <= dose.baseUnits + 1e-12)
+                #expect(dose.reductionUnits >= 0)
+                #expect(dose.exactUnits >= 0)
+            }
         }
-        #expect(reason == .belowControlMinimum)
     }
+
+    // MARK: - The control's floor and ceiling (Req 5.4, 5.5)
 
     @Test("A value above the control maximum clamps the seed and keeps exactUnits")
     func aboveControlMaximumClamps() throws {
@@ -238,13 +227,16 @@ struct DoseSuggesterTests {
     @Test("Identical inputs always yield the identical outcome")
     func deterministic() {
         let carbs = 63.4
-        let first = DoseSuggester.suggest(inputs(carbsG: carbs, hour: 8, iobUnits: 2.25))
+        let first = DoseSuggester.suggest(
+            inputs(carbsG: carbs, hour: 8, unoffsetIOBUnits: 2.25))
         for _ in 0..<10 {
-            #expect(DoseSuggester.suggest(inputs(carbsG: carbs, hour: 8, iobUnits: 2.25)) == first)
+            #expect(
+                DoseSuggester.suggest(inputs(carbsG: carbs, hour: 8, unoffsetIOBUnits: 2.25))
+                    == first)
         }
     }
 
-    // MARK: - Configured ratios (Req 1.6, 1.7)
+    // MARK: - Configured ratios (Req 1.6)
 
     @Test("A configured band ratio overrides its seed and is reported as configured")
     func configuredRatioOverridesSeed() throws {
@@ -258,12 +250,13 @@ struct DoseSuggesterTests {
         #expect(dose.seedUnits == 15)
     }
 
-    // MARK: - The increment is a fixed set (Req 5.6)
+    // MARK: - Whole units only (Req 5.1)
 
-    @Test("Only 0.5 and 1.0 are accepted as dosable increments")
-    func incrementIsAFixedSet() {
-        #expect(DosableIncrement(units: 0.5) != nil)
+    @Test("1 U is the only permitted increment — no half-unit path survives")
+    func incrementIsWholeUnitsOnly() {
+        #expect(DosableIncrement.permitted == [1.0])
         #expect(DosableIncrement(units: 1.0) != nil)
+        #expect(DosableIncrement(units: 0.5) == nil)
         #expect(DosableIncrement(units: 0.1) == nil)
         #expect(DosableIncrement(units: 2.0) == nil)
         #expect(DosableIncrement(units: 0) == nil)
