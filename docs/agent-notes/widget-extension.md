@@ -8,14 +8,21 @@ THREE kinds in one `WidgetBundle`:
 |---|---|---|---|
 | `ie.medata.widget.insulin` | `MeDataWidgets.swift` | none | `medata://insulin/add` |
 | `ie.medata.widget.capture` | `MeDataWidgets.swift` | none | `medata://capture` |
+| `ie.medata.widget.glucose.add` | `MeDataWidgets.swift` | none | `medata://glucose/add` |
 | `ie.medata.widget.glucose` | `GlucoseWidget.swift` | App Group snapshot, plus its own LibreLinkUp fetch when the app is suspended (Decision 16) | `medata://graph` |
+
+FOUR kinds now, and the last two are **different kinds about the same
+measurement** — one shows a reading, one records one. Do not be tempted to
+merge them: WidgetKit keys placement, reload budget and tap destination on the
+kind string, so a launcher sharing `ie.medata.widget.glucose` would spend the
+glucose tile's budget and replace its `medata://graph` tap.
 
 Lock-screen accessory widgets carry a SINGLE tap target — that is why dose and
 capture are separate kinds, not two buttons in one widget, and why the glucose
 kind's whole view is one `widgetURL`. Deep links are handled by
 `App/AppRoot.swift handleDeepLink` (see `insulin-dose-ui.md`).
 
-The two LAUNCHER kinds display no data: no persistence imports, `Timeline`
+The three LAUNCHER kinds display no data: no persistence imports, `Timeline`
 policy `.never`, no network. Keep them that way — the App Group, the snapshot
 read and the vendor fetch belong to the glucose kind alone. The 30 MB memory cap
 and the no-GRDB rule bind every kind in the bundle; the no-network rule binds
@@ -146,6 +153,23 @@ the shared WidgetKit reload budget on the co-hosted launchers.
   needs the app's hold-window setting. That setting stays app-private and is
   deliberately not App Group state.
 
+- **`refreshedSnapshot` renders what the STORE resolved, not its own
+  candidate**, and this is load-bearing rather than tidy. `merged` case 1
+  ADMITS a mid-hold sensor write (it returns a snapshot, so `write` returns
+  true) but keeps the held reading and takes only the candidate's trend.
+  Returning `derived` there would put the sensor number back on the Lock Screen
+  for the whole timeline while the App Group correctly held the blood one —
+  Req 3.8 defeated one layer above where it was implemented. The re-read is
+  same-process, so the CFPreferences "atomicity is not freshness" caveat below
+  does not apply to it. The `held` outcome in the wake log names that branch:
+  `outcome=held` means a fetch landed during a hold and contributed an arrow
+  only.
+
+- The extension's fetch builds `GlucoseReading(..., provenance: .sensor)` with
+  the literal stated and passes `holdWindow: 0`. Both are intent, not
+  scaffolding: a vendor CGM feed can carry nothing else, and the extension has
+  no database and therefore cannot see a blood reading at all.
+
 - The contract is one `Codable` blob under one key in
   `UserDefaults(suiteName: "group.rtob.MeData")` — plist-level atomicity, so a
   concurrent reader sees the old blob or the new one, never a splice. Both
@@ -168,6 +192,22 @@ the shared WidgetKit reload budget on the co-hosted launchers.
   `TrendsMath` inside the package; `GlucoseWidget.swift` is only the WidgetKit
   adapter plus per-family views. Keep new display rules on the package side
   where they are testable — the appex has no executable test target.
+- **`GlucoseRender` carries provenance on `.fresh` and `.stale` and on neither
+  of the terminal cases**, structurally: Req 3.5 binds surfaces REPORTING a
+  current value, and past thirty minutes the ladder has dropped the value, so
+  there is nothing left to qualify. `render` coalesces a nil
+  `snapshot.provenance` to `.sensor` and never consults `holdsUntil` — the
+  ladder measures a reading's age from its own instant (Req 3.6), so a held
+  reading ages normally and reaches the fresh/stale boundary at 15 minutes
+  whether it is holding or not. There is a test for that specifically; the hold
+  rule had an obvious wrong turning there.
+- The widget marks BLOOD and leaves sensor unmarked (a `drop.fill` glyph; a
+  "Blood" word in `accessoryInline`, which has no room for a symbol run). That
+  follows the LO/HI token idiom in the same file — an absent token IS the
+  in-range state — and is forced by space: the accessoryCircular family is a
+  ~40 pt disc that already drops the age channel. The in-app surfaces name BOTH
+  provenances, because they have the width and a row read against its
+  neighbours needs the sensor case stated.
 - One exception the pure ladder cannot express: a FRESH entry spans up to 15
   minutes of wall time, so its age is rendered with `Text(_, style: .relative)`
   from a `readingDate` carried on the entry, rather than a baked string that
