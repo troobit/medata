@@ -124,7 +124,12 @@ actor GlucoseWidgetPublisher {
     // The last 24 hours of `bsl` rows condensed into the snapshot, shared with
     // the home page's latest-reading header via `GlucoseSnapshotSource`.
     private func currentSnapshot(now: Date) async -> GlucoseSnapshot {
-        let snapshot = await GlucoseSnapshotSource.current(store: store, now: now)
+        // Same reader as `HomeGlucoseModel`, so the published snapshot and the
+        // home header can never resolve different readings (Req 3.7). The
+        // window stays app-private: what crosses to the extension is the
+        // resolved absolute `holdsUntil` on the snapshot (Decision 8).
+        let snapshot = await GlucoseSnapshotSource.current(
+            store: store, now: now, holdWindow: GlucoseHoldWindow.seconds())
         // Confirms or refutes the skew diagnosis from the field: if this fires,
         // the old `...now` window bound was hiding this row from the widget.
         if let readingDate = snapshot.readingDate, readingDate > now {

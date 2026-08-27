@@ -110,6 +110,40 @@ nonisolated enum SettingsKeys {
     // Which of the two in-app surfaces is showing (specs/data/dose-schedule UI
     // attempts 1 and 2). A developer-phase comparison switch, not a feature.
     static let doseSurfaceStyle = "medata.doseSchedule.surfaceStyle"
+
+    // How long a blood reading outranks a newer sensor reading, in seconds
+    // (specs/data/fingerprick-glucose Req 3.2). Deliberately APP-PRIVATE and
+    // not App Group state (Decision 8): the widget extension never reads the
+    // window, because the snapshot carries the resolved `holdsUntil` as an
+    // absolute date instead. Seconds, so `GlucoseHoldWindow` hands a
+    // `TimeInterval` straight to the derivation without a unit conversion in
+    // between; the Settings control renders minutes.
+    static let glucoseHoldWindowSeconds = "medata.glucose.holdWindowSeconds"
+}
+
+// The hold window, read from wherever it is needed (Req 3.2).
+//
+// `nonisolated` for the `InsulinProduct` reason above: `GlucoseWidgetPublisher`
+// is an actor and deliberately not `@MainActor`, so it cannot reach a
+// main-actor-isolated constant. Both it and `HomeGlucoseModel` read THIS, which
+// is what makes Req 3.7's "same reading on every surface" structural rather
+// than a matter of keeping two literals in step.
+nonisolated enum GlucoseHoldWindow {
+    // 15 minutes (Decision 3), chosen so a reading held to the end of the
+    // window reaches exactly the boundary at which the staleness ladder begins
+    // de-emphasising it.
+    static let defaultSeconds: TimeInterval = 900
+
+    // The range the Settings control offers. Zero is a valid setting — it
+    // disables the hold outright — so an absent key cannot be detected with
+    // `UserDefaults.double(forKey:)`, which returns 0 for both.
+    static let rangeSeconds: ClosedRange<TimeInterval> = 0...(60 * 60)
+
+    static func seconds(_ defaults: UserDefaults = .standard) -> TimeInterval {
+        guard let stored = defaults.object(forKey: SettingsKeys.glucoseHoldWindowSeconds) as? Double
+        else { return defaultSeconds }
+        return min(max(stored, rangeSeconds.lowerBound), rangeSeconds.upperBound)
+    }
 }
 
 // The per-kind product string every insulin write needs (PRD
