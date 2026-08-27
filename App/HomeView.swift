@@ -94,11 +94,6 @@ struct HomeView: View {
         }
     }
 
-    // Attempt 2: the Dose route itself becomes the discharge control while a
-    // dose is outstanding. Home keeps the same shape either way; the control
-    // changes what it does. With more than one dose outstanding the oldest
-    // takes the control and the rest wait, which is the honest limit of not
-    // adding a surface.
     // Dose and BSL share one row (fingerprick-glucose Req 2.1, Decision 5).
     // The pair echoes `ingestRow` with the treatments INVERTED — Dose plain in
     // the leading slot, BSL accent-prominent in the trailing one — so the
@@ -113,6 +108,12 @@ struct HomeView: View {
         }
     }
 
+    // Attempt 2: the Dose route itself becomes the discharge control while a
+    // dose is outstanding. Home keeps the same shape either way; the control
+    // changes what it does. With more than one dose outstanding the oldest
+    // takes the control and the rest wait, which is the honest limit of not
+    // adding a surface. Since fingerprick-glucose this is the leading HALF of
+    // the row rather than the whole of it.
     @ViewBuilder
     private var doseSlot: some View {
         if surfaceStyle == .doseRoute, let dose = outstandingDoses.first {

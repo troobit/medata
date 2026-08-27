@@ -284,11 +284,14 @@ struct GlucoseWidgetView: View {
         switch entry.render {
         case let .fresh(value, status, trend, provenance):
             VStack(spacing: 0) {
-                bloodMark(provenance)
                 Text(value)
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(tint(status))
+                // The mark joins the qualifier row rather than taking a row of
+                // its own: this family is a ~40 pt disc and already has two
+                // lines in it.
                 HStack(spacing: 2) {
+                    bloodMark(provenance)
                     if let token = token(status) {
                         Text(token)
                             .font(.system(size: 11, weight: .bold))
@@ -305,7 +308,7 @@ struct GlucoseWidgetView: View {
                 }
             }
         case let .stale(value, _, provenance):
-            VStack(spacing: 0) {
+            HStack(spacing: 2) {
                 bloodMark(provenance)
                 Text(value)
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
@@ -428,7 +431,9 @@ struct GlucoseWidgetView: View {
                 [bloodWord(provenance), token(status), value, trend?.arrow]
                     .compactMap { $0 }.joined(separator: " "))
         case let .stale(value, age, provenance):
-            Text([bloodWord(provenance), "\(value) · \(age)"].compactMap { $0 }.joined(separator: " "))
+            Text(
+                [bloodWord(provenance), "\(value) · \(age)"]
+                    .compactMap { $0 }.joined(separator: " "))
         case let .lastReading(age):
             Text("Last reading \(age)")
         case .neverRecorded:
