@@ -1378,3 +1378,62 @@ Keeping R3 conditional rather than pre-specified is the same restraint the origi
 `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 10 (title, detail lines, and `Blocked-by`). No change to R1, R4 or R5, and no change to the judging procedure.
 
 ---
+
+## Decision 35: R1 loses to the incumbent and is not adopted; its regression sets R3's shape
+
+**Date**: 2026-08-28
+**Status**: accepted
+
+### Context
+
+R1 is the head of the serial run queue Decision 33 fixed and the only run with a settled recipe: `--loss combined --class-weighting sqrt_inverse --photometric-augment` on the merged FoodSeg103 + Food Recognition 2022 corpus, at parity with the incumbent's recorded configuration (36 classes, 513x513, 12 epochs, batch 16, lr 1e-3, poly-0.9 per epoch, pretrained backbone). It was run to answer whether three levers together beat plain cross-entropy, judged on the 182-image leak-free anchor against the promoted incumbent `ab812dc3aa9d` at 0.3927 mean food-class IoU with the 0.45 staple floors.
+
+Decision 34 stated the consequence of each outcome in advance: a clean win needs nothing further, and any other outcome is unattributable as it stands, because a regression could belong to the loss, to the weighting, to the augmentation, or to an interaction, and one verdict cannot separate them.
+
+### Decision
+
+R1 (`eb18a668c6ce`) is **not adopted**. The incumbent `ab812dc3aa9d` remains the promoted checkpoint and the bundled `segmenter.mlpackage` is unchanged. R1's checkpoint and its lineage are retained as the measured baseline that R3's attribution ablation is read against.
+
+### Rationale
+
+R1 fails both halves of the promotion criterion, on the binding measurement set.
+
+Mean food-class IoU on `heldout_leakfree` is **0.3787 against the incumbent's 0.3927** — a regression of 0.0139, not a win. Per carb-priority staple, identically measured:
+
+| Staple | Incumbent | R1 | Delta |
+|---|---|---|---|
+| bread_white | 0.3927 | 0.4434 | **+0.0507** |
+| chips_fries | 0.5599 | 0.4646 | **-0.0953** |
+| pasta | 0.6497 | 0.5125 | **-0.1372** |
+| white_rice | 0.6320 | 0.5426 | **-0.0895** |
+| potato_boiled | 0.4748 | 0.4512 | -0.0237 |
+| bread_wholemeal | 0.0000 | 0.0000 | 0.0000 |
+| potato_mashed | 0.0000 | 0.0000 | 0.0000 |
+
+The shape of the result is more informative than the mean. R1 does not fail uniformly: it *improves* the weakest carb staple in the set by 0.05 while giving back far more on the three strongest. That is the signature of a re-weighting that has shifted capacity from well-represented classes toward under-represented ones — which is what `sqrt_inverse` is for — and the trade is a net loss at these weights. Read against Decision 25, where inverse-frequency weighting was attributed as the staple-killer and deleted, the milder square-root scheme reproduces the same direction of harm at smaller magnitude rather than escaping it.
+
+The run also lands below the strict export gate (0.48 mean, 0.45 per staple) on four counts, but that gate is not what decides adoption here — the incumbent is below it too, and the developer-phase override is the shipping path (Decision 11).
+
+### Alternatives Considered
+
+- **Adopt R1 on the bread_white gain**: The one staple that moved up is the weakest in the set and arguably the most valuable to fix - Rejected: the promotion criterion is explicitly conjunctive (beat the anchor AND no material staple regression), and three staples regress by 0.09 to 0.14 against one 0.05 gain. Adopting would trade a large measured loss for a small measured gain and call it progress.
+- **Re-run R1 on a longer schedule before judging**: The candidate might still be climbing at epoch 12 - Rejected as a substitute for the verdict: the training-loop validation curve had flattened by epoch 10 (0.3806) and gained 0.0187 across the final two epochs to 0.3993, so it is near its plateau, and R4/R5 already own the longer-schedule question for a different candidate. A longer R1 would also break step parity and make the comparison unattributable, which is the defect this run exists to avoid.
+- **Declare the regression attributable to the class weighting now**: Decision 25's precedent points straight at it - Rejected: it is the most probable single cause, not a measured one. Three levers moved at once; naming one without an ablation is exactly the unattributability Decision 34 anticipated.
+
+### Consequences
+
+**Positive:**
+- The settled-recipe question is closed with a measurement rather than an expectation: these three levers together are worse than plain CE on this corpus, and the shipped estimator is unaffected.
+- R3's premise is now concrete. Decision 34 left its shape to R1's verdict, and the verdict supplies one: R3 is an ablation that separates the three levers, and the weighting is the first lever to isolate given both the regression's shape and Decision 25's precedent.
+- The per-staple table gives R3 a per-class expectation to test against, not just a mean.
+
+**Negative:**
+- Several hours of MPS time bought a negative result and no shipped uplift — the accepted price of the gate, but real.
+- The queue is no further forward on accuracy: R3's ablation is now required before any recipe change can be adopted, so the earliest possible uplift moves out by at least one more serial run.
+- `brown_rice` appears in R1's carb-priority readout at 0.0000 and is absent from the incumbent's recorded readout, so that class is not comparable across the two and is excluded from the judgement above.
+
+### Impact
+
+`tools/segmenter/build/checkpoint_r1_combined_sqrtinv_merged.pt` and `build/lineage-r1.json` (retained, not promoted); `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 6 (closed) and task 10 (premise supplied). No change to the bundled model, the palette, or any shipped artifact.
+
+---
