@@ -54,8 +54,6 @@ struct SettingsView: View {
     private var bolusInsulinType = SettingsKeys.insulinTypeBolusDefault
     @AppStorage(SettingsKeys.insulinTypeBasal)
     private var basalInsulinType = SettingsKeys.insulinTypeBasalDefault
-    @AppStorage(SettingsKeys.dosableIncrementU)
-    private var dosableIncrement = 1.0
     @AppStorage(SettingsKeys.ratioSource)
     private var ratioSource = "manual"
     @AppStorage(SettingsKeys.ratioFitRef)
@@ -146,12 +144,8 @@ struct SettingsView: View {
                 ForEach(DoseBand.allCases, id: \.self) { band in
                     CarbRatioRow(band: band)
                 }
-                Picker("Pen increment", selection: $dosableIncrement) {
-                    Text("0.5 U").tag(0.5)
-                    Text("1 U").tag(1.0)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("settings.dosableIncrement")
+                // No increment row: the dosable increment is fixed at 1 U
+                // (Req 5.1, 6.9, Decision 17), so there is nothing to choose.
                 Picker("Ratio source", selection: $ratioSource) {
                     Text("Chosen").tag("manual")
                     Text("medreg").tag("medreg")

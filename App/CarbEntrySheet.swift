@@ -18,9 +18,13 @@ struct CarbEntryContent: View {
     let nextSortOrder: Int
     let onFinished: () -> Void
 
-    // Optional so any surface can host this content without the app-level
-    // model; absent simply means no suggestion segment.
-    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+    // Computed where it renders (specs/data/insulin-dosing Decision 19), so
+    // this sheet cannot show another surface's leftovers. Optional so any
+    // surface can host this content without the app-level seed holder; absent
+    // simply means nothing is armed.
+    @State private var doseReadout: DoseReadout?
+    @State private var showingWorking = false
+    @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
@@ -63,7 +67,6 @@ struct CarbEntryContent: View {
         // Recomputed as the amount and the time change, so the figure on
         // screen is always the one this save would produce.
         .task(id: suggestionKey) { await refreshSuggestion() }
-        .onDisappear { doseSuggestions?.clear() }
         .sheet(isPresented: $showingPresetSheet, onDismiss: { onFinished() }) {
             QuickPresetEditSheet(
                 store: model.store,
@@ -86,7 +89,7 @@ struct CarbEntryContent: View {
         // a unit symbol, no verb, no qualifier. A suppressed suggestion is
         // an absent segment, not a placeholder.
         CarbAmountField(text: $model.carbsText, identifier: "carb.amount") {
-            if let readout = doseSuggestions?.readout {
+            if let readout = doseReadout {
                 (
                     Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
                         + Text(readout.unitsLabel).fontWeight(.semibold)
@@ -97,8 +100,17 @@ struct CarbEntryContent: View {
                 // (design-direction §2.4; ui-ux review 2026-08-25).
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .animation(reduceMotion ? nil : .smooth, value: readout)
+                // Req 6.12: the tap reveals the working and writes nothing.
+                .contentShape(Rectangle())
+                .onTapGesture { showingWorking = true }
                 .accessibilityLabel(readout.spokenUnits)
+                .accessibilityAction(named: "Show working") { showingWorking = true }
                 .accessibilityIdentifier("carb.doseSuggestion")
+            }
+        }
+        .sheet(isPresented: $showingWorking) {
+            if let doseReadout {
+                DoseWorkingSheet(readout: doseReadout)
             }
         }
     }
@@ -155,25 +167,24 @@ struct CarbEntryContent: View {
         return DoseSubject(
             carbsG: Double(carbs),
             instant: model.timestamp,
-            source: .intake,
-            sourceEventID: model.editing?.id,
-            fatG: model.macros.fatG,
-            proteinG: model.macros.proteinG,
-            sigmaMeal: nil
+            sourceEventID: model.editing?.id
         )
     }
 
     private func refreshSuggestion() async {
         guard let subject else {
-            doseSuggestions?.clear()
+            doseReadout = nil
             return
         }
-        await doseSuggestions?.refresh(for: subject)
+        doseReadout = await DoseComputation.readout(for: subject, store: model.store)
     }
 
+    // The seed is armed from the readout already on screen, which the
+    // `suggestionKey` task keeps current with the amount and the time. A `0 U`
+    // result arms nothing (Req 3.4, 6.4).
     private func armSuggestion() async {
-        guard let subject else { return }
-        await doseSuggestions?.arm(from: subject)
+        await refreshSuggestion()
+        if let seed = doseReadout?.seed { doseSeeds?.arm(seed) }
     }
 }
 

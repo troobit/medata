@@ -1,4 +1,3 @@
-import Persistence
 import Photos
 import SwiftUI
 import UIKit
@@ -86,33 +85,53 @@ struct CarbAmountText: View {
     }
 }
 
-// The recorded-suggestion line for history surfaces (insulin-dosing
-// Req 6.10/6.11): the ledger row's values verbatim, never a recomputation —
-// the band, ratio and insulin-on-board belong to the moment the number was
-// produced. "suggested" labels a past hypothesis (design-direction §6.3) and
-// is not counsel. A row that was a suppression, or no row at all, renders
-// nothing (Req 6.6).
-enum RecordedSuggestion {
-    static func line(_ row: DoseSuggestionRecord?) -> String? {
-        guard let row, let rounded = row.roundedUnits else { return nil }
-        var line = "suggested \(DoseReadout.wholeUnitsLabel(rounded))"
-        line += " · \(DoseReadout.gramsPerUnitLabel(row.crGramsPerUnit))"
-        if let given = row.givenUnits {
-            line += " · given \(DoseReadout.wholeUnitsLabel(given))"
+// The dose line for history surfaces (insulin-dosing Req 6.10/6.11): the
+// suggestion RECOMPUTED for the meal's own instant — its band, its window —
+// from recorded events and the settings in force at read time. No recorded row
+// exists to read (Decision 18), so a later ratio change re-renders past meals
+// at the new ratio; that is accepted, the readout being a present-tense
+// statement of the rule applied to that meal.
+//
+// Same middle-dot grammar and derived register as the review surface, so the
+// segments carry no verb: `12 U · 5 g/U · given 11 U`. The given figure is
+// paired by the ±45-minute window over insulin events, never by a stored link.
+enum DoseHistoryLine {
+    static func runs(
+        _ readout: DoseReadout?, givenUnits: Double?
+    ) -> [MiddleDotLine.Run] {
+        guard let readout else { return [] }
+        var runs = [
+            MiddleDotLine.Run(
+                id: "result.doseSuggestion",
+                text: readout.unitsLabel,
+                emphasised: true,
+                animates: Double(readout.units)
+            ),
+            MiddleDotLine.Run(
+                id: "result.doseRatio",
+                text: readout.ratioLabel,
+                animates: readout.gramsPerUnit
+            )
+        ]
+        if let givenUnits {
+            runs.append(
+                MiddleDotLine.Run(
+                    id: "result.doseGiven",
+                    text: "given \(DoseReadout.wholeUnitsLabel(givenUnits))",
+                    animates: givenUnits
+                )
+            )
         }
-        return line
+        return runs
     }
 
     // VoiceOver form: "12 U" spoken verbatim reads as "twelve you" and
     // "5 g/U" as "g slash u" (ui-ux review 2026-08-25).
-    static func spokenLine(_ row: DoseSuggestionRecord?) -> String? {
-        guard let row, let rounded = row.roundedUnits else { return nil }
-        let ratio = row.crGramsPerUnit
-        let ratioText = ratio == ratio.rounded()
-            ? String(Int(ratio)) : String(format: "%.1f", ratio)
-        var line = "suggested \(spokenUnits(rounded)) at \(ratioText) grams per unit"
-        if let given = row.givenUnits {
-            line += ", given \(spokenUnits(given))"
+    static func spokenLine(_ readout: DoseReadout?, givenUnits: Double?) -> String? {
+        guard let readout else { return nil }
+        var line = "\(readout.spokenUnits) at \(readout.spokenRatio)"
+        if let givenUnits {
+            line += ", given \(spokenUnits(givenUnits))"
         }
         return line
     }

@@ -12,7 +12,7 @@ import SwiftUI
 // - the recent-entries list — swipe-delete, tap-to-edit inline (Req 7.1/7.5).
 struct IntakeView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+    @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
     @State private var model: IntakeModel
     @State private var activeSheet: IntakeSheet?
 
@@ -137,16 +137,7 @@ struct IntakeView: View {
     // The tile is disabled and dimmed while its write is in flight so a
     // double-tap cannot write two rows.
     private func presetSubject(_ preset: QuickPreset) -> DoseSubject {
-        DoseSubject(
-            carbsG: preset.carbsG,
-            instant: Date(),
-            source: .quickPreset,
-            sourceEventID: nil,
-            fatG: preset.macros.fatG,
-            proteinG: preset.macros.proteinG,
-            sigmaMeal: nil,
-            fatStale: false
-        )
+        DoseSubject(carbsG: preset.carbsG, instant: Date(), sourceEventID: nil)
     }
 
     private func presetButton(_ preset: QuickPreset) -> some View {
@@ -158,8 +149,11 @@ struct IntakeView: View {
                 // Req 6.6): a second number on a tile whose whole label is a
                 // carbohydrate figure would rewrite the control and blunt its
                 // one job. The suggestion still reaches the developer one tap
-                // later, as the dose sheet's opening value.
-                await doseSuggestions?.arm(from: presetSubject(preset))
+                // later, as the dose sheet's opening value, and on the intake's
+                // history detail. A `0 U` result arms nothing (Req 3.4, 6.4).
+                let readout = await DoseComputation.readout(
+                    for: presetSubject(preset), store: store)
+                if let seed = readout?.seed { doseSeeds?.arm(seed) }
             }
         } label: {
             VStack(spacing: 2) {

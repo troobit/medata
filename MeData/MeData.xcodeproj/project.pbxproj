@@ -44,7 +44,6 @@
 		11DA5C0288A1B34E77CD3E1E /* ServingRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */; };
 		11DAA046C7E5F23D11007E1E /* MealReadouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DAB157D8F60A4E22118E1E /* MealReadouts.swift */; };
 		11DA8E24A5C3D01B99EE5E1E /* SharedFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */; };
-		11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */; };
 		11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */; };
 		11AC77A03010000000272C1E /* ActivityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC77B03010000000272C1E /* ActivityModel.swift */; };
 		11AC77A13010000000272C1E /* ActivitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC77B13010000000272C1E /* ActivitySheet.swift */; };
@@ -56,6 +55,8 @@
 		115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */; };
 		11AA0001300000000272C1E0 /* MealReviewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0002300000000272C1E0 /* MealReviewModel.swift */; };
 		11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0004300000000272C1E0 /* MealReviewView.swift */; };
+		463E764396C67E95B5F56E05 /* DoseWorkingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */; };
+		F1E3F53CC9FC076450BD311F /* DoseComputation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD7096BBD53461990EE2C06 /* DoseComputation.swift */; };
 		40E2330CBA95E436DE3D3B19 /* FieldMaintenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F82DA141702B6F050479225 /* FieldMaintenance.swift */; };
 		A99B22F3CB77BD9935A63227 /* FieldNoteSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCED12D432DC7D558A9849C3 /* FieldNoteSpeech.swift */; };
 		72E7147E25F410A563A6BBE9 /* FieldScreenshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43516A67AB9B929BC44FC607 /* FieldScreenshot.swift */; };
@@ -127,7 +128,6 @@
 		11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ServingRows.swift; path = ../App/ServingRows.swift; sourceTree = SOURCE_ROOT; };
 		11DAB157D8F60A4E22118E1E /* MealReadouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReadouts.swift; path = ../App/MealReadouts.swift; sourceTree = SOURCE_ROOT; };
 		11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedFormatting.swift; path = ../App/SharedFormatting.swift; sourceTree = SOURCE_ROOT; };
-		11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseSuggestionModel.swift; path = ../App/DoseSuggestionModel.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseSheet.swift; path = ../App/InsulinDoseSheet.swift; sourceTree = SOURCE_ROOT; };
 		11AC77B03010000000272C1E /* ActivityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivityModel.swift; path = ../App/ActivityModel.swift; sourceTree = SOURCE_ROOT; };
 		11AC77B13010000000272C1E /* ActivitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivitySheet.swift; path = ../App/ActivitySheet.swift; sourceTree = SOURCE_ROOT; };
@@ -139,6 +139,8 @@
 		115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MaskOverlayLoader.swift; path = ../App/MaskOverlayLoader.swift; sourceTree = SOURCE_ROOT; };
 		11AA0002300000000272C1E0 /* MealReviewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewModel.swift; path = ../App/MealReviewModel.swift; sourceTree = SOURCE_ROOT; };
 		11AA0004300000000272C1E0 /* MealReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewView.swift; path = ../App/MealReviewView.swift; sourceTree = SOURCE_ROOT; };
+		3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseWorkingSheet.swift; path = ../App/DoseWorkingSheet.swift; sourceTree = SOURCE_ROOT; };
+		8BD7096BBD53461990EE2C06 /* DoseComputation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseComputation.swift; path = ../App/DoseComputation.swift; sourceTree = SOURCE_ROOT; };
 		5F82DA141702B6F050479225 /* FieldMaintenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FieldMaintenance.swift; path = ../App/FieldMaintenance.swift; sourceTree = SOURCE_ROOT; };
 		CCED12D432DC7D558A9849C3 /* FieldNoteSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FieldNoteSpeech.swift; path = ../App/FieldNoteSpeech.swift; sourceTree = SOURCE_ROOT; };
 		43516A67AB9B929BC44FC607 /* FieldScreenshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FieldScreenshot.swift; path = ../App/FieldScreenshot.swift; sourceTree = SOURCE_ROOT; };
@@ -274,7 +276,6 @@
 				11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */,
 				11DAB157D8F60A4E22118E1E /* MealReadouts.swift */,
 				11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */,
-				11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */,
 				11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */,
 				11AC77B03010000000272C1E /* ActivityModel.swift */,
 				11AC77B13010000000272C1E /* ActivitySheet.swift */,
@@ -287,6 +288,8 @@
 				115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */,
 				11AA0002300000000272C1E0 /* MealReviewModel.swift */,
 				11AA0004300000000272C1E0 /* MealReviewView.swift */,
+				3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */,
+				8BD7096BBD53461990EE2C06 /* DoseComputation.swift */,
 				5F82DA141702B6F050479225 /* FieldMaintenance.swift */,
 				CCED12D432DC7D558A9849C3 /* FieldNoteSpeech.swift */,
 				43516A67AB9B929BC44FC607 /* FieldScreenshot.swift */,
@@ -503,7 +506,6 @@
 				11DA5C0288A1B34E77CD3E1E /* ServingRows.swift in Sources */,
 				11DAA046C7E5F23D11007E1E /* MealReadouts.swift in Sources */,
 				11DA8E24A5C3D01B99EE5E1E /* SharedFormatting.swift in Sources */,
-				11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */,
 				11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */,
 				11AC77A03010000000272C1E /* ActivityModel.swift in Sources */,
 				11AC77A13010000000272C1E /* ActivitySheet.swift in Sources */,
@@ -515,6 +517,8 @@
 				115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */,
 				11AA0001300000000272C1E0 /* MealReviewModel.swift in Sources */,
 				11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */,
+				463E764396C67E95B5F56E05 /* DoseWorkingSheet.swift in Sources */,
+				F1E3F53CC9FC076450BD311F /* DoseComputation.swift in Sources */,
 				40E2330CBA95E436DE3D3B19 /* FieldMaintenance.swift in Sources */,
 				A99B22F3CB77BD9935A63227 /* FieldNoteSpeech.swift in Sources */,
 				72E7147E25F410A563A6BBE9 /* FieldScreenshot.swift in Sources */,
