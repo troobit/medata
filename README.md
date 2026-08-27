@@ -188,9 +188,10 @@ outcome row. A note whose bundle is still on the device is not lost — the join
 is re-resolved on every ingest, so it links itself once `field-pull` brings the
 bundle across.
 
-`field-pull` prints one line per file with percent, throughput and an ETA, and
-is resumable: interrupt it and the next run picks up where it stopped rather
-than re-copying. It is slow because the data is large — measured at ~14.5 MB/s
+`field-pull` shows a live progress bar on the terminal — percent, bytes,
+throughput, ETA and the file in flight (piped or logged output gets one
+parseable line per file instead) — and is resumable: interrupt it and the next
+run picks up where it stopped rather than re-copying. It is slow because the data is large — measured at ~14.5 MB/s
 over the cable, with two-view successes around 390 MB each — not because it is
 stuck.
 

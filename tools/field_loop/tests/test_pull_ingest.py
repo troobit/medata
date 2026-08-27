@@ -1,5 +1,6 @@
 """Pull, ingest, and the corpus index (tasks 15/16; Reqs 3.3-3.5, 3.7, 8.1)."""
 
+import io
 import json
 import sqlite3
 import subprocess
@@ -390,6 +391,37 @@ def test_listing_entries_prefer_relative_paths_and_sizes():
          "resources": {"isDirectory": True}}]}}
     assert field_pull._listing_entries(payload, "Documents/notes") == [
         ("Documents/notes/x.json", 7)]
+
+
+def test_progress_bar_carries_the_req_3_8_figures(tmp_path):
+    # Req 3.8 in bar form: fraction, bytes, throughput, ETA, and the file in
+    # flight — including live bytes read off the `.partial` while it copies.
+    out = io.StringIO()      # no .encoding, so the ASCII frames are exercised
+    bar = field_pull._ProgressBar(1_000, out=out, columns=120)
+    partial = tmp_path / "a.fixture.partial"
+    partial.write_bytes(b"x" * 250)
+    bar.start("captures/a.fixture", partial)
+    inflight = out.getvalue()
+    bar.advance(250, rate=14_500_000, eta_s=85)
+    bar.close()
+    done = out.getvalue()[len(inflight):]
+    assert "captures/a.fixture" in inflight and " 25.0%" in inflight
+    for piece in (" 25.0%", "250 B/1.0 kB", " 14.5 MB/s", "eta 1:25", "######"):
+        assert piece in done
+    assert done.endswith("\r\x1b[K")    # the closed bar leaves a clean line
+
+
+def test_progress_bar_trims_long_paths_keeping_the_stem(tmp_path):
+    out = io.StringIO()
+    bar = field_pull._ProgressBar(1_000, out=out, columns=72)
+    bar.start("captures/0001756000000001-success.fixture",
+              tmp_path / "absent.partial")
+    line = out.getvalue()
+    bar.close()
+    # Directory and extension go first; the stem's varying tail survives.
+    assert ".fixture" not in line and "captures/" not in line
+    assert line.endswith("-success")
+    assert len(line.split("\x1b[K")[-1]) <= 72
 
 
 class StubPullTransport:
