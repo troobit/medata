@@ -422,16 +422,38 @@ def test_pull_skips_present_files_at_listed_size_and_marks_completion(corpus_roo
         {"Documents/captures": [
             ("Documents/captures/a.fixture", len(b"already-here")),
             ("Documents/captures/b.fixture", 3)]},
-        {"Documents/captures/b.fixture": b"new"})
+        {"Documents/captures/b.fixture": b"new",
+         "Documents/meals.sqlite": b"db"})
 
     hashes = field_pull.pull_files(transport, pull_dir)
 
     # The present-at-size file was hashed without a wire copy; only the
-    # missing one crossed. Optional DB siblings missing is not a failure, so
+    # missing ones crossed. Optional DB siblings missing is not a failure, so
     # the completion marker lands.
-    assert transport.copied == ["Documents/captures/b.fixture"]
-    assert set(hashes) == {"captures/a.fixture", "captures/b.fixture"}
+    assert transport.copied == ["Documents/captures/b.fixture",
+                                "Documents/meals.sqlite"]
+    assert set(hashes) == {"captures/a.fixture", "captures/b.fixture",
+                           "meals.sqlite"}
     assert (pull_dir / field_pull.PULL_COMPLETE_NAME).exists()
+
+
+def test_pull_without_the_database_is_a_failure_and_stays_resumable(corpus_root, capsys):
+    """The DB carries the outcome rows every note link resolves through, so a
+    pull that lands bundles but no database has joined nothing — the state a
+    real 10 GB pull reached while the miss scrolled past unremarked."""
+    pull_dir = corpus_root / "pulls" / "20260827-1"
+    pull_dir.mkdir(parents=True)
+    transport = StubPullTransport(
+        {"Documents/captures": [("Documents/captures/a.fixture", 3)]},
+        {"Documents/captures/a.fixture": b"abc"})
+
+    field_pull.pull_files(transport, pull_dir)
+
+    out = capsys.readouterr().out
+    assert "file=meals.sqlite reason=required_database" in out
+    assert "failed=1" in out
+    # No marker: the next run resumes this dir and retries exactly the miss.
+    assert not (pull_dir / field_pull.PULL_COMPLETE_NAME).exists()
 
 
 def test_resolve_pull_dir_resumes_only_incomplete_dirs(corpus_root):
@@ -443,3 +465,36 @@ def test_resolve_pull_dir_resumes_only_incomplete_dirs(corpus_root):
     (first / field_pull.PULL_COMPLETE_NAME).write_text("{}")
     assert field_pull.resolve_pull_dir(corpus_root, now) == (
         corpus_root / "pulls" / "20260827-2", False)
+
+
+def test_notes_only_pull_skips_captures_and_keeps_its_own_series(corpus_root):
+    from datetime import datetime, timezone
+    now = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
+    # A backlog pull is part-copied and unmarked: it must stay resumable.
+    backlog = corpus_root / "pulls" / "20260827-1"
+    backlog.mkdir(parents=True)
+
+    notes_dir, resumed = field_pull.resolve_pull_dir(corpus_root, now, kind="notes")
+    assert (notes_dir.name, resumed) == ("20260827-notes-1", False)
+    notes_dir.mkdir(parents=True)
+
+    transport = StubPullTransport(
+        {"Documents/notes": [("Documents/notes/n.json", 2)],
+         "Documents/captures": [("Documents/captures/big.fixture", 400_000_000)]},
+        {"Documents/notes/n.json": b"{}", "Documents/meals.sqlite": b"db"})
+    hashes = field_pull.pull_files(transport, notes_dir, notes_only=True)
+
+    # The DB still crosses — it is what a note's link resolves through — but
+    # the 400 MB bundle stays on the phone.
+    assert transport.copied == ["Documents/notes/n.json", "Documents/meals.sqlite"]
+    assert set(hashes) == {"notes/n.json", "meals.sqlite"}
+    marker = json.loads((notes_dir / field_pull.PULL_COMPLETE_NAME).read_text())
+    assert marker["notes_only"] is True
+    # The notes dir neither renumbered nor resumed the interrupted backlog.
+    assert field_pull.resolve_pull_dir(corpus_root, now) == (backlog, True)
+
+
+def test_notes_only_pull_refuses_to_prune(corpus_root, capsys):
+    code = field_pull.main(["--corpus", str(corpus_root), "--notes-only", "--prune"])
+    assert code == 2
+    assert "notes_only_cannot_prune" in capsys.readouterr().out

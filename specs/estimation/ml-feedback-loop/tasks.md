@@ -243,3 +243,14 @@ references:
   - devicectl calls carry timeouts (300 s listing; 120 s + ~1 s/MB per copy) so a wedged copy fails the file and moves on; failures leave the marker unwritten so the next run retries exactly the misses
   - Stream: 3
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
+
+- [x] 35. field_pull: byte-based progress with ETA, and the DB snapshot made required
+  - Progress is bytes, not files: bundles span 2-400 MB. Each copy line carries pct, MB/s and an ETA once three copies have set a rate. Measured 10.6 GB / 100 bundles / 12 min = ~14.5 MB/s.
+  - meals.sqlite moved from optional to required (DB_PRIMARY vs DB_SIBLINGS): the first real pull landed 100 bundles with db_integrity=absent and joins_resolved=0 because one silent copy failure scrolled past.
+  - Requirements: [3.8](requirements.md#3.8), [3.10](requirements.md#3.10)
+
+- [x] 36. make field-notes: a notes-only pull for feedback on work in flight
+  - --notes-only pulls notes + the DB snapshot and skips capture bundles: ~6 s against the device that takes 12 min for a full pull.
+  - Separate <date>-notes-<n> dir series so it cannot resume or renumber an interrupted backlog pull; refuses --prune, which would retire an outcome protection before its bundle is ashore.
+  - Verified on device 2026-08-27: 3 notes + 152 outcome rows + 23 correction rows ingested, db_integrity=ok.
+  - Requirements: [3.9](requirements.md#3.9)

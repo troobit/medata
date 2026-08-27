@@ -454,6 +454,7 @@ process:
 
 ```
 make field-pull       devicectl -> pulls/<date>-<n>/ -> ingest -> index.sqlite
+make field-notes      notes + DB only -> pulls/<date>-notes-<n>/ -> ingest (seconds)
 make field-diagnose   replay every annotated capture -> diagnoses -> cycles/cycle-<n>/tasks.md
   (agent phase)       drafts.json + any notes, written INTO the cycle directory
 make field-close      six guards -> commits or proposals -> verdict.json + triage.md
@@ -623,15 +624,49 @@ failure has, so a note taken from any capture state links to the most recent
 attempt (Req 2.6). The sheet's Context section states the link (short id +
 relative age, or `none linked`) — first field session could not tell.
 
-**A field pull over a backlog is hours, not minutes — and must say so.**
-~200-400 MB per fixture, one `devicectl copy from` per file; the first pull
-(three-week backlog) ran silent, read as a hang, and was interrupted twice,
-re-copying everything each time (9+ GB of repeats across sibling dirs).
-`field_pull.py` now prints one key=value line per copy, lands copies as
-`.partial` + rename, resumes the newest same-day dir lacking its
+**A field pull is slow because the data is big, not because it is stuck.**
+Measured on the first real pull (`20260827-3`, three-week backlog): **10.6 GB
+across 100 bundles in 12 minutes — ~14.5 MB/s over one `devicectl copy from`
+per file**. That is the honest cost; a two-day session is still several GB,
+because a two-view success is ~390 MB and even a refusal can be ~200 MB. The
+first pull ran silent, read as a hang, and was interrupted twice, re-copying
+everything each time (9+ GB of repeats across sibling dirs).
+`field_pull.py` now prints one key=value line per copy carrying **bytes,
+percent, MB/s and an ETA** (progress is measured in bytes — a file count means
+nothing when files span 2-400 MB, and the ETA waits for three copies because a
+rate off one small file is mostly devicectl's per-invocation overhead), lands
+copies as `.partial` + rename, resumes the newest same-day dir lacking its
 `pull_complete.json` marker by skipping files present at listed size, and
 times out wedged `devicectl` calls per-file. Do not "clean up" the marker
 file: its absence is the resume signal.
+
+**`meals.sqlite` is required; its WAL siblings are not.** The first pull
+treated the whole DB group as optional, the one `meals.sqlite` copy failed for
+a transient reason, and the miss scrolled past under 10 GB of copy lines — so
+100 bundles and 3 notes landed with `db_integrity=absent`, `outcomes=0`,
+`joins_resolved=0`. Without the database there are no outcome rows, so nothing
+a note links to exists. A failed DB copy now fails the pull and leaves the
+marker unwritten, so the next run retries exactly it.
+
+**`make field-notes` is the fast path, and it is not only for capture work.**
+`--notes-only` leaves the bundles on the phone and pulls the notes plus the DB
+snapshot — measured at **~6 seconds** against the same device that takes 12
+minutes for a full pull. Use it whenever feedback is wanted on work still in
+flight; the affordance is a separate window over every screen, so a note taken
+on any surface of any FIELD_LOOP build lands in the corpus with its screen id
+and screenshot whether or not it concerns a capture. Notes-only pulls take
+their own `<UTC-date>-notes-<n>` dir series precisely so they cannot resume or
+renumber an interrupted backlog pull, and the flag refuses `--prune`: retiring
+an outcome's protection before its bundle is ashore would cost the note its
+join route. An unjoined note is not lost — `_resolve_joins` re-runs over every
+note in the corpus on each ingest, so the join lands with the bundle later.
+
+**Notes from an unmounted screen inherit the nearest labelled ancestor.**
+`FieldNoteContext.screenID` reads the top of the stack, falling back to `home`
+— so a new surface added by other work reports whatever cover it was pushed
+from until it carries its own one-line `.fieldScreen("its.id")`. Adding that
+line is the whole integration cost of making a new screen's notes legible
+Mac-side.
 
 **`devicectl info files --json-output` is the only listing worth parsing.**
 The envelope carries flat `result.files[].relativePath` + `metadata.size`

@@ -169,6 +169,16 @@ through `FixtureLoader` + `FixtureRunner` with no harness changes.
 - The simulator destination fails at codesigning `MedataCore_Pipeline.bundle`
   ("bundle format unrecognized") — pre-existing and unrelated; build for
   device (`generic/platform=iOS` compiles, `make build-app` needs the phone).
+- A recorded bundle can be **slimmed in place** after the fact:
+  `MedataCore/Sources/Pipeline/CaptureBundleSlimmer.swift` drops the
+  probability tensors (top-level fields 9 and 10) by walking varints, never
+  by decoding — a full SwiftProtobuf decode of a ~390 MB bundle is not
+  affordable. A `<stem>.slimmed` sidecar marks content state;
+  `fixture_revision` stays put, because a slimmed bundle is the same schema
+  carrying less. Anything that reads a pulled `.fixture` must tolerate the
+  tensors being absent. Policy — when to slim, to what watermark — is the
+  App layer's (`App/FieldMaintenance.swift`), not the pipeline's. Details:
+  `ml-feedback-loop.md`, "Wire-level bundle slimmer".
 
 ## Replaying a device bundle through HarnessCLI (first done 2026-08-05)
 
