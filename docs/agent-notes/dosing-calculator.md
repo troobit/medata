@@ -110,6 +110,18 @@ surface consumes it and it is computed nowhere (Decision 18).
 The curve and the summation are untouched by any of this, so medreg parity
 (Req 4.6) still holds: membership only decides which boluses reach them.
 
+**An unclassifiable insulin event is COUNTED, never dropped** (Req 4.9).
+`DoseComputation.classify` returning `nil` means "cannot be classified", not
+"ignore" — the caller turns it into a `DatedBolus` anyway. Dropping it is the
+tempting shape (`compactMap` invites it, and `assertionFailure` makes it feel
+handled) and it is the dangerous one twice over: `assertionFailure` compiles
+to nothing in Release, which is the profile the developer actually carries,
+and a missing bolus understates insulin already given, so the suggestion comes
+back too HIGH. Counting an unknown event can only lower the suggestion. This
+exact defect has now been written twice — Decision 19 added Req 4.9 after the
+first, and the task-34 rewrite reintroduced it — so treat `compactMap` over
+insulin rows as a smell in this file.
+
 ## Rounding — the one rule that must not be relaxed
 
 Read `Decision 17` before touching `DoseSuggester.suggest`. Three points do real
