@@ -38,45 +38,20 @@ public enum DoseBand: String, Sendable, Equatable, Hashable, CaseIterable {
 
     /// The calendar — and therefore the time zone — is injected, never reached
     /// for (Req 2.2, 10.2). Call sites pass `.current`.
+    /// Daylight-saving transitions need no special handling:
+    /// `Calendar.component(.hour:)` already returns the wall-clock hour that
+    /// was displayed at that instant, which is exactly what "my morning" means.
     public static func band(at instant: Date, calendar: Calendar) -> DoseBand {
         band(forLocalHour: calendar.component(.hour, from: instant))
     }
 
-    /// Band plus the three clock quantities the ledger records, all derived
-    /// from the same instant (Req 2.5).
-    public static func reading(at instant: Date, calendar: Calendar) -> BandReading {
-        BandReading(instant: instant, calendar: calendar)
-    }
-}
-
-/// The band and the clock facts behind it. `localHour` and `utcHour` come from
-/// the same instant read through two calendars, so any disagreement between
-/// local-clock and UTC-clock banding is a measurable quantity off-device rather
-/// than a silent discrepancy (Req 2.5).
-public struct BandReading: Sendable, Equatable {
-
-    public let band: DoseBand
-    public let localHour: Int
-    public let utcHour: Int
-    public let utcOffsetSeconds: Int
-
-    /// Daylight-saving transitions need no special handling:
-    /// `Calendar.component(.hour:)` already returns the wall-clock hour that
-    /// was displayed at that instant.
-    public init(instant: Date, calendar: Calendar) {
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = TimeZone(secondsFromGMT: 0)!
-
-        self.localHour = calendar.component(.hour, from: instant)
-        self.utcHour = utc.component(.hour, from: instant)
-        self.utcOffsetSeconds = calendar.timeZone.secondsFromGMT(for: instant)
-        self.band = DoseBand.band(forLocalHour: localHour)
-    }
-
-    public init(band: DoseBand, localHour: Int, utcHour: Int, utcOffsetSeconds: Int) {
-        self.band = band
-        self.localHour = localHour
-        self.utcHour = utcHour
-        self.utcOffsetSeconds = utcOffsetSeconds
+    /// The local wall-clock hour the band was chosen by. Selection needs only
+    /// this; the UTC hour and offset that once travelled beside it existed to
+    /// fill a recorded row and left with it (Decision 18). Any disagreement
+    /// between local-clock and UTC-clock banding stays measurable off-device,
+    /// derived by the retrospective measurement from the exported event
+    /// timestamps and its own declared time zone (Req 2.5).
+    public static func localHour(at instant: Date, calendar: Calendar) -> Int {
+        calendar.component(.hour, from: instant)
     }
 }

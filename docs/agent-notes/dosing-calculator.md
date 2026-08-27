@@ -14,11 +14,17 @@ transitive path was possible. Here there is no edge for a path to run along, so
 a graph test would assert a property the package file already makes
 unrepresentable.
 
-The consequence, and it is easy to get wrong: **`DoseSuggestionRecord` cannot
-live in `Dosing`.** Persistence would have to import the target, and
-`Pipeline → Persistence` would then reach dose arithmetic from the estimation
-path. The row type lives in `Persistence` and the App layer composes it from the
-pure `SuggestedDose` result — the `EstimationOutcome` precedent.
+The same firewall is why the food-offset membership rule (`FoodOffset.swift`) is
+a pure function over `[Date]` and `[DatedBolus]` rather than a query: the caller
+reads the events and hands over plain instants, so no store type crosses the
+boundary (Req 10.3). `FoodOffsetWindow.bolusSpan` / `.mealOrIntakeSpan` declare
+the spans the caller must cover, so the ±45-minute constant lives in one place
+rather than being re-derived at each call site.
+
+*(Historical: `DoseSuggestionRecord` used to live in `Persistence` for the same
+reason — it could not live in `Dosing` without `Pipeline → Persistence` reaching
+dose arithmetic from the estimation path. The DTO and its table are gone as of
+insulin-dosing Decision 18; nothing derived is stored.)*
 
 ## `Dosing` needs a library product, not just a target
 
@@ -51,9 +57,13 @@ reads 300 rather than 12, the direction has been inverted somewhere.
 The one difference is the clock: medreg segments in UTC, this segments in local
 wall-clock time, because "my morning" is a wall-clock fact.
 
-`BandReading` records `localHour`, `utcHour` and `utcOffsetSeconds` from the
-same instant, which turns any local-versus-UTC banding disagreement into a
-number the ledger can carry rather than a silent discrepancy.
+Band selection needs only the local hour, and `DoseBand.localHour(at:calendar:)`
+is all that remains of the clock bookkeeping. `BandReading` — which carried
+`utcHour` and `utcOffsetSeconds` beside it — existed to fill the ledger's hour
+pair and left with the ledger (Decision 18). Any local-versus-UTC banding
+disagreement stays measurable: the retrospective measurement derives both
+bandings off-device from the exported event timestamps and its own declared
+time zone (Req 2.5).
 
 The `Calendar` is always a parameter. Nothing in this target reaches for
 `.current`, `Date()`, `TimeZone.current` or any other ambient value — that is
@@ -83,34 +93,55 @@ Summation copies `history.py::bolus_iob`: boluses only (the caller filters basal
 out before building the array), and a dose counted only while
 `0 ≤ elapsed < duration`. Empty history yields 0 and is not an error.
 
+## Only the unoffset insulin-on-board reaches the subtraction
+
+Read `Decision 17` before touching this. Insulin dosed for food already consumed
+is spoken for by that food; counting it against the next meal under-dosed every
+meal that followed another inside the duration of action. `isOffsetByFood` is
+the whole rule: a bolus with a logged meal or intake within **45 minutes either
+side** of it is offset and excluded. The window is symmetric on purpose — a
+pre-bolus taken 20 minutes before eating is covered by the meal that follows it,
+not freestanding.
+
+Only the unoffset sum is computed. The physiological total over every bolus was
+computed alongside it to fill the ledger's `iob_u`; with nothing stored, no
+surface consumes it and it is computed nowhere (Decision 18).
+
+The curve and the summation are untouched by any of this, so medreg parity
+(Req 4.6) still holds: membership only decides which boluses reach them.
+
 ## Rounding — the one rule that must not be relaxed
 
-Read `Decision 7` before touching `DoseSuggester.suggest`. Three points do real
-safety work:
+Read `Decision 17` before touching `DoseSuggester.suggest`. Three points do real
+work:
 
-1. The 0.5 U test is on the **unrounded** value. A 3 g quick-add at 10 g/U is
-   0.30 U and must produce **nothing**. Clamping it up to the stepper's floor of
-   1 U would be a threefold overdose invented by a user-interface constraint.
+1. **There is no floor and no suppression.** A meal with a carbohydrate total
+   always renders its number, `0 U` included — a 3 g quick-add at 10 g/U reads
+   `0 U` with its working inspectable, and arms no seed (`seedUnits == 0`). An
+   absent number is indistinguishable from breakage; `0 U` says what happened.
+   `.suppressed(.noCarbTotal)` is the only non-number outcome that exists.
 2. Rounding is applied **once**, to the final value. Rounding the carbohydrate
-   term and the insulin-on-board term separately changes the answer — 27 g at
-   10 g/U with 1.4 U on board is 1 U applied once and 2 U applied separately,
-   and `roundingAppliedOnce` asserts exactly that difference.
-3. Half rounds **away from zero**, not down. Flooring would bias every recorded
-   suggestion low by up to a full unit, which is a systematic error in the
-   evidence rather than a safety margin.
+   term and the reduction separately changes the answer — 27 g at 10 g/U with
+   1.4 U unoffset on board is 1 U applied once and 2 U applied separately, and
+   `roundingAppliedOnce` asserts exactly that difference.
+3. Half rounds **away from zero**, not down. Flooring would bias every
+   suggestion low by up to a full unit, which is a systematic error rather than
+   a safety margin. The increment is fixed at 1 U; `DosableIncrement.permitted`
+   holds one value and the type survives only for call-site stability.
 
-`SuggestionContext` is carried on a **suppression** as fully as on a suggestion
-(Req 7.1). A band whose ratio suppresses everything is a finding, not an
-absence, so the band, hours, offset, ratio and insulin-on-board are all recorded
-either way.
+`reductionUnits` is **capped at `baseUnits`**, and that cap is load-bearing
+rather than defensive: it is what makes `base − reduction == exact` true at
+every input, so the tap-through working's lines sum exactly at each step
+(Req 6.12) instead of showing `2.0 − 9.0` rendered as `0`.
 
 ## What this target must never grow
 
 No fat, protein, glucose-correction, confidence or activity term enters the
 arithmetic in iteration 1 (Req 3.8, Decision 6). This is the experimental
-control: while the dose is exactly `carbs ÷ ratio − iob`, a recorded outcome
-attributes to the ratio. The moment a variable uplift joins it, every row
-becomes `carbs ÷ ratio + unknown` and neither term is measurable afterwards.
+control: while the dose is exactly `carbs ÷ ratio − unoffset iob`, an observed
+outcome attributes to the ratio. The moment a variable uplift joins it, every
+outcome becomes `carbs ÷ ratio + unknown` and neither term is measurable
+afterwards.
 
 No fitting, ever. `~/repos/medreg` is the only place parameters are estimated
 from history (Req 9.1, 9.2).

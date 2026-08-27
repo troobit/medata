@@ -312,14 +312,14 @@ metadata:
 
 ## Phase 9 — Decisions 17/18: carbs-only whole-unit rule, recompute everywhere
 
-- [ ] 29. Red — DosingTests for the amended rule <!-- id:idz000y -->
+- [x] 29. Red — DosingTests for the amended rule <!-- id:idz000y -->
   - Failing tests against the current DoseSuggester: dose = carbs ÷ ratio − unoffset IOB floored at 0; rounding half away from zero on the final value with Req 5.2 examples (3.5→4, 3.4→3, 0.6→1); reductionUnits capped at the base so base − reduction = exact at every input; a 0 U result is .suggested (rendered) with no seedable amount; .suppressed only for a nil carb total; no belowMeaningfulDose or belowControlMinimum outcomes exist
   - Increment fixed at 1 U — DosableIncrement.permitted collapses per the design; tests assert no 0.5 U path survives
   - Existing fixtures for the IOB curve (design fixture table) stay untouched
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.4](requirements.md#5.4)
 
-- [ ] 30. Green — DoseSuggester implements the amended rule <!-- id:idz000z -->
+- [x] 30. Green — DoseSuggester implements the amended rule <!-- id:idz000z -->
   - MedataCore/Sources/Dosing/DoseSuggester.swift: DoseInputs takes unoffset IOB; SuggestedDose carries reductionUnits and the unrounded result for the working; .suppressed slims to its SuppressionReason (noCarbTotal only); ruleID/ruleVersion bookkeeping deleted — nothing recorded pools (Decision 18)
   - The physiological IOB total is no longer computed anywhere unless a surface consumes it — design says it is not
   - Blocked-by: idz000y (Red — DosingTests for the amended rule)
