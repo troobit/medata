@@ -21,6 +21,13 @@ Run from repo root: python3 tools/food_db/generate.py
 Requirements: python3 (no external deps beyond stdlib sqlite3)
 """
 
+# PEP 604 annotations (`list | None`) are evaluated at def time without this,
+# and the end-to-end bake test invokes whatever bare `python3` resolves to —
+# /usr/bin/python3 is 3.9 on macOS, which raises TypeError on import. Deferring
+# annotation evaluation keeps the bake runnable on the system interpreter; the
+# pytest gate still runs under a modern one.
+from __future__ import annotations
+
 import argparse
 import json
 import os
