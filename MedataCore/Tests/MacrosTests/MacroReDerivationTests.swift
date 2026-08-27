@@ -88,6 +88,69 @@ final class MacroReDerivationTests: XCTestCase {
         XCTAssertNil(Macros.preBetaVolume(storedVolumeCm3: 108, betaUsed: .nan))
         XCTAssertNil(Macros.preBetaVolume(storedVolumeCm3: 108, betaUsed: .infinity))
     }
+
+    // MARK: - Corrected fat and protein (insulin-dosing Req 8.3, 8.8)
+
+    func testCorrectedFatAndProteinFollowTheCorrectedMasses() throws {
+        let derived = try XCTUnwrap(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["couscous": 150, "chicken": 200],
+                database: db, edition: edition))
+
+        // couscous 150 g at 0.2 g fat / 100 g, chicken 200 g at 3.6. The
+        // tolerance is Float32's, not the arithmetic's: FoodEntry holds its
+        // per-100 g figures as Float, exactly as the pipeline reads them.
+        XCTAssertEqual(derived.fatG, 150 * 0.2 / 100 + 200 * 3.6 / 100, accuracy: 1e-5)
+        XCTAssertEqual(derived.proteinG, 150 * 3.8 / 100 + 200 * 31.0 / 100, accuracy: 1e-5)
+    }
+
+    // The whole point of F1: the figures follow the CORRECTED masses, so a
+    // meal scaled down carries fat scaled down with it.
+    func testHalvingEveryMassHalvesBothFigures() throws {
+        let full = try XCTUnwrap(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["couscous": 150, "chicken": 200],
+                database: db, edition: edition))
+        let half = try XCTUnwrap(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["couscous": 75, "chicken": 100],
+                database: db, edition: edition))
+
+        XCTAssertEqual(half.fatG, full.fatG / 2, accuracy: 1e-9)
+        XCTAssertEqual(half.proteinG, full.proteinG / 2, accuracy: 1e-9)
+    }
+
+    // A rejected food contributes zero mass and therefore zero fat, which is
+    // not the same fact as a meal whose classes cannot be resolved at all.
+    func testAZeroMassMealResolvesToZeroRatherThanAbsent() throws {
+        let derived = try XCTUnwrap(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["couscous": 0], database: db, edition: edition))
+
+        XCTAssertEqual(derived.fatG, 0)
+        XCTAssertEqual(derived.proteinG, 0)
+    }
+
+    // Req 8.1's absent-is-not-zero rule: nothing derivable reads as absent.
+    func testNoResolvableClassReadsAsAbsentNotFatFree() {
+        XCTAssertNil(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["not_a_food": 120], database: db, edition: edition))
+        XCTAssertNil(
+            Macros.correctedFatAndProtein(
+                massGByClassID: [:], database: db, edition: edition))
+    }
+
+    // A class that fails to resolve inside an otherwise resolvable meal is
+    // skipped, matching Macros.compute's own silent skip.
+    func testOneUnresolvableClassIsSkippedNotFatal() throws {
+        let derived = try XCTUnwrap(
+            Macros.correctedFatAndProtein(
+                massGByClassID: ["couscous": 150, "not_a_food": 500],
+                database: db, edition: edition))
+
+        XCTAssertEqual(derived.fatG, 150 * 0.2 / 100, accuracy: 1e-5)
+    }
 }
 
 // MARK: - Stub

@@ -16,4 +16,18 @@ message UserCorrection {
     // with the future clinical track). Every surface that names a food
     // resolves through this map (meal-review Req 8.7).
     map<string, string> corrected_class_ids = 5;
+    // insulin-dosing Req 8.3 / 8.8 (F1). A correction adjusts carbohydrate,
+    // and until these landed it left the ORIGINAL pipeline fat and protein in
+    // place — so the fat figure was least trustworthy on exactly the meals
+    // that got the most human attention. Both are oneof-wrapped for the same
+    // reason `corrected_total_carbs_g` is: proto3 defaults a bare float to 0,
+    // and a fat-free meal must stay distinguishable from an unrecorded one
+    // (Req 8.1's absent-is-not-zero rule). Derived at write from the corrected
+    // masses on the same per-100 g lines the pipeline uses.
+    oneof corrected_fat_g_oneof {
+        float corrected_fat_g = 6;
+    }
+    oneof corrected_protein_g_oneof {
+        float corrected_protein_g = 7;
+    }
 }

@@ -73,4 +73,36 @@ public extension Macros {
         guard betaUsed.isFinite, betaUsed > 0 else { return nil }
         return storedVolumeCm3 / betaUsed
     }
+
+    // Fat and protein for a corrected meal (specs/data/insulin-dosing Req 8.3,
+    // 8.8 — the F1 gate). A correction asserts a MASS per food, so the two
+    // figures follow from that mass on the same per-100 g lines
+    // `Macros.compute` uses — the derivation is shared rather than
+    // reimplemented, exactly as `reDerive` above shares it for a relabel.
+    // Deriving from the corrected mass is what makes a scaled or user-set
+    // amount carry through: `reDerive`'s own per-class figures describe the
+    // volume it was handed, which a later scale supersedes.
+    //
+    // Returns nil where NO class resolved in the database — a meal whose fat
+    // cannot be derived reads as absent, never as fat-free (Req 8.1). A class
+    // that fails to resolve inside an otherwise resolvable meal is skipped,
+    // matching `Macros.compute`'s own silent skip.
+    static func correctedFatAndProtein(
+        massGByClassID: [String: Double],
+        database: FoodDatabase,
+        edition: String
+    ) -> (fatG: Double, proteinG: Double)? {
+        var fatG = 0.0
+        var proteinG = 0.0
+        var resolvedAny = false
+
+        for (classID, massG) in massGByClassID {
+            guard let entry = database.entry(for: classID, edition: edition) else { continue }
+            resolvedAny = true
+            fatG += massG * Double(entry.fatG) / 100.0
+            proteinG += massG * Double(entry.proteinG) / 100.0
+        }
+
+        return resolvedAny ? (fatG: fatG, proteinG: proteinG) : nil
+    }
 }
