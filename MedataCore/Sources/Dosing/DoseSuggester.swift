@@ -192,7 +192,16 @@ public enum DoseSuggester {
         // 4. The reduction, capped at the base so the working's lines sum
         //    exactly at every step (Req 6.12); `exact` is then ≥ 0 by
         //    construction, which is Req 3.1's zero floor.
-        let reduction = min(max(0, inputs.unoffsetIOBUnits), base)
+        //
+        //    A non-finite insulin-on-board reduces the whole base, giving
+        //    `0 U`. It is not reachable from the app's own writes — the dose
+        //    sheet holds units as an Int clamped 1...60 — but the arithmetic
+        //    must not depend on that: NaN would propagate through the rounding
+        //    into the seed's Int conversion and trap. Reducing to zero is the
+        //    one direction that cannot invent insulin.
+        let unoffset = inputs.unoffsetIOBUnits.isFinite
+            ? max(0, inputs.unoffsetIOBUnits) : base
+        let reduction = min(unoffset, base)
         let exact = base - reduction
 
         // 5. Rounded half away from zero, applied ONCE to the final value,

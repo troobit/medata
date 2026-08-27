@@ -142,6 +142,23 @@ struct DoseSuggesterTests {
         #expect(dose.seedUnits == 0)
     }
 
+    // Not reachable from the app's own writes — the dose sheet holds units as
+    // an Int clamped 1...60 — but the arithmetic must not depend on that: a
+    // non-finite value would propagate through the rounding into the seed's
+    // Int conversion and trap.
+    @Test("A non-finite insulin-on-board yields 0 U rather than trapping")
+    func nonFiniteIOBFloorsAtZero() throws {
+        for iob in [Double.nan, .infinity] {
+            let dose = try suggested(
+                DoseSuggester.suggest(inputs(carbsG: 60, hour: 13, unoffsetIOBUnits: iob)))
+
+            #expect(dose.exactUnits == 0)
+            #expect(dose.roundedUnits == 0)
+            #expect(dose.seedUnits == 0)
+            #expect(dose.reductionUnits == dose.baseUnits)
+        }
+    }
+
     // MARK: - Rounding half away from zero, applied once (Req 5.1, 5.2)
 
     // Req 5.2's own three examples, driven through the carbohydrate term.
