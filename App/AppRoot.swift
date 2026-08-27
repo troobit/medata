@@ -59,13 +59,15 @@ struct AppRoot: View {
     @State private var settingsOpensAtDoseSchedule = false
     @Environment(\.scenePhase) private var scenePhase
 
-    // Owned here, as `DoseSuggestionModel`'s own header states, so a seed
-    // armed inside the Capture cover survives that cover's dismissal, and
-    // injected into the environment so the entry surfaces read one instance.
-    @State private var doseSuggestions: DoseSuggestionModel
+    // Owned here, as `DoseSeedHolder`'s own header states, so a seed armed
+    // inside the Capture cover survives that cover's dismissal, and injected
+    // into the environment so the entry surfaces read one instance. It is the
+    // ONLY shared dose state: every readout is computed where it renders
+    // (specs/data/insulin-dosing Decision 19).
+    @State private var doseSeeds = DoseSeedHolder()
     // Read at the moment the sheet is raised, never inside the sheet builder:
-    // `takeSeed()` consumes the seed, and consuming it during a view update
-    // would be a state mutation mid-body.
+    // `take()` consumes the seed, and consuming it during a view update would
+    // be a state mutation mid-body.
     @State private var pendingSeed: DoseSeed?
 
     // The deep links under the `medata` scheme — each a single-tap lock-screen
@@ -95,7 +97,6 @@ struct AppRoot: View {
         self.adjustRouter = adjustRouter
         _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
         _doseSchedule = State(initialValue: DoseScheduleModel(store: store))
-        _doseSuggestions = State(initialValue: DoseSuggestionModel(store: store))
     }
 
     // A single optional so the covers are mutually exclusive by construction —
@@ -144,7 +145,7 @@ struct AppRoot: View {
         #if FIELD_LOOP
         .fieldScreen("home")
         #endif
-        .environment(doseSuggestions)
+        .environment(doseSeeds)
         .fullScreenCover(item: $activeSheet, onDismiss: {
             settingsOpensAtDoseSchedule = false
             // A deep-linked present waits for the cover's dismissal to
@@ -266,19 +267,12 @@ struct AppRoot: View {
                 seedUnits: adjustingDose?.nominalUnits,
                 seedKind: adjustingDose?.schedule.kind,
                 seed: pendingSeed,
-                onInsulinSaved: { eventID, units in
-                    // Req 7.5: the saved dose is linked back to the suggestion
-                    // row the seed came from — an UPDATE on the side table
-                    // only, and only when a seeded suggestion was in force.
-                    if let suggestionID = pendingSeed?.suggestionID {
-                        Task {
-                            await doseSuggestions.noteSavedDose(
-                                suggestionID: suggestionID,
-                                eventID: eventID,
-                                units: Double(units)
-                            )
-                        }
-                    }
+                onInsulinSaved: { eventID, _ in
+                    // Nothing links the saved dose back to a suggestion: no row
+                    // exists to update (Decision 18). The later
+                    // suggested-versus-given comparison pairs a dose with its
+                    // meal by the ±45-minute window over recorded events
+                    // (Req 6.10), not by a stored link.
                     guard let dose = adjustingDose else { return }
                     Task {
                         await doseSchedule.recordAdjusted(dose, insulinEventID: eventID)
@@ -372,11 +366,11 @@ struct AppRoot: View {
     // dismisses the other one first and resumes through `pendingDeepLink`;
     // presenting a sheet over a sheet that is animating out is dropped.
     // Req 6.4: the sheet opens on the armed suggestion where one is in force
-    // and at the standing default otherwise. `takeSeed()` returns nil once the
+    // and at the standing default otherwise. `take()` returns nil once the
     // seed's 45 minutes have lapsed, so both two-tap paths are unchanged when
     // nothing is armed.
     private func presentInsulinSheet() {
-        pendingSeed = doseSuggestions.takeSeed()
+        pendingSeed = doseSeeds.take()
         showInsulinSheet = true
     }
 

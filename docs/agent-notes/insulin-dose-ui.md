@@ -27,16 +27,42 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   field: `insulin_type` fills at save time from per-kind Settings defaults
   (`SettingsKeys.insulinTypeBolus/Basal`, defaults NovoRapid/Lantus; empty or
   whitespace falls back to the default).
-- **`DoseSuggestionModel`** computes the suggestion from the merged `Dosing`
-  target and writes real `dose_suggestions` rows via `saveDoseSuggestion` /
-  `linkDose` (no in-memory ledger survives the merge). The history surfaces
-  (`MealOverviewView`, `ResultView`) read a meal's recorded suggestion back
-  via `doseSuggestion(forSourceEventID:)` and render it as the read-only
-  `suggested 12 U · 5 g/U (· given 14 U)` line
-  (`specs/data/insulin-dosing/requirements.md` Req 6.10). Since superseded:
-  insulin-dosing Decision 18 removed the `dose_suggestions` store and its API
-  (every surface recomputes live), and home-router Decision 16 deleted
-  `MealOverviewView`.
+- **`DoseComputation`** (`App/DoseComputation.swift`) is the only place the
+  `Dosing` target and the store meet: a pure enum, no state and no observation.
+  `readout(for:store:)` reads the four ratio keys from `UserDefaults`, runs
+  three `events(in:type:)` queries (boluses over the duration of action; meals
+  and intakes over that span widened by ±45 minutes), and calls
+  `DoseSuggester`. Every surface calls it in its own `.task` and holds the
+  result as local `@State`. There is deliberately **no shared readout state and
+  no environment model** — insulin-dosing Decision 19 dissolved the former
+  `DoseSuggestionModel` precisely because a shared `readout` with
+  refresh/clear choreography is where stale-display bugs live. Nothing is
+  written: Decision 18 removed the `dose_suggestions` store, so history
+  recomputes rather than reads (Req 6.11), and a later ratio change re-renders
+  past meals at the new ratio (accepted).
+- **`DoseSeedHolder`** is the one shared object that survives: `arm(_:)` /
+  `take()` with a 45-minute lifetime, owned by `AppRoot` and injected into the
+  environment, because the dose sheet's seed is genuinely cross-surface —
+  armed inside the Capture cover, consumed by a sheet presented from `AppRoot`
+  after that cover is gone (Req 6.4). It arms only at ≥ 1 U
+  (`DoseReadout.seed` is nil below that), so a `0 U` meal renders its readout
+  and seeds nothing. Nothing links a saved dose back to a suggestion; the
+  suggested-versus-given pairing is the same ±45-minute window over recorded
+  events (`DoseComputation.givenUnits(at:store:)`).
+- **Fail-loud classification** (Req 4.9): `DoseComputation.classify` fires an
+  `assertionFailure` on an insulin event whose metadata carries no usable
+  `kind`. Basal is a *classified* exclusion and returns normally. The shipped
+  code used to `compactMap` unparseable rows away, so a dose could leave the
+  insulin-on-board sum with no trace — do not restore that.
+- **`DoseWorkingSheet`** (`App/DoseWorkingSheet.swift`) is the tap-through
+  working (Req 6.12), reachable from all three readout surfaces (meal review's
+  second line, `CarbEntrySheet`'s amount line, `ResultView`'s history line) and
+  from a "Show working" accessibility action on each surface's combined
+  element. `DoseWorking.lines` is pure and renders base ÷ ratio, one
+  `− x U, for <reason>` line per non-zero reduction, the unrounded result, then
+  the rounding step. The lines sum at every step only because
+  `SuggestedDose.reductionUnits` is capped at `baseUnits` in the suggester — do
+  not relax that cap. The sheet writes nothing and shows no control.
 - **TrendsModel** loads insulin via `events(in:type: EventType.insulin)` in
   the same `reload()` the `eventsDidChange` subscription drives, decoding
   `kind` from the metadata JSON (rows that fail to decode are dropped).
@@ -96,7 +122,8 @@ attempt 2's reach ported on top — `DoseReadoutLine` (`MiddleDotLine` /
 line, the dose sheet's provenance caption consumed by the first press, and a
 seed that is actually consumed. Attempt 3's documented ledger stub was
 replaced with the real `saveDoseSuggestion` / `linkDose` wiring (since removed
-— insulin-dosing Decision 18; see the `DoseSuggestionModel` bullet above).
+— insulin-dosing Decision 18, and the model class itself dissolved by
+Decision 19; see the `DoseComputation` / `DoseSeedHolder` bullets above).
 Attempt 1 was
 rejected outright — the seed it armed on Record was never consumed
 (`takeSeed()` had no caller), which under the everywhere-readable bar is "the
@@ -129,7 +156,9 @@ replays — stays where it is; those trees no longer build against current
 All three share the same spine: a `DoseSuggestionModel` in `App/` reading the
 merged `Dosing` target, a readout on the meal-review second line and on the
 manual intake path, and ratio/increment rows in Settings. What they disagree
-about is how far the suggestion reaches past that line.
+about is how far the suggestion reaches past that line. (Since: the model class
+is dissolved into `DoseComputation` + `DoseSeedHolder` by Decision 19, and the
+increment row is deleted — the increment is fixed at 1 U by Decision 17.)
 
 **Attempt 1 — the readout, and nothing else.** Eight files. The suggestion is
 seven characters appended to a line that already exists: `≈ 214 g on plate ·
