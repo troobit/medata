@@ -117,7 +117,7 @@ references:
 
 ## App and widget surfaces
 
-- [ ] 12. Write GlucoseSnapshotSource provenance-decode and hold-window tests (Red) <!-- id:3sphmgn -->
+- [x] 12. Write GlucoseSnapshotSource provenance-decode and hold-window tests (Red) <!-- id:3sphmgn -->
   - A row written by recordBloodBsl surfaces as .blood; a row written by ingestLiveBsl, which carries no provenance key, surfaces as .sensor — Req 7.1 satisfied by absence, with nothing rewritten. An unrecognised provenance string also falls back to .sensor.
   - End to end over a real store: a blood row inside the window is the snapshot's displayed reading while a newer sensor row exists, and stops being it once the window elapses.
   - Blocked-by: 3sphmge (Implement precedence and the sensor-only trend in GlucoseDerivation Green), 3sphmgi (Implement BloodBslReading and recordBloodBsl Green)
@@ -125,7 +125,7 @@ references:
   - Requirements: [3.7](requirements.md#3.7), [7.1](requirements.md#7.1)
   - References: MedataCore/Tests/PersistenceTests/
 
-- [ ] 13. Implement the provenance decode, hold-window setting, and app-side pass-through (Green) <!-- id:3sphmgo -->
+- [x] 13. Implement the provenance decode, hold-window setting, and app-side pass-through (Green) <!-- id:3sphmgo -->
   - SettingsKeys.glucoseHoldWindowSeconds (medata.glucose.holdWindowSeconds), default 900 — app-private, deliberately NOT App Group state (Decision 8).
   - GlucoseSnapshotSource.current(store:now:holdWindow:) decodes metadata.provenance onto each GlucoseReading and forwards the window.
   - HomeGlucoseModel and GlucoseWidgetPublisher both read the setting and pass it, so home and the published snapshot resolve the same reading (Req 3.7).

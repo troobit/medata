@@ -38,18 +38,48 @@ public enum GlucoseSnapshotSource {
     // The last 24 hours of `bsl` rows condensed into a snapshot. A throw
     // (corrupt row) degrades to never-recorded rather than propagating —
     // both callers render a display, neither has an error surface.
-    public static func current(store: any PersistenceStore, now: Date) async -> GlucoseSnapshot {
+    //
+    // `holdWindow` is not defaulted, for the reason `GlucoseDerivation.snapshot`
+    // states: hold semantics must be asked for, never acquired by accident.
+    // Both app-side callers read the same setting, which is what makes Req 3.7
+    // hold — home and the published snapshot resolve the same reading.
+    public static func current(
+        store: any PersistenceStore, now: Date, holdWindow: TimeInterval
+    ) async -> GlucoseSnapshot {
         let oldest = now.addingTimeInterval(-displayHorizon)
         let newest = now.addingTimeInterval(futureSkewAllowance)
         let events = (try? await store.events(in: oldest...newest, type: EventType.bsl)) ?? []
-        let readings = events.compactMap { event in
-            event.value.map { GlucoseReading(timestamp: event.timestamp, mmolL: $0) }
+        return snapshot(from: events.compactMap(reading(from:)), now: now, holdWindow: holdWindow)
+    }
+
+    // One `bsl` row as a reading, or nil when the row carries no value.
+    //
+    // Public and here rather than private to each consumer because THREE
+    // surfaces read provenance off these rows — this snapshot derivation, the
+    // Graph's trace/marker split, and the Records row label — and a second
+    // spelling of the fallback rule is how one of them starts calling a blood
+    // reading a sensor one.
+    public static func reading(from event: Event) -> GlucoseReading? {
+        event.value.map {
+            GlucoseReading(
+                timestamp: event.timestamp, mmolL: $0, provenance: provenance(of: event))
         }
-        // Zero window until the provenance decode and the app-side setting land
-        // (specs/data/fingerprick-glucose tasks 12 and 13): with every reading
-        // still reading back as `.sensor`, a window of any size would resolve
-        // the same reading anyway.
-        return snapshot(from: readings, now: now, holdWindow: 0)
+    }
+
+    // The stored form of provenance, and the whole of Req 7.1: an ABSENT
+    // `metadata.provenance` key is a sensor reading, so every row recorded
+    // before this feature reads back correctly with nothing rewritten and no
+    // migration. An unrecognised value falls the same way, which is the
+    // fail-safe direction — a reading mistaken for blood would earn a hold it
+    // has not measured.
+    public static func provenance(of event: Event) -> GlucoseProvenance {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: Data(event.metadata.utf8))
+                as? [String: Any],
+            let raw = object["provenance"] as? String,
+            let provenance = GlucoseProvenance(rawValue: raw)
+        else { return .sensor }
+        return provenance
     }
 
     // The pure half moved to `GlucoseDerivation` (GlucoseWidgetShared) when the
