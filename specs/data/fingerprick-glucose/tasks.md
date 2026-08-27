@@ -9,7 +9,7 @@ references:
 
 ## Shared contract and precedence (MedataCore)
 
-- [ ] 1. Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot <!-- id:3sphmgc -->
+- [x] 1. Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot <!-- id:3sphmgc -->
   - public enum GlucoseProvenance: String, Codable, Sendable { case sensor, blood } in GlucoseWidgetShared — Foundation-only, no new dependency edge.
   - GlucoseReading.provenance defaulted .sensor in the initialiser so every existing construction site compiles unchanged: GlucoseSnapshotSource.current, App/TrendsModel.swift, App/RecordsModel.swift, MeData/MeDataWidgets/GlucoseWidget.swift.
   - GlucoseSnapshot to schemaVersion 2 with provenance: GlucoseProvenance? and holdsUntil: Date?, both carried through make(...). A v1 blob already reads as .neverRecorded on the version check, so there is no migration and no backfill.

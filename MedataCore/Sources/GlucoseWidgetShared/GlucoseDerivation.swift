@@ -13,14 +13,32 @@
 // Foundation only, per this module's standing constraints.
 import Foundation
 
+// How a reading was measured (specs/data/fingerprick-glucose Decision 4).
+// Two values and no more: a meter sample arriving through Apple Health and a
+// hand-entered fingerstick are one behavioural class, separated only by the
+// route recorded in `metadata.source_id`.
+//
+// Stored form is the `bsl` event's `metadata.provenance`. The key being ABSENT
+// means sensor, which is what makes Req 7.1 free — every reading recorded
+// before this feature reads back as a sensor reading with nothing rewritten.
+public enum GlucoseProvenance: String, Codable, Sendable, CaseIterable {
+    case sensor, blood
+}
+
 // A single glucose reading in mmol/L (the value carried by `bsl` events).
 public struct GlucoseReading: Sendable, Equatable {
     public let timestamp: Date
     public let mmolL: Double
+    public let provenance: GlucoseProvenance
 
-    public init(timestamp: Date, mmolL: Double) {
+    // `provenance` is defaulted so every existing construction site — the
+    // widget extension's vendor fetch, the Graph, Records — compiles unchanged
+    // and keeps meaning what it meant. Sensor is also the fail-safe direction:
+    // a reading mistaken for blood would earn a hold it has not measured.
+    public init(timestamp: Date, mmolL: Double, provenance: GlucoseProvenance = .sensor) {
         self.timestamp = timestamp
         self.mmolL = mmolL
+        self.provenance = provenance
     }
 }
 
