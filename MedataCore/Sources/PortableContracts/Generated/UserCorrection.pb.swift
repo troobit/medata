@@ -49,10 +49,56 @@ public nonisolated struct PbUserCorrection: Sendable {
   /// resolves through this map (meal-review Req 8.7).
   public var correctedClassIds: Dictionary<String,String> = [:]
 
+  /// insulin-dosing Req 8.3 / 8.8 (F1). A correction adjusts carbohydrate,
+  /// and until these landed it left the ORIGINAL pipeline fat and protein in
+  /// place — so the fat figure was least trustworthy on exactly the meals
+  /// that got the most human attention. Both are oneof-wrapped for the same
+  /// reason `corrected_total_carbs_g` is: proto3 defaults a bare float to 0,
+  /// and a fat-free meal must stay distinguishable from an unrecorded one
+  /// (Req 8.1's absent-is-not-zero rule). Derived at write from the corrected
+  /// masses on the same per-100 g lines the pipeline uses.
+  public var correctedFatGOneof: PbUserCorrection.OneOf_CorrectedFatGOneof? = nil
+
+  public var correctedFatG: Float {
+    get {
+      if case .correctedFatG(let v)? = correctedFatGOneof {return v}
+      return 0
+    }
+    set {correctedFatGOneof = .correctedFatG(newValue)}
+  }
+
+  public var correctedProteinGOneof: PbUserCorrection.OneOf_CorrectedProteinGOneof? = nil
+
+  public var correctedProteinG: Float {
+    get {
+      if case .correctedProteinG(let v)? = correctedProteinGOneof {return v}
+      return 0
+    }
+    set {correctedProteinGOneof = .correctedProteinG(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_CorrectedTotalCarbsGOneof: Equatable, Sendable {
     case correctedTotalCarbsG(Float)
+
+  }
+
+  /// insulin-dosing Req 8.3 / 8.8 (F1). A correction adjusts carbohydrate,
+  /// and until these landed it left the ORIGINAL pipeline fat and protein in
+  /// place — so the fat figure was least trustworthy on exactly the meals
+  /// that got the most human attention. Both are oneof-wrapped for the same
+  /// reason `corrected_total_carbs_g` is: proto3 defaults a bare float to 0,
+  /// and a fat-free meal must stay distinguishable from an unrecorded one
+  /// (Req 8.1's absent-is-not-zero rule). Derived at write from the corrected
+  /// masses on the same per-100 g lines the pipeline uses.
+  public nonisolated enum OneOf_CorrectedFatGOneof: Equatable, Sendable {
+    case correctedFatG(Float)
+
+  }
+
+  public nonisolated enum OneOf_CorrectedProteinGOneof: Equatable, Sendable {
+    case correctedProteinG(Float)
 
   }
 
@@ -65,7 +111,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UserCorrection"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}created_at_ms\0\u{3}corrected_total_carbs_g\0\u{3}corrected_per_class\0\u{1}note\0\u{3}corrected_class_ids\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}created_at_ms\0\u{3}corrected_total_carbs_g\0\u{3}corrected_per_class\0\u{1}note\0\u{3}corrected_class_ids\0\u{3}corrected_fat_g\0\u{3}corrected_protein_g\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -85,6 +131,22 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &self.correctedPerClass) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.note) }()
       case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.correctedClassIds) }()
+      case 6: try {
+        var v: Float?
+        try decoder.decodeSingularFloatField(value: &v)
+        if let v = v {
+          if self.correctedFatGOneof != nil {try decoder.handleConflictingOneOf()}
+          self.correctedFatGOneof = .correctedFatG(v)
+        }
+      }()
+      case 7: try {
+        var v: Float?
+        try decoder.decodeSingularFloatField(value: &v)
+        if let v = v {
+          if self.correctedProteinGOneof != nil {try decoder.handleConflictingOneOf()}
+          self.correctedProteinGOneof = .correctedProteinG(v)
+        }
+      }()
       default: break
       }
     }
@@ -110,6 +172,12 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.correctedClassIds.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.correctedClassIds, fieldNumber: 5)
     }
+    try { if case .correctedFatG(let v)? = self.correctedFatGOneof {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 6)
+    } }()
+    try { if case .correctedProteinG(let v)? = self.correctedProteinGOneof {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -119,6 +187,8 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.correctedPerClass != rhs.correctedPerClass {return false}
     if lhs.note != rhs.note {return false}
     if lhs.correctedClassIds != rhs.correctedClassIds {return false}
+    if lhs.correctedFatGOneof != rhs.correctedFatGOneof {return false}
+    if lhs.correctedProteinGOneof != rhs.correctedProteinGOneof {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

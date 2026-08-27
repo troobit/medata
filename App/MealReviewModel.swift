@@ -652,6 +652,16 @@ final class MealReviewModel {
                   !corrected.classID.isEmpty else { return nil }
             return (food.classId, corrected.classID)
         })
+        // insulin-dosing Req 8.3 / 8.8 (F1): a correction adjusts carbohydrate,
+        // so without these the original pipeline fat and protein stayed in
+        // force on exactly the meals that got the most human attention. Keyed
+        // by the CURRENT class, so a relabelled food carries its new food's
+        // composition. Left unset — absent, never zero — where no class
+        // resolves in the database (Req 8.1).
+        if let derived = correctedFatAndProtein() {
+            out.correctedFatG = Float(derived.fatG)
+            out.correctedProteinG = Float(derived.proteinG)
+        }
         // Machine-readable amounts (ServingNote), so ResultView's history
         // seeding keeps working unchanged on corrected meals.
         out.note = ServingNote.note(foods.map { food -> (classId: String, amount: ServingNote.Amount) in
@@ -663,6 +673,22 @@ final class MealReviewModel {
             return (classId: food.classId, amount: .grams(food.currentMassG))
         })
         return out
+    }
+
+    // The corrected meal's fat and protein, derived from the corrected masses
+    // through the shared `Macros` derivation rather than reimplemented here
+    // (insulin-dosing Req 8.3). Masses are summed per current class so two
+    // rows relabelled onto the same food do not overwrite each other.
+    private func correctedFatAndProtein() -> (fatG: Double, proteinG: Double)? {
+        guard let database else { return nil }
+        var massGByClassID: [String: Double] = [:]
+        for food in foods {
+            massGByClassID[food.currentClassId, default: 0] += food.currentMassG
+        }
+        return Macros.correctedFatAndProtein(
+            massGByClassID: massGByClassID,
+            database: database,
+            edition: record.databaseEdition)
     }
 
     // MARK: - Session seeding

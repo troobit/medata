@@ -241,7 +241,7 @@ metadata:
   - Stream: 1
   - Requirements: [11.1](requirements.md#11.1), [11.3](requirements.md#11.3), [11.5](requirements.md#11.5)
 
-- [ ] 21. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
+- [x] 21. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
   - PbUserCorrection gains corrected_fat_g and corrected_protein_g, written from Macros.reDerive, which already computes both
   - The cheapest gate to clear and independent of every other fat stage: without it the fat figure is least trustworthy on exactly the meals that got the most human attention
   - Until this lands, fat_stale flags those rows and any fat rule refuses them
