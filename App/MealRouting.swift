@@ -1,3 +1,4 @@
+import GlucoseWidgetShared
 import Persistence
 import PortableContracts
 import SwiftUI
@@ -114,6 +115,21 @@ struct GlucoseRow: Identifiable, Equatable {
     let id: UUID
     let timestamp: Date
     let mmolL: Double
+    // How it was measured (fingerprick-glucose Req 4.3). Defaulted so the
+    // existing construction sites read unchanged, and `.sensor` because an
+    // absent `metadata.provenance` key IS a sensor reading (Req 7.1).
+    var provenance: GlucoseProvenance = .sensor
+
+    // Req 4.3 labels BOTH provenances, unlike the Lock Screen, which has room
+    // for one qualifier and marks blood alone: a timeline row is read against
+    // its neighbours, and an unlabelled row beside a labelled one reads as
+    // "unknown" rather than as the other kind.
+    var provenanceLabel: String {
+        switch provenance {
+        case .sensor: return "Sensor"
+        case .blood: return "Blood"
+        }
+    }
 }
 
 // The capture-born preset draft (specs/data/manual-carb-intake Req 8, task

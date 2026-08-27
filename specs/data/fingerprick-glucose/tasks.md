@@ -187,7 +187,7 @@ references:
   - Requirements: [2.2](requirements.md#2.2)
   - References: MeData/MeDataWidgets/MeDataWidgets.swift
 
-- [ ] 20. Draw blood readings as a distinct marker series on the Graph <!-- id:3sphmgv -->
+- [x] 20. Draw blood readings as a distinct marker series on the Graph <!-- id:3sphmgv -->
   - TrendsModel.reload decodes provenance when building the glucose series; TrendsView keeps the existing LineMark over sensor readings alone, so the trace is drawn unbroken across a blood instant, and adds blood readings as a separate PointMark series.
   - App/UI: no preceding test.
   - Blocked-by: 3sphmgi (Implement BloodBslReading and recordBloodBsl Green)
@@ -195,7 +195,7 @@ references:
   - Requirements: [4.2](requirements.md#4.2)
   - References: App/TrendsModel.swift, App/TrendsView.swift
 
-- [ ] 21. Label provenance on the Records glucose row <!-- id:3sphmgw -->
+- [x] 21. Label provenance on the Records glucose row <!-- id:3sphmgw -->
   - loadGlucose carries provenance onto GlucoseRow, keeping Event.id (records-deletion Decision 13); the row labels it.
   - Ordering, the swipe gesture and the bulk actions are untouched — Req 6.1 needs no change.
   - App/UI: no preceding test.
@@ -204,7 +204,7 @@ references:
   - Requirements: [4.3](requirements.md#4.3), [6.1](requirements.md#6.1)
   - References: App/RecordsModel.swift, App/RecordsView.swift
 
-- [ ] 22. Route deleted bsl instants to the snapshot write <!-- id:3sphmgx -->
+- [x] 22. Route deleted bsl instants to the snapshot write <!-- id:3sphmgx -->
   - RecordsModel.delete and deleteBulk collect the removed bsl timestamps — including the date-range and delete-all purges from specs/ui/records-deletion — and hand them to the publisher, which passes them as replacingDeleted:. Deletions of other event types pass nothing and behave as today.
   - Needs a route from RecordsModel, constructed in RecordsView, to the publisher owned by App.swift; pick one seam and use it for all three deletion paths.
   - App wiring over a store policy already covered by task 4's tests.

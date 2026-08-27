@@ -99,6 +99,13 @@ final class TrendsModel {
     // Bug `graph-month-selection-hang` 2026-07-06.
     private(set) var carbBars: [TrendsChartPoint] = []
     private(set) var glucoseLine: [TrendsChartPoint] = []
+    // Blood readings, at their own instants, in every range (Req 4.2). Separate
+    // from `glucoseLine` because they are a different measurement, not another
+    // vertex of the same trace: interpolating a fingerstick into the sensor
+    // line would draw a step between two modalities as though glucose had
+    // moved. Unbucketed even on week and month, where the line is daily
+    // averages — a fingerstick is a discrete event, like an insulin dose.
+    private(set) var bloodPoints: [TrendsChartPoint] = []
     private(set) var insulinMarkers: [InsulinMarker] = []
     private(set) var activityMarkers: [ActivityMarker] = []
     private(set) var carbAxisMax: Double = 0
@@ -153,9 +160,11 @@ final class TrendsModel {
         // §10.9 / Error handling: a corrupt-record throw yields an empty series
         // and the carb chart still renders — never a crash.
         let events = (try? await store.events(in: iv.start...iv.end, type: EventType.bsl)) ?? []
-        glucose = events.compactMap { event in
-            event.value.map { GlucoseReading(timestamp: event.timestamp, mmolL: $0) }
-        }
+        // `reading(from:)` carries `metadata.provenance` onto each row
+        // (fingerprick-glucose Req 4.2). Shared with the snapshot derivation
+        // and the Records row rather than re-spelled here: one place decides
+        // that an absent key is a sensor reading.
+        glucose = events.compactMap(GlucoseSnapshotSource.reading(from:))
         let doses = (try? await store.events(in: iv.start...iv.end, type: EventType.insulin)) ?? []
         insulin = doses.compactMap(Self.insulinEntry(from:))
         let activityEvents =
@@ -175,13 +184,23 @@ final class TrendsModel {
     // here was previously a computed property re-evaluated on every chart-body
     // access (see the `carbBars` doc comment).
     private func recomputeSeries(in iv: DateInterval) {
+        // The trace is the SENSOR series alone, which is what draws it unbroken
+        // across the instant of a blood reading (Req 4.2): a blood vertex
+        // spliced into the line would break the trace at exactly the moment the
+        // requirement asks it to stay continuous. Neither series is filtered
+        // out of `glucose`, so the stat cards and Records still see every
+        // reading (Req 4.1).
+        let sensor = glucose.filter { $0.provenance == .sensor }
+        bloodPoints = glucose
+            .filter { $0.provenance == .blood }
+            .map { TrendsChartPoint(date: $0.timestamp, value: $0.mmolL) }
         switch range {
         case .day:
             // One bar per entry regardless of source — one carb series, not
             // two (manual-carb-intake Req 6.2).
             carbBars = meals.map { TrendsChartPoint(date: $0.createdAt, value: carbTotal($0)) }
                 + intakeCarbs.map { TrendsChartPoint(date: $0.date, value: $0.value) }
-            glucoseLine = glucose
+            glucoseLine = sensor
                 .sorted { $0.timestamp < $1.timestamp }
                 .map { TrendsChartPoint(date: $0.timestamp, value: $0.mmolL) }
             insulinMarkers = insulin.map {
@@ -201,7 +220,7 @@ final class TrendsModel {
                 + intakeCarbs
             carbBars = TrendsMath.dailyBuckets(carbSamples, in: iv, calendar: calendar)
                 .map { TrendsChartPoint(date: $0.start, value: $0.total) }
-            let glucoseSamples = glucose.map { DatedValue(date: $0.timestamp, value: $0.mmolL) }
+            let glucoseSamples = sensor.map { DatedValue(date: $0.timestamp, value: $0.mmolL) }
             glucoseLine = TrendsMath.dailyBuckets(glucoseSamples, in: iv, calendar: calendar)
                 .compactMap { bucket in
                     bucket.average.map { TrendsChartPoint(date: bucket.start, value: $0) }
@@ -221,7 +240,9 @@ final class TrendsModel {
                 .map { ActivityMarker(date: $0.start, end: nil, kind: nil, count: $0.count) }
         }
         carbAxisMax = TrendsMath.carbAxisMax(forMaxCarbs: carbBars.map(\.value).max() ?? 0)
-        let dataMax = glucoseLine.map(\.value).max() ?? 0
+        // Both series, or a blood reading above the sensor trace's peak would
+        // be plotted off the top of an auto-scaled chart.
+        let dataMax = (glucoseLine + bloodPoints).map(\.value).max() ?? 0
         autoGlucoseMax = max(TrendsMath.targetHighMmolL + 2, (dataMax + 1).rounded(.up))
     }
 
