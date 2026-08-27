@@ -4,6 +4,7 @@ import UIKit
 #endif
 import Foundation
 import GlucoseIngestion
+import GlucoseWidgetShared
 import LibreLinkUpKit
 import Observation
 import Persistence
@@ -49,11 +50,30 @@ final class GlucoseConnectionsModel {
     private(set) var heartbeat: Libre3HeartbeatSource?
     #endif
 
+    // Every Apple Health app that has contributed a glucose sample, with its
+    // classification (fingerprick-glucose Req 1.5). Mirrored here for the same
+    // reason `connectedSourceIDs` is: a UserDefaults read inside a view body is
+    // invisible to @Observable tracking, so the picker would not move.
+    //
+    // This list is the whole reason no Contour bundle identifier is hard-coded
+    // anywhere — the literal is read off a real sample on device and set here,
+    // without a rebuild.
+    private(set) var healthKitWriters: [HealthKitGlucoseWriter] = []
+
+    private let writerRegistry = HealthKitWriterRegistry()
     private let coordinator: IngestionCoordinator
     private let healthKit = HealthKitGlucoseSource()
     private let libreLinkUp = LibreLinkUpGlucoseSource()
     private var subscription: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
+
+    // Req 1.5. Takes effect on SUBSEQUENTLY arriving samples only: rows already
+    // recorded keep the provenance they were written with, and a mistake is
+    // corrected by deleting the row, never by rewriting it (Decision 2).
+    func classifyHealthKitWriter(_ bundleID: String, as classification: GlucoseProvenance?) {
+        writerRegistry.classify(bundleID: bundleID, as: classification)
+        healthKitWriters = writerRegistry.writers()
+    }
 
     var healthKitID: String { healthKit.id }
     var libreLinkUpID: String { libreLinkUp.id }
@@ -63,6 +83,7 @@ final class GlucoseConnectionsModel {
         for id in [healthKit.id, libreLinkUp.id] where Self.connectedFlag(for: id) {
             connectedSourceIDs.insert(id)
         }
+        healthKitWriters = writerRegistry.writers()
         heartbeatEnabled = UserDefaults.standard.bool(forKey: Self.heartbeatEnabledKey)
         #if os(iOS)
         if heartbeatEnabled {
@@ -99,6 +120,11 @@ final class GlucoseConnectionsModel {
                 }
                 self.states = snapshot
                 self.discrepancyCounts = counts
+                // A batch may have observed a writer this list has never seen.
+                // Refreshed off the same tick rather than polled, so a Contour
+                // sample arriving while Settings is open makes its writer
+                // appear without a reopen.
+                self.healthKitWriters = self.writerRegistry.writers()
             }
         }
         #if os(iOS)

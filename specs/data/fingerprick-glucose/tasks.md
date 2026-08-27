@@ -213,7 +213,7 @@ references:
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)
   - References: App/RecordsModel.swift, App/GlucoseWidgetPublisher.swift, App/App.swift, App/RecordsView.swift
 
-- [ ] 23. Add the Apple Health writer-classification list and the hold-window control to Settings <!-- id:3sphmgy -->
+- [x] 23. Add the Apple Health writer-classification list and the hold-window control to Settings <!-- id:3sphmgy -->
   - GlucoseConnectionsView gains an Apple Health writers section listing every observed writer — bundle id, display name, and device name/manufacturer when known — each with a blood/sensor picker, taking effect on subsequently arriving samples only.
   - SettingsView gains the hold-window control bound to SettingsKeys.glucoseHoldWindowSeconds; above 15 minutes a held reading can render as stale (Decision 3), which the control should make evident without disclaimer copy.
   - This surface is what makes the Contour classification settable without a rebuild.
