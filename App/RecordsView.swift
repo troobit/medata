@@ -150,7 +150,7 @@ struct RecordsView: View {
     private func rowView(_ row: RecordRow) -> some View {
         switch row {
         case .meal(let meal):
-            NavigationLink(value: MealRoute.overview(meal.record)) {
+            NavigationLink(value: MealRoute.result(meal.record)) {
                 MealRecordRow(meal: meal)
             }
             #if FIELD_LOOP
