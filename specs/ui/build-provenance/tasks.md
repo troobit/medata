@@ -14,11 +14,11 @@ references:
   - tools/deploy_release.sh:16 and tools/deploy_release_stub.sh:26 — same expression, preserving the `${BUILD_STAMP:-...}` override so a Make-supplied stamp still wins.
   - Blocked-by: bpv001a (Make BUILD_STAMP dirty-aware in the Makefile)
 
-- [-] 3. Verify deploy-release-stub does not self-report dirty <!-- id:bpv003c -->
-  - The stamp is computed before the script's Package.swift edit (Makefile `:=` at parse time; script default at line 26 ahead of the perl edit at line 54), and the script already refuses a pre-modified Package.swift.
+- [x] 3. Verify deploy-release-stub does not self-report dirty <!-- id:bpv003c -->
+  - The stamp is computed before the script's Package.swift edit (Makefile `:=` at parse time; script default at line 31 ahead of the perl edit at line 58), and the script already refuses a pre-modified Package.swift.
   - Confirm by inspection plus one `make deploy-release-stub` from a clean tree: the printed stamp must have no `-dirty` marker.
-  - Done by inspection and by an off-device run of the script with `xcodebuild`/`xcrun` shimmed out, from a foreign dirty repo, against a clean worktree: the `DEPLOYED BUILD STAMP` line — printed after the `perl -pi` edit — read `4864590-20260814-165324`, no marker, and the trap reverted Package.swift. Also confirmed `make deploy-release-stub` passes `BUILD_STAMP='$(BUILD_STAMP)'` (Makefile), expanded at parse time, so the script's own default is not reached on that path.
-  - Remaining: one real `make deploy-release-stub` on the iPhone 16 Pro. Not run — no device available to this session.
+  - Re-verified 2026-08-28 at eaa9df8, by inspection plus an off-device run of the script (invoked directly so its own line-31 default was exercised) with `xcodebuild`/`xcrun` shimmed out via PATH, from a clean tree: the `DEPLOYED BUILD STAMP` line — printed at line 77, after the `perl -pi` edit at line 58, while Package.swift was still modified — read `eaa9df8-20260828-015730`, no `-dirty` marker, and the EXIT trap reverted Package.swift (tree clean afterwards). A second run against a pre-modified Package.swift exited 1 with "Package.swift has uncommitted changes" before any edit. `make -n deploy-release-stub` shows the Make path passing a literal already-expanded `BUILD_STAMP='eaa9df8-<timestamp>'` (Makefile `:=` at lines 46-47, target at 353-355), so the script's own default is not reached on that path.
+  - The on-device stamp check lives in task 5 (gate), still pending.
   - Blocked-by: bpv002b (Mirror the dirty-aware default into both deploy scripts)
 
 - [x] 4. Document the stamp format and the UI-attempt tag convention <!-- id:bpv004d -->
