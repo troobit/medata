@@ -263,6 +263,22 @@ run_summary_contract.json`, which pytest diffs against the Python emitter
 and `EndToEndCalibrateBakeTests` feeds to the built binary. The truth
 sidecar is a flat `{fixture_id: mesh_volume_mm3}` JSON.
 
+## `diagnose` subcommand (ml-feedback-loop)
+
+A second consumer of `FixtureRunner` lives beside `accuracy`:
+`HarnessCLI diagnose` (core in `HarnessCore/DiagnoseRun.swift`) replays the
+same fixtures and emits the `MealCalibrationInput` fields the accuracy path
+discards — per-class predicted carbs and volumes, dominant class, support-plane
+reference and residual. Two things constrain edits to the shared replay path:
+the report is snake_case JSON pinned by `DiagnoseRunTests`, and it carries
+`replay_version_skew` plus a database hash
+(`DiagnoseRun.contentSHA256(of: GRDBFoodDatabase.bundledResourceURLs())`,
+CoFID then AFCD in bake order) so the Mac side can tell a loop-induced change
+from a HEAD-versus-device drift. Replay outcomes map to a fixed vocabulary —
+success → `replayed`, `volumeEstimationFailed` → `replay_zero_meals`, any
+other throw → `not_replayable` — and an all-failed batch still prints its
+report and exits 0. Details: `ml-feedback-loop.md`, "`HarnessCLI diagnose`".
+
 ## Gotchas
 
 - `CalibrateRun.applyPurityGate` drops inputs with no entry in

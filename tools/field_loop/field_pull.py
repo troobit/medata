@@ -51,8 +51,15 @@ DEFAULT_BUNDLE_ID = "rtob.MeData"
 # Copied whole, with the siblings a live WAL database keeps its recent writes
 # in. Pulling meals.sqlite alone gives a snapshot missing the session's last
 # minutes — and PRAGMA integrity_check would not necessarily notice.
-DB_FILES = ("meals.sqlite", "meals.sqlite-wal", "meals.sqlite-shm",
-            "meals.sqlite-journal")
+#
+# The database itself is REQUIRED, its siblings are not. A missing sibling is
+# ordinary (journal mode, a quiet session); a missing database means no outcome
+# rows, so no note can resolve to the capture it is about. Treating it as
+# optional cost a whole 10 GB pull its joins once (20260827-3: 100 bundles and
+# 3 notes ashore, `db_integrity=absent`, `joins_resolved=0`) because the one
+# failed copy scrolled past unremarked.
+DB_PRIMARY = "meals.sqlite"
+DB_SIBLINGS = ("meals.sqlite-wal", "meals.sqlite-shm", "meals.sqlite-journal")
 LOOSE_FILES = ("slimming_state.json",)
 
 # Written at pull-dir root once every listed file landed (invisible to ingest,
@@ -190,33 +197,43 @@ def _flatten_listing(payload, subdirectory):
     return sorted(set(found))
 
 
-def next_pull_id(root: Path, now=None) -> str:
+def _same_day_dirs(root: Path, day: str, kind: str):
+    """Same-day pull dirs of one kind, oldest first.
+
+    Full pulls are `<day>-<n>` and notes-only pulls `<day>-notes-<n>`; the two
+    series are counted and resumed independently, so a quick notes pull taken
+    beside an interrupted backlog pull cannot be mistaken for it."""
+    prefix = "%s-%s" % (day, kind) if kind else day
+    found = []
+    for path in (root / "pulls").glob("%s-*" % prefix):
+        tail = path.name[len(prefix) + 1:]
+        if tail.isdigit():
+            found.append((int(tail), path))
+    return [path for _, path in sorted(found)]
+
+
+def next_pull_id(root: Path, now=None, kind: str = "") -> str:
     """`<UTC-date>-<n>`: sortable, and countable within a day."""
     day = (now or datetime.now(timezone.utc)).strftime("%Y%m%d")
-    existing = [p.name for p in (root / "pulls").glob("%s-*" % day)]
-    return "%s-%d" % (day, len(existing) + 1)
+    existing = _same_day_dirs(root, day, kind)
+    prefix = "%s-%s" % (day, kind) if kind else day
+    return "%s-%d" % (prefix, len(existing) + 1)
 
 
-def resolve_pull_dir(root: Path, now=None):
+def resolve_pull_dir(root: Path, now=None, kind: str = ""):
     """`(pull dir, resumed)` — the newest same-day dir without a completion
     marker is resumed rather than restarted. A multi-gigabyte backlog pull that
     is interrupted must keep the files it already landed; before this, every
     ctrl-C restarted the whole copy into a fresh directory (observed 2026-08-27:
     three sibling dirs, 9+ GB of repeated copies)."""
-    def suffix(path):
-        try:
-            return int(path.name.rsplit("-", 1)[1])
-        except ValueError:
-            return 0
-
     day = (now or datetime.now(timezone.utc)).strftime("%Y%m%d")
-    existing = sorted((root / "pulls").glob("%s-*" % day), key=suffix)
+    existing = _same_day_dirs(root, day, kind)
     if existing and not (existing[-1] / PULL_COMPLETE_NAME).exists():
         return existing[-1], True
-    return root / "pulls" / next_pull_id(root, now), False
+    return root / "pulls" / next_pull_id(root, now, kind), False
 
 
-def pull_files(transport, pull_dir: Path) -> dict:
+def pull_files(transport, pull_dir: Path, notes_only: bool = False) -> dict:
     """Copy `Documents/` down. Returns {relative path: sha256}.
 
     One key=value line per wire copy: a multi-gigabyte backlog with silent
@@ -224,51 +241,92 @@ def pull_files(transport, pull_dir: Path) -> dict:
     field pull read, and why it was interrupted twice). A file already present
     at its listed size is hashed and skipped — `copy_from`'s partial-then-
     rename means a final-name file is always complete.
+
+    `notes_only` skips the capture bundles, which are the entire cost of a
+    pull: notes are kilobytes, so the feedback a developer wrote minutes ago is
+    readable in seconds instead of after the backlog. The DB snapshot still
+    comes over — it is small and it carries the outcome rows a note's link
+    resolves through. Notes whose bundles are still on the phone simply stay
+    unjoined; `_resolve_joins` re-runs over every note in the corpus on each
+    ingest, so the join lands with the bundle on a later full pull.
     """
     hashes = {}
     wanted = []                         # (remote, size, optional)
-    for subdirectory in ("Documents/notes", "Documents/captures"):
+    subdirectories = (("Documents/notes",) if notes_only
+                      else ("Documents/notes", "Documents/captures"))
+    for subdirectory in subdirectories:
         try:
             wanted.extend((remote, size, False)
                           for remote, size in transport.list_files(subdirectory))
         except subprocess.CalledProcessError:
             continue                    # the directory does not exist yet
-    # The DB siblings and state json are wanted whole but legitimately absent
-    # (journal mode, first session) — a miss there is not a failure.
+    # The database is required; its siblings and the state json are wanted
+    # whole but legitimately absent (journal mode, first session).
+    wanted.append(("Documents/%s" % DB_PRIMARY, None, False))
     wanted.extend(("Documents/%s" % name, None, True)
-                  for name in DB_FILES + LOOSE_FILES)
+                  for name in DB_SIBLINGS + LOOSE_FILES)
 
-    print("pull dir=%s files=%d bytes=%d"
-          % (pull_dir.name, len(wanted),
-             sum(size or 0 for _, size, _ in wanted)), flush=True)
+    # Progress is measured in BYTES, not files: bundles run from 2 MB to 400 MB,
+    # so a file count says nothing about how far along a pull is. The listed
+    # total is known before the first copy, so the first line can state the size
+    # of the job and every later line can carry a percentage and an ETA off
+    # measured throughput. Silence is what made a twelve-minute pull read as a
+    # hang and get killed twice.
+    total_bytes = sum(size or 0 for _, size, _ in wanted)
+    print("pull dir=%s files=%d bytes=%d mb=%d"
+          % (pull_dir.name, len(wanted), total_bytes, total_bytes // 1_000_000),
+          flush=True)
     copied = resumed = failed = 0
+    done_bytes = 0
+    wire_bytes = 0.0                    # only what crossed, for the rate
+    wire_secs = 0.0
     for n, (remote, size, optional) in enumerate(wanted, 1):
         relative = remote[len("Documents/"):]
         local = pull_dir / relative
         if size is not None and local.is_file() and local.stat().st_size == size:
             hashes[relative] = corpus.sha256_file(local)
             resumed += 1
+            done_bytes += size
             continue
         started = time.monotonic()
         if not transport.copy_from(remote, local, size):
             if not optional:
                 failed += 1
-                print("pull copy_failed n=%d/%d file=%s" % (n, len(wanted), relative),
+                print("pull copy_failed n=%d/%d file=%s%s"
+                      % (n, len(wanted), relative,
+                         " reason=required_database" if relative == DB_PRIMARY else ""),
                       flush=True)
             continue
         if local.is_file():
+            elapsed = time.monotonic() - started
+            landed = local.stat().st_size
             hashes[relative] = corpus.sha256_file(local)
             copied += 1
-            print("pull copy n=%d/%d file=%s bytes=%d secs=%.1f"
-                  % (n, len(wanted), relative, local.stat().st_size,
-                     time.monotonic() - started), flush=True)
-    print("pull copied=%d resumed=%d failed=%d" % (copied, resumed, failed),
+            done_bytes += landed
+            wire_bytes += landed
+            wire_secs += elapsed
+            rate = wire_bytes / wire_secs if wire_secs > 0 else 0
+            # Unlisted files (the DB and its siblings) land bytes the total
+            # never counted, so cap rather than report 240% done. The ETA waits
+            # for three copies: a rate measured off one small file is mostly
+            # devicectl's per-invocation overhead and reads as nonsense.
+            pct = min(100.0, 100.0 * done_bytes / total_bytes) if total_bytes else 100.0
+            eta = ("" if copied < 3 or not rate else
+                   " eta_s=%d" % int(max(total_bytes - done_bytes, 0) / rate))
+            print("pull copy n=%d/%d file=%s bytes=%d secs=%.1f pct=%.1f mb_s=%.1f%s"
+                  % (n, len(wanted), relative, landed, elapsed, pct,
+                     rate / 1_000_000, eta),
+                  flush=True)
+    print("pull copied=%d resumed=%d failed=%d mb=%d mb_s=%.1f"
+          % (copied, resumed, failed, done_bytes // 1_000_000,
+             (wire_bytes / wire_secs / 1_000_000) if wire_secs > 0 else 0.0),
           flush=True)
     # No marker while anything failed: the next run resumes this directory and
     # retries exactly the misses.
     if failed == 0:
         (pull_dir / PULL_COMPLETE_NAME).write_text(json.dumps(
-            {"files": len(wanted), "copied": copied, "resumed": resumed},
+            {"files": len(wanted), "copied": copied, "resumed": resumed,
+             "notes_only": notes_only},
             sort_keys=True))
     return hashes
 
@@ -324,16 +382,26 @@ def run(args, transport=None) -> int:
         Path(args.corpus) if args.corpus else corpus.corpus_root())
     conn = corpus.open_index(root)
 
+    # Pruning is a full pull's business: the manifest retires an outcome's
+    # protection once every note referencing it is ashore, and doing that from
+    # a notes-only pull would let the phone evict an outcome row whose bundle
+    # has not been pulled yet — the note would lose its join route.
+    if args.notes_only and args.prune:
+        print("pull error=notes_only_cannot_prune")
+        conn.close()
+        return 2
+
     if args.pull_dir:
         pull_dir = Path(args.pull_dir)
         hashes = {}
     else:
         transport = transport or DevicectlTransport(args.device, args.bundle_id)
-        pull_dir, resumed = resolve_pull_dir(root)
+        pull_dir, resumed = resolve_pull_dir(
+            root, kind="notes" if args.notes_only else "")
         pull_dir.mkdir(parents=True, exist_ok=True)
         if resumed:
             print("pull resume dir=%s" % pull_dir.name, flush=True)
-        hashes = pull_files(transport, pull_dir)
+        hashes = pull_files(transport, pull_dir, notes_only=args.notes_only)
 
     summary = ingest_pull(pull_dir, root, conn)
     for line in summary.lines():
@@ -367,6 +435,9 @@ def main(argv=None) -> int:
                     help="ingest an existing pull directory instead of pulling")
     ap.add_argument("--prune", action="store_true",
                     help="push the cleanup manifest back to the device (Req 3.7)")
+    ap.add_argument("--notes-only", action="store_true",
+                    help="pull notes and the DB snapshot, skipping capture "
+                         "bundles: seconds rather than hours")
     return run(ap.parse_args(argv))
 
 

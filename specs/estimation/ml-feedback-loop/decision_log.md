@@ -704,7 +704,7 @@ Adopt the orbit-impl-1 variant (`orbit-impl-1/ml-feedback-loop`) as the ml-feedb
 ### Alternatives Considered
 
 - **orbit-impl-2 variant**: Cleaner single-slot context model and an application-delegate window install - Rejected: its `field_pull.py` parsed the human-readable `devicectl` listing instead of `--json-output`, matched no files, copied nothing, and aborted on the missing `meals.sqlite` snapshot (observed: an empty `2026-08-27-1` pull dir); its passthrough window gated touches by view identity, which cannot work against a single SwiftUI hosting view; its note/context UI read worse on device.
-- **Merge impl-2's pieces into impl-1**: Cherry-pick its context model - Rejected: impl-1's stack-based `FieldNoteContext` is strictly more robust (top-of-stack read at save time survives push/pop ordering), so there is no piece worth the graft.
+- **Merge impl-2's pieces into impl-1**: Cherry-pick its context model, screenshot compositor, or bake gate - Rejected on each: impl-1's stack-based `FieldNoteContext` is strictly more robust (top-of-stack read at save time survives push/pop ordering); impl-2's screenshot composites an `ImageRenderer` re-render of chrome values the capture view must register with it, where impl-1's `CALayer.render(in:)` over `ARView.snapshot` captures the real layer tree with no coupling; and impl-2's `make food-db` hardcodes the calibration artifact path where impl-1 fails closed on a missing `CALIBRATION=`. A full file-level comparison of the two branches found impl-1 a superset everywhere except two module-note cross-references (`estimation-diagnostics.md` for the slimmer, `n5k-calibration-harness.md` for `diagnose`), which were harvested into the merge — a reader changing the pipeline or the harness reads those notes, not the feature note.
 
 ### Consequences
 
@@ -713,7 +713,52 @@ Adopt the orbit-impl-1 variant (`orbit-impl-1/ml-feedback-loop`) as the ml-feedb
 - The field-session lessons (hit-region reporting, attempt-link visibility, observable resumable pulls) are recorded as requirements (2.6), design contracts, and completed tasks on the surviving branch.
 
 **Negative:**
-- Impl-2's rehearsal-tested tooling (its own pull/ingest/close suite) is discarded rather than salvaged; any latent quality in it is lost.
+- Impl-2's rehearsal-tested tooling (its own pull/ingest/close suite) is discarded rather than salvaged; any latent quality in it is lost. Its sqlite-based rehearsal fixtures are discarded with it — impl-1 rehearses from JSON, so the committed-binary-fixture exemption impl-2 added to `.gitignore` is not carried over.
 - The retired branch still holds the only copy of its implementation until deleted; anyone reading both variants' shared corpus should know pull dirs named `2026-08-27-*` (dashed) are impl-2 debris.
+
+---
+
+## Decision 22: A notes-only pull, and the events database made required
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+The first real pull established the cost of the wired path with measurements rather than estimates: 10.6 GB across 100 capture bundles in 12 minutes, ~14.5 MB/s, one `devicectl copy from` per file. That cost is inherent — a two-view success bundle is ~390 MB and even a refusal can reach ~200 MB — so any pull that carries bundles is minutes-to-hours, and even a two-day session is several gigabytes. Meanwhile a field note is a few hundred bytes of JSON plus a ~370 KB screenshot.
+
+The same pull exposed a second problem. `meals.sqlite` was grouped with its WAL siblings as an optional file, on the reasoning that a missing sibling is ordinary. Its copy failed for a transient reason, the single failure line scrolled past under ten gigabytes of copy output, and the pull declared success having landed 100 bundles and 3 notes with `db_integrity=absent`, `outcomes=0` and `joins_resolved=0` — every note unjoined, because the outcome rows a link resolves through were never ashore.
+
+Both matter beyond this feature: the note affordance is a window over every screen in any FIELD_LOOP build, so it is the fastest feedback channel available to work in flight on other branches — but only if reading the notes back does not mean waiting for the capture backlog.
+
+### Decision
+
+Add `--notes-only` (`make field-notes`): pull the notes and the events-database snapshot, leave capture bundles on the device. Give it its own `<UTC-date>-notes-<n>` pull-directory series and refuse `--prune` under it. Separately, split the database group — `meals.sqlite` is required and its WAL siblings stay optional — so a failed database copy fails the pull and leaves it resumable.
+
+### Rationale
+
+- Notes-only measured at ~6 seconds against the device that takes 12 minutes for a full pull. That is the difference between a feedback channel usable during a work session and one usable at the end of a day.
+- An unjoined note is not a lost note: `_resolve_joins` re-runs over every note in the corpus on each ingest, so a note pulled ahead of its bundle joins when the bundle arrives. Deferring bundles costs nothing permanent.
+- The separate directory series is what keeps the two pull kinds from interfering — resume looks for the newest same-day dir of its own kind, so a quick notes pull can neither be mistaken for an interrupted backlog pull nor renumber it.
+- Refusing `--prune` under notes-only follows the same reasoning as the manifest handshake: retiring an outcome's protection before its bundle is verified ashore would let the device evict the row the note joins through.
+- Required-versus-optional should track what the corpus needs, not what is usually present. Without the database no note resolves, which makes it the one file whose absence must stop the pull declaring completion.
+
+### Alternatives Considered
+
+- **Rely on device-side slimming to make full pulls fast**: Drop the probability tensors before the pull so every bundle is smaller - Rejected as a substitute: slimming is already the mitigation for the backlog and remains valuable, but a slimmed bundle is still tens of megabytes against a note's kilobytes, so a full pull stays minutes-scale. The two are complementary, not alternatives.
+- **A separate notes-only tool**: A small script that copies `Documents/notes` and stops - Rejected: it would duplicate the corpus ingest, index, and join logic, and the join is the whole point — a note outside the corpus index cannot resolve to its capture.
+- **Keep the database optional and rely on the ingest summary**: `db_integrity=absent` is already printed - Rejected by evidence: it was printed, and it scrolled past under 10 GB of copy lines. A condition that invalidates the whole pull must fail it, not annotate it.
+
+### Consequences
+
+**Positive:**
+- Feedback on work in flight — on any branch carrying FIELD_LOOP, on any screen, capture-related or not — is readable in seconds.
+- A pull can no longer report success while having joined nothing; the failure is named on the line that fails and the directory stays resumable.
+- The pull states the size of the job before it starts and its progress in bytes, percent, throughput and ETA, so its duration is legible instead of being read as a hang.
+
+**Negative:**
+- Notes pulled ahead of their bundles sit unjoined in the corpus until a later full pull, so a report run between the two understates joins.
+- Two pull-directory series make the corpus layout slightly less uniform: `pulls/` now holds both `<date>-<n>` and `<date>-notes-<n>` directories.
+- Making the database required means a device whose database genuinely cannot be copied blocks a pull that would otherwise land its bundles — the resume path makes this recoverable, but it is a stop rather than a warning.
 
 ---

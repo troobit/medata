@@ -56,6 +56,9 @@ The test developer uses the app in the field for days at a time and needs to rec
 5. <a name="3.5"></a>WHEN a note cannot be joined to a bundle or outcome row, the tooling SHALL report it as unmatched with the reason (never present, evicted, or deleted) and SHALL NOT drop it.
 6. <a name="3.6"></a>The design SHALL state a device storage budget for a maximum-length session at measured bundle sizes (~390 MB per two-view success, ~200 MB per refusal); WHEN that budget is exceeded mid-session, the device SHALL reduce bundle bulk in a way that keeps captures replayable for geometry (image, depth, and argmax retained) rather than stop recording or lose whole captures.
 7. <a name="3.7"></a>The ingest command SHOULD offer pruning of device-side capture bundles, permitted only for bundles checksum-verified as present in the Mac corpus AND after the corpus durability condition (Req 8.3) is met.
+8. <a name="3.8"></a>The pull SHALL report its progress as it copies — the size of the job before the first file, then per file the bytes landed, the fraction complete, and the measured throughput — and SHALL be resumable, since a silent multi-gigabyte copy is indistinguishable from a hang.
+9. <a name="3.9"></a>The tooling SHALL offer a notes-only pull that completes in seconds by leaving capture bundles on the device, so that feedback written during work still in flight is readable without waiting for the capture backlog. Notes whose bundles have not been pulled SHALL remain joinable by a later full pull rather than be recorded as permanently unmatched.
+10. <a name="3.10"></a>WHEN the events-database snapshot cannot be copied, the pull SHALL report the failure and SHALL NOT mark itself complete: without it no note link resolves, so a pull that lands bundles and no database has joined nothing.
 
 ### 4. Estimation gap analysis
 

@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -60,6 +60,8 @@ help:
 	@echo "                       loop overlay applied) and run the generator test suite"
 	@echo "  field-pull           pull a field session off the device, ingest it into"
 	@echo "                       the corpus, and push the cleanup manifest back"
+	@echo "  field-notes          pull just the notes (and the DB snapshot) — seconds,"
+	@echo "                       for feedback on work still in flight"
 	@echo "  field-diagnose       replay the annotated captures and generate the"
 	@echo "                       cycle task file the agent phase executes"
 	@echo "  field-report         alignment report across pulls (key=value, every"
@@ -164,6 +166,15 @@ field-pull:
 	$(PYTHON) tools/field_loop/field_pull.py \
 	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID) \
 	  $(if $(PULL_DIR),--pull-dir "$(PULL_DIR)",--prune)
+
+# The same pull with the capture bundles left on the phone: notes and the DB
+# snapshot only, so feedback written minutes ago is readable in seconds rather
+# than after a multi-hour backlog copy. Use it while work is in flight — on any
+# branch carrying FIELD_LOOP, whether or not the note is about a capture. It
+# never prunes: retiring an outcome's protection is a full pull's business.
+field-notes:
+	$(PYTHON) tools/field_loop/field_pull.py --notes-only \
+	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID)
 
 # ml-feedback-loop Reqs 4.1-4.4: replay every annotated capture in the corpus
 # through `HarnessCLI diagnose`, attribute each estimation-vs-stated gap, and
