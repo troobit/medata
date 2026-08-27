@@ -38,6 +38,12 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   `build-product` needs no device. Debug and Release BOTH carry `FIELD_LOOP` —
   field is the daily default, matching the always-on capture recorder — so
   this is the only way to build a product-profile binary.
+- `make field-notes` — reads the field notes back off the device in seconds
+  (notes + the events DB, no capture bundles), where `make field-pull` carries
+  the whole backlog and takes minutes to hours. Any Debug or Release build
+  carries the note affordance, so this is the fastest way to get a written
+  observation off the phone and onto the Mac during a session — including for
+  UI work unrelated to captures. See `ml-feedback-loop.md`, "Day-to-day use".
 - `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs
   filtered to `subsystem == "ie.medata.app"`, to stdout and
   `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live

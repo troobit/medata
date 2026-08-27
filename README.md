@@ -144,3 +144,72 @@ references the SwiftPM package via the relative path `../../medata`. See
 [`docs/ios-device-setup.md`](docs/ios-device-setup.md) and
 [`docs/agent-notes/device-build-and-test.md`](docs/agent-notes/device-build-and-test.md)
 for the end-to-end iPhone setup.
+
+## Quickstart: recording field feedback
+
+Development builds carry a field-note layer (`FIELD_LOOP`, compiled out of
+product builds). It is a small draggable button floating above every screen:
+tap it and write — or dictate — what is wrong, right where it is wrong. The note
+carries the screen it was taken on, a screenshot of exactly what was displayed,
+and, on a capture surface, a link to the most recent estimation attempt.
+
+Nothing about it is capture-specific. A note on a chart, a wording problem, or a
+layout that reads badly is worth taking the same way.
+
+**On the phone**
+
+```sh
+make deploy-device        # any Debug or Release build carries the note layer
+```
+
+Tap the button → type or hit **Speak** → **Save**. The Context section of the
+sheet tells you what the note is tied to before you save it:
+
+```
+Screen    capture.ready
+Attempt   1c9a2f4b · 40 sec. ago      ← or "none linked"
+```
+
+`Attempt` appears whenever an estimation attempt has been recorded, **including
+one that failed before drawing anything** — a capture that never reaches the
+result screen is exactly when a note is worth taking. The button can be dragged
+to any corner and stays there; it never appears in its own screenshots.
+
+**On the Mac**
+
+```sh
+make field-notes   # notes + the events DB only — seconds. Use this during a session.
+make field-pull    # everything, including capture bundles — minutes to hours.
+```
+
+Reach for `field-notes` while work is in flight; it leaves the multi-gigabyte
+capture bundles on the phone and still ingests every note, screenshot and
+outcome row. A note whose bundle is still on the device is not lost — the join
+is re-resolved on every ingest, so it links itself once `field-pull` brings the
+bundle across.
+
+`field-pull` prints one line per file with percent, throughput and an ETA, and
+is resumable: interrupt it and the next run picks up where it stopped rather
+than re-copying. It is slow because the data is large — measured at ~14.5 MB/s
+over the cable, with two-view successes around 390 MB each — not because it is
+stuck.
+
+Both land in `../medata-corpus/`. To read what came across:
+
+```sh
+make field-report          # alignment metrics across the whole corpus
+sqlite3 ../medata-corpus/index.sqlite \
+  "SELECT screen_id, text, meal_linked FROM notes ORDER BY created_at_ms DESC LIMIT 10;"
+```
+
+**Adding a screen.** A new surface reports whatever screen it was pushed from
+until it names itself. One line at its root fixes that:
+
+```swift
+SomeNewScreen()
+    .fieldScreen("some.new.screen")
+```
+
+The rest of the loop — diagnosis, the cycle task file, the guarded fixes — is in
+[`specs/estimation/ml-feedback-loop/`](specs/estimation/ml-feedback-loop/) and
+[`docs/agent-notes/ml-feedback-loop.md`](docs/agent-notes/ml-feedback-loop.md).

@@ -6,6 +6,35 @@ half you are touching: the Swift core and the on-device capture layer are the
 sections up to "FieldMaintenance ordering contract", and the Python loop is
 "The Mac-side cycle" at the end.
 
+## Day-to-day use (what to run, what to check)
+
+The developer-facing walkthrough is the README's "Quickstart: recording field
+feedback". What that does not say, and an agent needs:
+
+| Want | Run | Then check |
+|---|---|---|
+| Read notes taken today | `make field-notes` | `ingest … notes=N`, and `db_integrity=ok` |
+| Full session, bundles included | `make field-pull` | `pull copied/resumed/failed`, then `joins_resolved` |
+| Re-ingest a directory already on disk | `make field-pull PULL_DIR=<path>` | idempotent by key; safe to repeat |
+| Just the Python suite | `make field-test PYTHON=/opt/homebrew/bin/python3` | Xcode's `python3` has no pytest |
+
+Read the ingest summary, not just the exit code. `db_integrity=absent`,
+`outcomes=0` or `joins_resolved=0` on a pull that carried notes means the notes
+landed with nothing to attach to — see the required-database gotcha below. A
+pull exits 0 in plenty of states worth looking at.
+
+Notes live on the device at `Documents/notes/<createdAtMs>-<uuid>.{json,png}`
+and are never evicted or deleted by any in-app path; they leave only when a
+pull's manifest confirms the Mac holds them. So a note is safe on the phone
+indefinitely — there is no urgency to pull, and no way to lose one by using the
+app normally.
+
+`make field-notes` is the one to reach for during a session, including for work
+that has nothing to do with captures: the affordance is a separate window over
+every screen, so any FIELD_LOOP build on any branch can record feedback and get
+it back in seconds. A branch cut before this feature merged has no affordance
+until it merges `research`.
+
 ## Protected outcomes (schema v11)
 
 `meals.sqlite` schema is now **11**. Version 11 adds one table:
