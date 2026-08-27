@@ -11,6 +11,11 @@ public enum PersistenceError: Error, Equatable {
     // Manual carb entry rejected at the store layer: carbsG outside 1...999
     // (specs/data/manual-carb-intake Req 1.4).
     case intakeCarbsOutOfRange(Double)
+    // Blood-glucose reading rejected at the store layer: mmol/L outside
+    // 1...30 (specs/data/fingerprick-glucose Req 2.3). The entry pad cannot
+    // express such a value; the guard is here so a deep-linked or future
+    // caller cannot bypass the pad's bound.
+    case bloodGlucoseOutOfRange(Double)
     // Benchmark-meal item rejected at the store layer: grams outside 1...5000
     // (specs/estimation/snaq-parity design "Error Handling").
     case benchmarkGramsOutOfRange(Double)
@@ -122,6 +127,32 @@ public struct LiveBslReading: Sendable, Equatable {
         self.mmolL = mmolL
         self.sourceID = sourceID
         self.nativeInstantMs = nativeInstantMs
+        self.nativeID = nativeID
+    }
+}
+
+// One blood-glucose reading bound for the event log (specs/data/
+// fingerprick-glucose Reqs 1.3, 2.5, 2.6; Decisions 6 and 10).
+//
+// The instant is stored exactly as measured, NOT snapped to the 5-minute grid.
+// The grid is a cross-source dedup device for samples of one continuous trace;
+// a fingerstick has no counterpart to deduplicate against, so snapping would
+// falsify its instant and manufacture a collision with the sensor row at that
+// mark.
+//
+// `nativeID` is the source's own stable identity — `HKObject.uuid` for a meter
+// sample arriving through Apple Health. A hand entry has none and is never
+// deduplicated: two fingersticks a minute apart are two measurements.
+public struct BloodBslReading: Sendable, Equatable {
+    public let instant: Date  // exact, not grid-snapped
+    public let mmolL: Double  // one decimal, rounded at the caller's single rounding point
+    public let sourceID: String  // "healthkit" | "manual"
+    public let nativeID: String?  // HKObject.uuid; nil for a hand entry
+
+    public init(instant: Date, mmolL: Double, sourceID: String, nativeID: String? = nil) {
+        self.instant = instant
+        self.mmolL = mmolL
+        self.sourceID = sourceID
         self.nativeID = nativeID
     }
 }
@@ -479,6 +510,25 @@ public protocol PersistenceStore: Sendable {
     // uniformly regardless of source. One transaction; notifies
     // `eventsDidChange` once iff at least one row was inserted.
     func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary
+
+    // specs/data/fingerprick-glucose Reqs 1.3, 1.4, 2.5, 2.6, 4.1, 4.4, 4.5.
+    // The blood sibling to `ingestLiveBsl`, sharing none of its code: ONE row
+    // in ONE transaction at the exact measured instant, with no grid and no
+    // keep-first. Insert-only — it holds no UPDATE and no DELETE against any
+    // existing row, which is how Reqs 4.1 and 4.4 are met structurally rather
+    // than by discipline.
+    //
+    // Metadata carries `provenance` ("blood"), `source_id`, `native_id` when
+    // present, and the Req 4.5 pairing stamp (`paired_sensor_value`,
+    // `paired_sensor_instant`, `sensor_delta`) when a sensor-provenance row
+    // falls in the preceding 15 minutes — keys absent, never null, when nil.
+    //
+    // Returns the new event's id, or nil when the reading was a re-delivery of
+    // one already stored under the same `(source_id, native_id)`. Notifies
+    // `eventsDidChange` once, and only when a row was actually written.
+    // Throws `bloodGlucoseOutOfRange` outside 1...30 mmol/L.
+    @discardableResult
+    func recordBloodBsl(_ reading: BloodBslReading) async throws -> UUID?
 
     // PRD regression-suggestion-integration Core 2–4. Writes ONE `events` row
     // per dose, exactly per medreg's convention (medreg

@@ -24,22 +24,36 @@ public struct GlucoseSample: Sendable, Equatable {
     public let nativeInstant: Date
     public let mmolL: Double
     public let nativeID: String?
+    // How the source measured it (specs/data/fingerprick-glucose Req 1.1).
+    // A source reports what it measured; the coordinator decides how that is
+    // stored. Defaulted `.sensor`, so LibreLinkUp, the screenshot import and
+    // the heartbeat source are untouched and Req 7.2's guarantee stays
+    // structural — the sensor path is entered only by sensor samples.
+    public let provenance: GlucoseProvenance
 
-    public init(nativeInstant: Date, mmolL: Double, nativeID: String? = nil) {
+    public init(
+        nativeInstant: Date, mmolL: Double, nativeID: String? = nil,
+        provenance: GlucoseProvenance = .sensor
+    ) {
         self.nativeInstant = nativeInstant
         self.mmolL = mmolL
         self.nativeID = nativeID
+        self.provenance = provenance
     }
 
     // mg/dL convenience for sources that report it (Req 5.5). The divisor is
     // `GlucoseGrid.mgPerDlPerMmolL`, shared with the widget's own vendor fetch.
     // No rounding here — the coordinator's single rounding point rounds to one
     // decimal before the duplicate check and storage.
-    public init(nativeInstant: Date, mgPerDl: Double, nativeID: String? = nil) {
+    public init(
+        nativeInstant: Date, mgPerDl: Double, nativeID: String? = nil,
+        provenance: GlucoseProvenance = .sensor
+    ) {
         self.init(
             nativeInstant: nativeInstant,
             mmolL: GlucoseGrid.mmolL(fromMgPerDl: mgPerDl),
-            nativeID: nativeID
+            nativeID: nativeID,
+            provenance: provenance
         )
     }
 }
