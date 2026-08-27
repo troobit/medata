@@ -38,16 +38,19 @@ until it merges `research`.
 
 ## Protected outcomes (schema v11)
 
-`meals.sqlite` schema is now **11**. Version 11 adds one table:
+`meals.sqlite` schema is now **12** — version 11 added the table below, and
+version 12 sits above it, dropping `dose_suggestions`
+(`docs/agent-notes/persistence.md`). Version 11 adds one table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS protected_outcomes (outcome_id TEXT PRIMARY KEY);
 ```
 
 Retrofit is by `CREATE TABLE IF NOT EXISTS` — no `ALTER`, no version gate, the
-`processed_images`/v4 precedent. Both stamp sites in `GRDBPersistenceStore` moved
-to `'11'` (`createSchema`'s `INSERT OR IGNORE` and `migrate`'s `INSERT OR
-REPLACE`).
+`processed_images`/v4 precedent. Both stamp sites in `GRDBPersistenceStore` read
+`'12'` today (`createSchema`'s `INSERT OR IGNORE` and `migrate`'s `INSERT OR
+REPLACE`); `EstimationOutcomeTests.testSchemaVersionIsStampedTwelve` asserts the
+current literal, not 11, so bump it there whenever the stamp moves.
 
 `PersistenceStore.markOutcomeProtected(id:)` inserts the row (`INSERT OR
 IGNORE`, so idempotent). It is keyed on the id **alone**: no foreign key, and
@@ -70,9 +73,10 @@ the pull's manifest pass; it does not grow monotonically.
 
 Adding the protocol requirement meant updating five no-op `PersistenceStore`
 test doubles (PipelineTests ×3, GlucoseIngestionTests, HarnessCLITests). Four
-existing tests asserted the schema stamp literal and had to move to `"11"`:
-`EstimationOutcomeTests`, `PersistenceTests`, `BslIngestTests`,
-`DoseSuggestionTests`. Grep for `schema_version` before the next bump.
+test files assert the schema stamp literal and move together on every bump:
+`EstimationOutcomeTests`, `PersistenceTests`, `BslIngestTests` and
+`DoseSuggestionsDropTests` (which replaced `DoseSuggestionTests` when v12
+dropped that table). Grep for `schema_version` before the next bump.
 
 ## `HarnessCLI diagnose`
 

@@ -72,20 +72,23 @@ final class PersistenceTests: XCTestCase {
         }
     }
 
-    // Version 8 adds dose_suggestions (specs/data/insulin-dosing, design "The
-    // ledger"); version 7 added correction_records (specs/ui/meal-review);
+    // Version 12 DROPS dose_suggestions (specs/data/insulin-dosing
+    // Decision 18 — nothing derived is stored); version 11 added
+    // protected_outcomes (specs/estimation/ml-feedback-loop); version 8 added
+    // the dose_suggestions table version 12 removes; version 7 added
+    // correction_records (specs/ui/meal-review);
     // version 6 added estimation_outcomes (specs/estimation/snaq-parity,
     // design "Data Models"); version 5 added quick_presets
     // (specs/data/manual-carb-intake), matching the processed_images/v4
     // precedent (specs/data/libre-ingestion Decision 4).
-    func testSchemaVersionIsEleven() throws {
+    func testSchemaVersionIsTwelve() throws {
         let q = try DatabaseQueue(path: dbURL.path)
         try q.read { db in
             let version = try String.fetchOne(
                 db,
                 sql: "SELECT v FROM meta WHERE k = 'schema_version'"
             )
-            XCTAssertEqual(version, "11")
+            XCTAssertEqual(version, "12")
         }
     }
 
