@@ -1,4 +1,5 @@
 import GlucoseIngestion
+import GlucoseWidgetShared
 import SwiftUI
 
 // Glucose-source connections screen (specs/data/cgm-connect Req 6), presented
@@ -18,6 +19,7 @@ struct GlucoseConnectionsView: View {
         NavigationStack {
             Form {
                 healthKitSection
+                healthKitWritersSection
                 libreLinkUpSection
                 heartbeatSection
             }
@@ -49,6 +51,67 @@ struct GlucoseConnectionsView: View {
                 .accessibilityIdentifier("glucose.healthkit.connect")
             }
         }
+    }
+
+    // Which Apple Health apps write blood readings (fingerprick-glucose
+    // Req 1.5). Empty until a sample has actually arrived, because a writer is
+    // recorded when it contributes one — there is no way to enumerate writers
+    // ahead of time, and inventing a Contour entry would be guessing at a
+    // bundle identifier this project deliberately never hard-codes.
+    //
+    // Classifying takes effect on subsequently arriving samples only. Rows
+    // already recorded keep the provenance they were written with; a mistake is
+    // corrected by deleting the row (Decision 2).
+    @ViewBuilder
+    private var healthKitWritersSection: some View {
+        if !model.healthKitWriters.isEmpty {
+            Section("Apple Health writers") {
+                ForEach(model.healthKitWriters) { writer in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(writer.displayName ?? writer.bundleID)
+                            .font(.headline)
+                        // The bundle identifier is always shown, even when a
+                        // display name exists: it is the key classification
+                        // runs on, and it is what the device pass is looking
+                        // for when it reads a real Contour sample.
+                        Text(writer.bundleID)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        if let device = Self.deviceLine(writer) {
+                            Text(device)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Picker("Kind", selection: classification(of: writer)) {
+                            // Unset is a distinct state, not a synonym for
+                            // Sensor: both ingest as sensor readings, but only
+                            // one of them is a decision anybody made.
+                            Text("Unset").tag(GlucoseProvenance?.none)
+                            Text("Sensor").tag(GlucoseProvenance?.some(.sensor))
+                            Text("Blood").tag(GlucoseProvenance?.some(.blood))
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("glucose.writer.\(writer.bundleID)")
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private func classification(
+        of writer: HealthKitGlucoseWriter
+    ) -> Binding<GlucoseProvenance?> {
+        Binding(
+            get: { writer.classification },
+            set: { model.classifyHealthKitWriter(writer.bundleID, as: $0) })
+    }
+
+    // Whatever `HKDevice` reported, when it reported anything — carried purely
+    // so a writer is recognisable here.
+    private static func deviceLine(_ writer: HealthKitGlucoseWriter) -> String? {
+        let parts = [writer.deviceManufacturer, writer.deviceName].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     @ViewBuilder
