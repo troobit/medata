@@ -37,11 +37,15 @@ struct MealReviewView: View {
     @FocusState private var gramFieldFocused: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    // Optional: this surface is also reachable from history routes, and a
-    // model is only injected on the live capture path (specs/data/insulin-dosing
-    // design.md — the model is owned by AppRoot). Absent, the second line is
-    // exactly what ships today.
-    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+    // The dose readout is computed HERE, on appearance and on every correction
+    // (specs/data/insulin-dosing Decision 19): no shared readout state, so this
+    // surface cannot show another surface's leftovers.
+    @State private var doseReadout: DoseReadout?
+    @State private var showingWorking = false
+    // Optional: this surface is also reachable from history routes, and the
+    // seed holder is only injected on the live capture path (it is owned by
+    // AppRoot). Absent, nothing is armed.
+    @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
     // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
     // menu action, presented as the same edit sheet a hand-authored preset
     // uses (Req 8.2).
@@ -76,20 +80,26 @@ struct MealReviewView: View {
     }
 
     // The input shape the suggester takes (specs/data/insulin-dosing design.md,
-    // `DoseSubject`). Fat and protein are recorded covariates only in
-    // iteration 1 — no fat term enters the arithmetic (Req 8.1). `fatStale`
-    // flags a corrected meal, whose fat figure the correction did not update.
+    // `DoseSubject`): the carbohydrate total, the meal's own instant, and the
+    // meal's own event id — which the offset query needs so this meal never
+    // offsets its own pre-bolus (Req 4.8). No fat, protein or confidence term
+    // travels: nothing is recorded and none of them enters the arithmetic
+    // (Req 3.8, Decision 18).
     private var doseSubject: DoseSubject {
         DoseSubject(
             carbsG: model.pendingTotalCarbsG,
             instant: record.createdAt,
-            source: model.hasActualCorrections ? .mealCorrected : .meal,
-            sourceEventID: record.id,
-            fatG: Double(record.macros.clinicalTotals.fatG),
-            proteinG: Double(record.macros.clinicalTotals.proteinG),
-            sigmaMeal: Double(sigma),
-            fatStale: model.hasActualCorrections
+            sourceEventID: record.id
         )
+    }
+
+    // Computed where it renders (Decision 19). The suggestion is derived from
+    // the total the user will actually record (Req 3.2), so it re-derives with
+    // every correction — tapping 1/2 on the plate scale rolls the carb total,
+    // the plate mass and the dose figure together, which teaches the divisor
+    // better than a caption could.
+    private func refreshDose() async {
+        doseReadout = await DoseComputation.readout(for: doseSubject, store: store)
     }
 
     #if FIELD_LOOP
@@ -157,14 +167,10 @@ struct MealReviewView: View {
             estimate: fieldEstimateSnapshot
         )
         #endif
-        // The suggestion is computed from the total the user will actually
-        // record (Req 3.2), so it re-derives with every correction — tapping
-        // 1/2 on the plate scale rolls the carb total, the plate mass and the
-        // dose figure together, which teaches the divisor better than a
-        // caption could.
-        .task { await doseSuggestions?.refresh(for: doseSubject) }
+        // On appearance and on every correction — see `refreshDose()`.
+        .task { await refreshDose() }
         .onChange(of: model.pendingTotalCarbsG) {
-            Task { await doseSuggestions?.refresh(for: doseSubject) }
+            Task { await refreshDose() }
         }
         .sheet(item: $presetDraft) { draft in
             QuickPresetEditSheet(store: store, preset: draft, isNew: true)
@@ -437,11 +443,29 @@ struct MealReviewView: View {
             // visible without scrolling.
             MealTotalSecondLine(
                 massG: model.pendingTotalMassG,
-                readout: doseSuggestions?.readout
+                readout: doseReadout
             )
+            // Req 6.12: the tap reveals the working. It does not act — nothing
+            // is written and no control chrome is added, so the segment's
+            // derived register is unchanged (design-direction §2.2).
+            .contentShape(Rectangle())
+            .onTapGesture { if doseReadout != nil { showingWorking = true } }
         }
         .accessibilityElement(children: .combine)
+        // The working is reachable without focusing the segment, which the
+        // combined element makes unfocusable (design-direction §2.6).
+        .accessibilityAction(named: "Show working") {
+            if doseReadout != nil { showingWorking = true }
+        }
         .accessibilityIdentifier("review.total")
+        // Presented from the row rather than from `body`, so the surface's
+        // two sheets (this and the quick-add draft) never share one modifier
+        // site.
+        .sheet(isPresented: $showingWorking) {
+            if let doseReadout {
+                DoseWorkingSheet(readout: doseReadout)
+            }
+        }
     }
 
 
@@ -458,8 +482,10 @@ struct MealReviewView: View {
                 // Arms the seed the dose sheet reads when it next opens
                 // through the existing route (Req 6.4). Nothing is presented
                 // from here: a dose stays a separate, deliberate act, and the
-                // capture path is still shutter -> Record.
-                await doseSuggestions?.arm(from: doseSubject)
+                // capture path is still shutter -> Record. A `0 U` result arms
+                // nothing — `DoseReadout.seed` is nil below 1 U (Req 3.4).
+                await refreshDose()
+                if let seed = doseReadout?.seed { doseSeeds?.arm(seed) }
                 onRecord()
             }
         } label: {

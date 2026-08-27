@@ -59,12 +59,12 @@ struct LogSheet: View {
     @State private var carbs: CarbEntryModel
 
     private let nextSortOrder: Int
-    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1) and the
-    // suggestion linkage (insulin-dosing Req 7.5) both reach the insulin mode
-    // through the same door as everything else: the schedule seeds the opening
-    // amount and each caller is told which event the save wrote and how many
-    // units it recorded. No schedule-specific control appears, and no fourth
-    // mode.
+    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1) reaches
+    // the insulin mode through the same door as everything else: the schedule
+    // seeds the opening amount and the caller is told which event the save
+    // wrote and how many units it recorded. No schedule-specific control
+    // appears, and no fourth mode. Nothing links the save back to a dose
+    // suggestion — no row exists to update (insulin-dosing Decision 18).
     private let onInsulinSaved: ((UUID, Int) -> Void)?
 
     init(

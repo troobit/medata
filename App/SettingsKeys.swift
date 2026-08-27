@@ -51,18 +51,21 @@ nonisolated enum SettingsKeys {
     // Per-band carbohydrate ratios in GRAMS PER UNIT — grams of carbohydrate
     // covered by one unit of insulin (specs/data/insulin-dosing Req 1.1). The
     // reciprocal direction is NEVER stored; Settings renders it read-only
-    // beside the field. An absent key means the seed default is in force and
-    // the suggestion row records that (Req 1.6). Flat keys of the same kind as
+    // beside the field. An absent key means the seed default is in force
+    // (Req 1.6). Flat keys of the same kind as
     // `insulinTypeBolus` — no structured or array-valued setting is
     // introduced.
     static let ratioOvernightGPerU = "medata.insulin.ratio.overnight"
     static let ratioBreakfastGPerU = "medata.insulin.ratio.breakfast"
     static let ratioLunchGPerU = "medata.insulin.ratio.lunch"
     static let ratioDinnerGPerU = "medata.insulin.ratio.dinner"
-    // Pen increment in units: 0.5 or 1.0 (Req 5.1, 5.6).
-    static let dosableIncrementU = "medata.insulin.dosableIncrement"
-    // Provenance of the configured ratios: "manual" | "medreg" (Req 9.4); an
-    // absent per-band key overrides this with "seed" on that band's rows.
+    // The dosable increment is fixed at 1 U (Req 5.1, Decision 17), so it has
+    // no key and no control. A stale stored `medata.insulin.dosableIncrement`
+    // value is simply never read again — no code references it and no
+    // migration removes it.
+    //
+    // Provenance of the configured ratios: "manual" | "medreg" (Req 9.4); a
+    // band with an absent per-band key runs on its seed default regardless.
     static let ratioSource = "medata.insulin.ratioSource"
     // Free text naming the medreg fit the values came from, e.g. an export
     // date or run label. Recorded verbatim, never parsed (Req 9.4).

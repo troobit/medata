@@ -35,17 +35,23 @@ The corrections-observation loop (`MealOverviewView` / `ResultView` /
 `RecordsModel`) and `TrendsModel`'s decoders — shared-meal-components
 Decision 2 and home-router Decision 13 (perf-hang file). Do not extract them.
 
-## Dose readout wiring (insulin-dosing Decisions 16–18)
+## Dose readout wiring (insulin-dosing Decisions 16–19)
 
-`DoseSuggestionModel` (AppRoot-owned, environment-injected, optional in every
-consumer so history routes render without it) computes via the pure `Dosing`
-target and arms a 45-minute `DoseSeed`. Since insulin-dosing Decision 18 it
-writes nothing: the `dose_suggestions` store, `saveDoseSuggestion`/`linkDose`,
-and the row id on the seed are removed — every surface recomputes live from
-recorded events + settings for the subject meal's own instant (Req 6.11
-reversed). `AppRoot.presentInsulinSheet` consumes the seed. Live readouts:
-`MealTotalSecondLine` (review), the CarbEntryContent secondary line; history
-surfaces recompute and render via `RecordedSuggestion.line` — the type name
-survives, the stored row does not. The remaining device judgement is
-insulin-dosing task 18's STOP, including design-direction §10's bare `12 U`
+Nothing is written and nothing is shared except the seed. Each surface calls
+the pure `DoseComputation.readout(for:store:)` in its own `.task` and holds a
+local `DoseReadout?`; the `dose_suggestions` store,
+`saveDoseSuggestion`/`linkDose`, and the row id on the seed are gone
+(Decision 18), and the `@Observable DoseSuggestionModel` that used to publish a
+shared readout is gone with them (Decision 19) — a surface that computes on
+appearance cannot show another surface's leftovers.
+
+`DoseSeedHolder` (AppRoot-owned, environment-injected, optional in every
+consumer so history routes render without it) is the only shared object:
+`arm(_:)` at ≥ 1 U, `take()` with a 45-minute lifetime, consumed by
+`AppRoot.presentInsulinSheet`. Readout sites: `MealTotalSecondLine` (review),
+the `CarbEntryContent` secondary line, and `ResultView`'s history line via
+`DoseHistoryLine.runs` (renamed from `RecordedSuggestion` — nothing is
+recorded). All three open the same `DoseWorkingSheet` on tap and carry a
+"Show working" accessibility action. The remaining device judgement is
+insulin-dosing task 37's STOP, including design-direction §10's bare `12 U`
 vs `12 U at 5 g/U`.
