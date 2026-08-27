@@ -180,6 +180,120 @@ final class IngestionCoordinatorTests: XCTestCase {
         XCTAssertEqual(stored[0].value, 5.4, "stored value unchanged")
     }
 
+    // MARK: - Provenance routing (specs/data/fingerprick-glucose Reqs 1.1, 1.3, 7.2)
+
+    private func bloodSample(
+        atMs instantMs: Int64, _ mmolL: Double, nativeID: String? = nil
+    ) -> GlucoseSample {
+        GlucoseSample(
+            nativeInstant: Date(timeIntervalSince1970: Double(instantMs) / 1000),
+            mmolL: mmolL, nativeID: nativeID, provenance: .blood)
+    }
+
+    private func provenance(of event: Event) -> String? {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: Data(event.metadata.utf8))
+                as? [String: Any]
+        else { return nil }
+        return json["provenance"] as? String
+    }
+
+    private func storedBslEvents() async throws -> [Event] {
+        let start = Date(timeIntervalSince1970: Double(baseMs) / 1000)
+        return try await store.events(
+            in: start.addingTimeInterval(-3600)...start.addingTimeInterval(3600),
+            type: EventType.bsl)
+    }
+
+    // The structural half of Req 7.2: sensor samples enter the code that exists
+    // today, blood samples never touch it, and the sources know nothing of the
+    // split.
+    func testMixedBatchSplitsBySourceProvenance() async throws {
+        let summary = try await coordinator.ingest(
+            [
+                // Two sensor samples on the same mark — the keep-first bucket
+                // collapse must still apply to them.
+                sample(atMs: gridMs(0) + 140_000, 6.4),
+                sample(atMs: gridMs(0) - 100_000, 5.5),
+                // 13:02:37 past the mark, and it must stay there.
+                bloodSample(atMs: gridMs(0) + 157_000, 9.4),
+            ], from: "healthkit")
+
+        XCTAssertEqual(summary.extracted, 3, "the summary accounts for both halves")
+        XCTAssertEqual(summary.stored, 2, "one collapsed sensor row plus the blood row")
+
+        let events = try await storedBslEvents()
+        XCTAssertEqual(events.count, 2)
+
+        let sensorRow = try XCTUnwrap(events.first { $0.value == 5.5 })
+        XCTAssertEqual(
+            Int64((sensorRow.timestamp.timeIntervalSince1970 * 1000).rounded()), gridMs(0),
+            "the sensor sample is still snapped to the grid")
+        XCTAssertNil(provenance(of: sensorRow), "sensor rows carry no provenance key")
+
+        let bloodRow = try XCTUnwrap(events.first { $0.value == 9.4 })
+        XCTAssertEqual(
+            Int64((bloodRow.timestamp.timeIntervalSince1970 * 1000).rounded()),
+            gridMs(0) + 157_000,
+            "the blood sample never enters the bucketing")
+        XCTAssertEqual(provenance(of: bloodRow), "blood")
+    }
+
+    func testBloodOnlyBatchDoesNoGridWorkAndStillAdvancesState() async throws {
+        let summary = try await coordinator.ingest(
+            [bloodSample(atMs: gridMs(10) + 37_000, 9.4)], from: "healthkit")
+
+        XCTAssertEqual(summary.extracted, 1)
+        XCTAssertEqual(summary.stored, 1)
+        XCTAssertTrue(summary.discrepant.isEmpty)
+
+        let events = try await storedBslEvents()
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(
+            Int64((events[0].timestamp.timeIntervalSince1970 * 1000).rounded()),
+            gridMs(10) + 37_000)
+
+        var states: [String: GlucoseConnectionState] = [:]
+        for await snapshot in await coordinator.stateStream() {
+            states = snapshot
+            break
+        }
+        let expected = Date(timeIntervalSince1970: Double(gridMs(10) + 37_000) / 1000)
+        XCTAssertEqual(states["healthkit"], .connected(lastReadingAt: expected))
+    }
+
+    // Req 1.4: HealthKit re-runs its 90-day backfill on every connect, and the
+    // repeat must not multiply meter readings.
+    func testRedeliveredBloodSampleIsAccountedAsSkipped() async throws {
+        let redelivered = bloodSample(atMs: gridMs(0) + 157_000, 9.4, nativeID: "hk-uuid-1")
+        _ = try await coordinator.ingest([redelivered], from: "healthkit")
+        let second = try await coordinator.ingest([redelivered], from: "healthkit")
+
+        XCTAssertEqual(second.extracted, 1)
+        XCTAssertEqual(second.stored, 0)
+        XCTAssertEqual(second.skippedExisting, 1)
+
+        let events = try await storedBslEvents()
+        XCTAssertEqual(events.count, 1)
+    }
+
+    // Req 7.2's other half: a source that says nothing about provenance gets
+    // exactly today's behaviour.
+    func testSamplesWithProvenanceUnsetTakeTheSensorPath() async throws {
+        XCTAssertEqual(sample(atMs: gridMs(0), 5.0).provenance, .sensor)
+
+        // +2:29 past the mark, so it snaps back down to it — the existing
+        // half-to-later boundary, unchanged.
+        let summary = try await coordinator.ingest(
+            [sample(atMs: gridMs(0) + 149_000, 5.1)], from: "librelinkup")
+
+        XCTAssertEqual(summary.stored, 1)
+        let events = try await storedBslEvents()
+        XCTAssertEqual(
+            Int64((events[0].timestamp.timeIntervalSince1970 * 1000).rounded()), gridMs(0))
+        XCTAssertNil(provenance(of: events[0]))
+    }
+
     // MARK: - Ack semantics (Decision 7)
 
     func testThrowingStoreRethrowsSoSourceKeepsItsCursor() async {
@@ -189,6 +303,21 @@ final class IngestionCoordinatorTests: XCTestCase {
             XCTFail("expected the store error to rethrow")
         } catch is ThrowingPersistenceStore.WriteFailed {
             // expected — the caller must not advance its cursor
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
+    // The blood path inherits the same contract: a throw propagates so the
+    // source leaves its cursor where it was.
+    func testThrowingStoreRethrowsFromTheBloodPathToo() async {
+        let coordinator = IngestionCoordinator(store: ThrowingPersistenceStore())
+        do {
+            _ = try await coordinator.ingest(
+                [bloodSample(atMs: gridMs(0), 9.4)], from: "healthkit")
+            XCTFail("expected the store error to rethrow")
+        } catch is ThrowingPersistenceStore.WriteFailed {
+            // expected
         } catch {
             XCTFail("unexpected error: \(error)")
         }
@@ -204,6 +333,10 @@ private struct ThrowingPersistenceStore: PersistenceStore {
     struct WriteFailed: Error {}
 
     func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary {
+        throw WriteFailed()
+    }
+
+    func recordBloodBsl(_ reading: BloodBslReading) async throws -> UUID? {
         throw WriteFailed()
     }
 
