@@ -17,17 +17,10 @@ enum CaptureRoute: Hashable {
 }
 
 // The Records and Trends sheet stacks share this enum: a day/list row pushes
-// `.overview`, which can push the full `.result`.
+// `.result` directly onto the single meal-detail surface (Decision 16 — the
+// separate overview recap and its DEBUG review re-entry are retired).
 enum MealRoute: Hashable {
-    case overview(MealRecord)    // → MealOverviewView
     case result(MealRecord)      // → ResultView (history read path)
-    #if DEBUG
-    // Developer-phase only: re-opens the post-capture review surface for a
-    // stored meal, so a UI attempt can be judged against a fixed meal without
-    // a fresh capture (insulin-dosing tasks.md task 8). Not a product path —
-    // history correction belongs to ResultView's per-food rows.
-    case review(MealRecord)      // → MealReviewView
-    #endif
 }
 
 enum PermissionSubject: Equatable, Sendable {

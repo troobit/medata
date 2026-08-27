@@ -239,6 +239,11 @@ struct ResultView: View {
     @State private var editingClassId: String?
     @State private var gramEditText = ""
     @FocusState private var gramFieldFocused: Bool
+    // Delete confirmation (Decision 16, absorbed from MealOverviewView): the
+    // ⋯ menu's Delete item arms this instead of calling onDelete directly, so
+    // the dialog is the one step between tap and cascade now the summary hop
+    // is gone.
+    @State private var showDeleteConfirm = false
 
     // Bundled food database, resolved once per process — the result rows only
     // need read-only `solid_servings` lookups (BenchmarkView precedent).
@@ -405,6 +410,10 @@ struct ResultView: View {
         }
         .sheet(item: $presetDraft) { draft in
             QuickPresetEditSheet(store: store, preset: draft, isNew: true)
+        }
+        .confirmationDialog("Delete meal?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
         }
         #if FIELD_LOOP
         // Meal-linked note context (ml-feedback-loop Req 2.1 / 2.4). The
@@ -676,8 +685,9 @@ struct ResultView: View {
         }
     }
 
-    // Summary card (§6.3): thumbnail (with §6.8 fallback), foods count, total
-    // mass, and the food-database edition.
+    // Summary card (§6.3): thumbnail (with §6.8 fallback and the mask overlay,
+    // Decision 16), foods count, total mass, the capture-metadata line
+    // (absorbed from MealOverviewView), and the food-database edition.
     private var summaryCard: some View {
         HStack(spacing: 16) {
             thumbnail
@@ -688,6 +698,9 @@ struct ResultView: View {
                 Text("\(totalMassGrams) g total")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.captureChromeText.opacity(0.8))
+                Text(metadataLine)
+                    .font(.caption)
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
                 Text("CoFID + AFCD")
                     .font(.caption)
                     .foregroundStyle(Color.captureChromeText.opacity(0.6))
@@ -699,9 +712,19 @@ struct ResultView: View {
         .accessibilityIdentifier("result.summaryCard")
     }
 
+    // Capture path + timestamp (absorbed from MealOverviewView.metadataLine,
+    // Decision 16).
+    private var metadataLine: String {
+        let path = record.capturePath == .singleViewLidar ? "1-view · LiDAR" : "2-view"
+        return "\(path) · \(MedataFormat.dateTimeString(record.createdAt))"
+    }
+
     // §6.8 fallback: neutral placeholder when the photo asset is unavailable.
+    // The mask overlay (absorbed from MealOverviewView, Decision 16) renders
+    // nothing when the mask artefact is missing, so the photo/fallback shows
+    // through unmodified.
     private var thumbnail: some View {
-        Group {
+        ZStack {
             if let photo {
                 Image(uiImage: photo)
                     .resizable()
@@ -715,6 +738,8 @@ struct ResultView: View {
                 }
                 .accessibilityIdentifier("result.thumbnailFallback")
             }
+            MaskOverlayLoader(store: store, mealId: record.id,
+                              paletteVersion: record.paletteVersion)
         }
         .frame(width: 64, height: 64)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -850,7 +875,7 @@ struct ResultView: View {
                     }
                 }
                 .accessibilityIdentifier("result.saveAsQuickAdd")
-                Button("Delete", role: .destructive, action: onDelete)
+                Button("Delete", role: .destructive) { showDeleteConfirm = true }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))

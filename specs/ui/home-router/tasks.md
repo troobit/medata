@@ -119,14 +119,14 @@ references:
 
 ## Meal-detail collapse (Decision 16)
 
-- [ ] 12. ResultView absorbs the overview's content (UI, no new tests) <!-- id:gnuq1hr -->
+- [x] 12. ResultView absorbs the overview's content (UI, no new tests) <!-- id:gnuq1hr -->
   - From App/MealOverviewView.swift into App/ResultView.swift: the capture-metadata line, the toolbar ⋯ menu with Delete behind its confirmation dialog, and the mask-overlay photo path (MaskOverlayLoader) — integration points per the design's meal-detail bullet
   - The dose readout on this surface recomputes live (insulin-dosing Req 6.10/6.12; its Phase 9 tasks own the model) — this task wires the surface, not the arithmetic
   - App-target change: gate is make build-app + the device look (project test rule)
   - Stream: 1
   - Requirements: [3.3](requirements.md#3.3)
 
-- [ ] 13. Reroute Records and the Graph day list; delete the overview and the DEBUG review route <!-- id:gnuq1hs -->
+- [x] 13. Reroute Records and the Graph day list; delete the overview and the DEBUG review route <!-- id:gnuq1hs -->
   - App/RecordsView.swift:153 and App/TrendsView.swift:361 NavigationLinks push MealRoute.result
   - Delete App/MealOverviewView.swift, the MealRoute.overview and DEBUG MealRoute.review cases (App/CaptureState.swift), and their destinations in App/MealRouting.swift — mealRouteDestination collapses to .result
   - Remove the file from project.pbxproj in the four places (docs/agent-notes/ui-capture-flow.md checklist)
