@@ -148,6 +148,32 @@ composition only; all behaviour is in the model and is unit-tested.
   (a corrupted input gives *random* argmax). It is the under-trained segmenter's food-region
   noise, correctly colourised. Track in the model work-stream; do not hunt for a code bug.
 
+- **`LiveSampleMath.nearSurfaceDistanceCm` (formerly `medianDistanceCm`) is a
+  near-side percentile, not a median — deliberately.** The working-distance
+  gate (`distanceGateOK`, `App/CaptureFlowModel.swift`) blocked the shutter on
+  a genuine in-range ~25 cm one-view LiDAR capture (task 61; field notes
+  C257CA10-81A8-4206-B140-8A205D7D1E94 / C577EE9D-8F5A-480A-9F33-96E7163A16B8
+  in `specs/estimation/ml-feedback-loop/triage.md`). The gate arithmetic
+  (`cm >= 25 && cm <= 50`, both inclusive) and the ARKit units (metres from
+  `frame.sceneDepth`, ×100 for cm) were both already correct; the bug was the
+  reduction of the centre-crop depth window to one number. In a top-down
+  capture the food is always the *closest* surface in the crop and the table
+  around it is always farther, but the crop is centred on the frame, not on
+  the food — a loosely framed or small item can put the farther table over
+  half the crop, and a **median** then reports the table's distance, not the
+  food's (the in-crop majority wins). This is the same "two-surface mixture"
+  failure the support-plane fitter already documents at
+  `specs/estimation/pipeline/design.md` §6.2.1 ("the in-band majority puts
+  the median on the supported surface") — search for that write-up before
+  adding any new median-of-a-region computation in this codebase. Fix: take
+  the near-side 10th percentile instead of the median, which keeps tracking
+  the food even when it is a minority of the crop while still absorbing a
+  stray near-zero noise sample. Tell vs. a genuine boundary/units/label bug:
+  `failingShutterGate` only ever has one string (`too far`) for the whole
+  gate — the design system (`design-system/pages/capture.md`,
+  `specs/ui/design-handoff-00/copy-inventory.md`) never defines a "too close"
+  string to invert, so a mislabelled direction was never the right diagnosis
+  here.
 - **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
 
 
