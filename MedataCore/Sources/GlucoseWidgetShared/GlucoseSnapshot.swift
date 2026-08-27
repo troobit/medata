@@ -30,7 +30,12 @@ public enum GlucoseBandStatus: String, Codable, Sendable {
 // `status` is derivable from `mmolL`, but it is carried here so the widget never
 // re-derives band logic — `TrendsMath` stays the single source of truth.
 public struct GlucoseSnapshot: Codable, Sendable, Equatable {
-    public static let schemaVersion = 1
+    // Version 2 adds `provenance` and `holdsUntil` (specs/data/
+    // fingerprick-glucose Decision 8). A v1 blob already reads as
+    // `.neverRecorded` on the version check, so there is no migration and no
+    // backfill; app and extension ship in one build, so the mismatch window is
+    // a single launch.
+    public static let schemaVersion = 2
 
     // The plausible measurable range, in mmol/L (Req 2.7). Inclusive.
     public static let plausibleRange = 1.0...35.0
@@ -40,16 +45,28 @@ public struct GlucoseSnapshot: Codable, Sendable, Equatable {
     public let readingDate: Date?
     public let trend: GlucoseTrend?
     public let status: GlucoseBandStatus?
+    // How the DISPLAYED reading was measured (Req 3.5). The trend beside it may
+    // derive from the other provenance — see `GlucoseDerivation.trend`.
+    public let provenance: GlucoseProvenance?
+    // Non-nil only while a blood reading holds the display: the ABSOLUTE
+    // instant the hold expires, computed app-side as blood instant + the hold
+    // window. Absolute rather than a duration so the extension — which cannot
+    // see blood readings or app settings — compares a date it already holds
+    // (Decision 8), and the window stays an ordinary app-private setting.
+    public let holdsUntil: Date?
 
     public init(
         version: Int, mmolL: Double?, readingDate: Date?,
-        trend: GlucoseTrend?, status: GlucoseBandStatus?
+        trend: GlucoseTrend?, status: GlucoseBandStatus?,
+        provenance: GlucoseProvenance? = nil, holdsUntil: Date? = nil
     ) {
         self.version = version
         self.mmolL = mmolL
         self.readingDate = readingDate
         self.trend = trend
         self.status = status
+        self.provenance = provenance
+        self.holdsUntil = holdsUntil
     }
 
     public static let neverRecorded = GlucoseSnapshot(
@@ -62,12 +79,13 @@ public struct GlucoseSnapshot: Codable, Sendable, Equatable {
     // ever land, rendering it AS a sentinel is a new requirement, not a tweak
     // here.
     public static func make(
-        mmolL: Double, readingDate: Date, trend: GlucoseTrend?, status: GlucoseBandStatus
+        mmolL: Double, readingDate: Date, trend: GlucoseTrend?, status: GlucoseBandStatus,
+        provenance: GlucoseProvenance? = nil, holdsUntil: Date? = nil
     ) -> GlucoseSnapshot {
         guard mmolL.isFinite, plausibleRange.contains(mmolL) else { return .neverRecorded }
         return GlucoseSnapshot(
             version: schemaVersion, mmolL: mmolL, readingDate: readingDate,
-            trend: trend, status: status)
+            trend: trend, status: status, provenance: provenance, holdsUntil: holdsUntil)
     }
 }
 
