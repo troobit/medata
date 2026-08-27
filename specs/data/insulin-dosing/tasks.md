@@ -326,13 +326,13 @@ metadata:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [4.7](requirements.md#4.7), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [10.2](requirements.md#10.2)
 
-- [ ] 31. Red — DosingTests for food-offset window membership <!-- id:idz0010 -->
+- [x] 31. Red — DosingTests for food-offset window membership <!-- id:idz0010 -->
   - Failing tests for the pure membership rule the design places in Dosing: a bolus within ±45 min of any logged meal or intake instant is food-offset and excluded; pre-bolus (dose 20 min before a meal) excluded; freestanding correction bolus counted; boundary at exactly ±45 min per the design's stated inclusivity; events query window is instant − (360+45) min … instant
   - Blocked-by: idz000z (Green — DoseSuggester implements the amended rule)
   - Stream: 1
   - Requirements: [4.8](requirements.md#4.8)
 
-- [ ] 32. Green — unoffset membership implemented in Dosing <!-- id:idz0011 -->
+- [x] 32. Green — unoffset membership implemented in Dosing <!-- id:idz0011 -->
   - Pure function over (boluses, meal/intake instants, subject instant); no store types cross the firewall (Req 10.3); consumed by DoseSuggestionModel in task 34
   - Blocked-by: idz0010 (Red — DosingTests for food-offset window membership)
   - Stream: 1
