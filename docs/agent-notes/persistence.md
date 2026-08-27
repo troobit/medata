@@ -270,6 +270,43 @@ Both `ingestBsl` (screenshot import) and `ingestLiveBsl` (live sources, cgm-conn
 
 `mergeBslKeepFirst` seeds its covered set with a `BETWEEN min AND max` range query over the batch's timestamps (fix landed in cgm-connect Phase 2; previously `timestamp IN (…)` — one bound variable per reading against SQLite's 32,766 cap, which a >32k-row backfill would exceed). Extra committed rows inside the range are harmless: the map is only probed at incoming timestamps. `ingestLiveBsl` also guards the empty batch — it returns a zero `BslIngestSummary` without opening a write transaction.
 
+## Blood readings (fingerprick-glucose)
+
+`recordBloodBsl(_:)` is the blood sibling to `ingestLiveBsl` and shares **none**
+of its code. One `events` row, one transaction, `event_type = bsl`, and no
+schema change at all — provenance lives in `metadata`.
+
+- **The instant is stored exactly as measured**, not snapped to the 5-minute
+  grid (Decision 6). The grid is a cross-source dedup device for samples of one
+  continuous trace; a fingerstick has no counterpart to deduplicate against, so
+  snapping would falsify its instant and manufacture a collision with the sensor
+  row at that mark. `Int64((instant.timeIntervalSince1970 * 1000).rounded())` —
+  rounded, not truncated like `saveInsulinDose`, because the exact instant is
+  the point of this path.
+- **Metadata**: `provenance: "blood"`, `source_id`, `native_id` when present,
+  plus `paired_sensor_value` / `paired_sensor_instant` (UTC ms) / `sensor_delta`
+  when a sensor row falls in the preceding 15 minutes. Keys absent, never null,
+  when nil — the `liveBslMetadataJSON` convention. **An absent `provenance` key
+  means sensor**, which is how every reading recorded before this feature reads
+  back correctly with nothing rewritten (Req 7.1).
+- **The path is insert-only.** No UPDATE, no DELETE, ever — that is how "a blood
+  reading modifies no existing glucose event" and "both readings at one instant
+  stay individually retrievable" are met structurally rather than by discipline.
+  The pairing stamp is a READ inside the same transaction, taken before the
+  INSERT; do not be tempted to write the delta onto the sensor row.
+- **Dedup** is `json_extract(metadata, '$.native_id')` gated on `source_id`
+  (Decision 10), scanning the rows at the reading's **own instant** — a
+  re-delivered HealthKit sample carries the identical `startDate`, so nothing
+  wider can match, and the timestamp index does the work. A reading with no
+  native id (every hand entry) is never deduplicated: two fingersticks a minute
+  apart are two measurements. Returns `nil` for the no-op, and then emits **no**
+  `eventsDidChange`.
+- Both JSON predicates put `json_valid(metadata)` ahead of `json_extract` (or
+  coalesce through `IFNULL`), because `json_extract` raises on invalid JSON.
+  SQLite short-circuits `AND`/`OR`, verified.
+- Range is 1...30 mmol/L, `bloodGlucoseOutOfRange` — the entry pad cannot
+  express anything else; the guard is for a deep link or a future caller.
+
 ## GRDB version note
 
 `DatabaseQueue.read {}` is async in GRDB 6 — always `try await`. `Database.CheckpointMode` uses `.truncate` (not `.truncating`). The Archive throwing initializer is `try Archive(url:accessMode:)`.

@@ -1,5 +1,9 @@
 import Foundation
 import GRDB
+// Leaf value types only (`GlucoseProvenance`), on the edge GlucoseSnapshotSource
+// already carries — GlucoseWidgetShared is Foundation-only with an empty
+// dependency list.
+import GlucoseWidgetShared
 import PortableContracts
 import ZIPFoundation
 
@@ -668,6 +672,117 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             changeBroadcaster.notify()
         }
         return summary
+    }
+
+    // MARK: - Blood readings (specs/data/fingerprick-glucose)
+
+    // Accepted at the store layer. The entry pad cannot express anything
+    // outside this; the guard stops a deep link or a future caller doing so.
+    private static let bloodGlucoseRange = 1.0...30.0
+
+    // The Req 4.5 pairing lookback: the sensor reading a fingerstick is
+    // measured against.
+    private static let pairingWindowMs: Int64 = 15 * 60 * 1000
+
+    public func recordBloodBsl(_ reading: BloodBslReading) async throws -> UUID? {
+        guard reading.mmolL.isFinite, Self.bloodGlucoseRange.contains(reading.mmolL) else {
+            throw PersistenceError.bloodGlucoseOutOfRange(reading.mmolL)
+        }
+        // Rounded, not truncated: the exact instant is the point of this path,
+        // and a Double milliseconds-since-epoch can land a hair under the whole
+        // millisecond it represents.
+        let instantMs = Int64((reading.instant.timeIntervalSince1970 * 1000).rounded())
+        let id = UUID()
+
+        let stored = try await queue.write { db -> Bool in
+            // Idempotence (Req 1.4, Decision 10). HealthKit re-runs a 90-day
+            // backfill on every connect, and blood readings have no keep-first
+            // to absorb the repeat. The candidate range is the rows at the
+            // reading's OWN instant: a re-delivered sample carries the same
+            // `startDate`, so nothing wider can match. `json_valid` first, so
+            // a row whose metadata is not an object cannot fail the query.
+            if let nativeID = reading.nativeID {
+                let existing = try Row.fetchOne(
+                    db,
+                    sql: """
+                        SELECT 1 FROM events
+                        WHERE event_type = ? AND timestamp = ? AND json_valid(metadata)
+                          AND json_extract(metadata, '$.source_id') = ?
+                          AND json_extract(metadata, '$.native_id') = ?
+                        LIMIT 1
+                        """,
+                    arguments: [EventType.bsl, instantMs, reading.sourceID, nativeID]
+                )
+                if existing != nil { return false }
+            }
+
+            // The pairing stamp (Req 4.5, Decision 12), read inside the same
+            // transaction and BEFORE the insert. A read, never a mutation —
+            // the sensor row is left exactly as recorded, which is what keeps
+            // this path insert-only. A row carrying no `provenance` key is a
+            // sensor row (Req 7.1), so the absence is coalesced, not filtered.
+            let paired = try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT timestamp, value FROM events
+                    WHERE event_type = ? AND timestamp > ? AND timestamp <= ?
+                      AND value IS NOT NULL
+                      AND (NOT json_valid(metadata)
+                           OR IFNULL(json_extract(metadata, '$.provenance'), 'sensor') <> 'blood')
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                    """,
+                arguments: [
+                    EventType.bsl, instantMs - Self.pairingWindowMs, instantMs,
+                ]
+            )
+            let pairedInstantMs: Int64? = paired?["timestamp"]
+            let pairedValue: Double? = paired?["value"]
+
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    id.uuidString, instantMs, EventType.bsl, reading.mmolL,
+                    try Self.bloodBslMetadataJSON(
+                        for: reading, pairedInstantMs: pairedInstantMs,
+                        pairedValue: pairedValue),
+                ]
+            )
+            return true
+        }
+
+        guard stored else { return nil }
+        changeBroadcaster.notify()
+        return id
+    }
+
+    // Builds the `metadata` JSON object for a blood reading: `provenance`,
+    // `source_id`, `native_id` when provided, and the pairing stamp when a
+    // sensor reading was found in the window. Every optional key is absent,
+    // never null, when nil — the liveBslMetadataJSON convention.
+    //
+    // `sensor_delta` is derivable from the other two keys and is stored anyway,
+    // so a future error analysis is one `json_extract` away (Decision 12).
+    private static func bloodBslMetadataJSON(
+        for reading: BloodBslReading, pairedInstantMs: Int64?, pairedValue: Double?
+    ) throws -> String {
+        var payload: [String: Any] = [
+            "provenance": GlucoseProvenance.blood.rawValue,
+            "source_id": reading.sourceID,
+        ]
+        if let nativeID = reading.nativeID {
+            payload["native_id"] = nativeID
+        }
+        if let pairedInstantMs, let pairedValue {
+            payload["paired_sensor_value"] = pairedValue
+            payload["paired_sensor_instant"] = pairedInstantMs
+            payload["sensor_delta"] = reading.mmolL - pairedValue
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
     }
 
     // Builds the `metadata` JSON object for a live reading: `source_id`,

@@ -56,7 +56,14 @@ struct GlucoseSnapshotTests {
 
     // The field defect: the app recomputed from a database that had not yet
     // ingested the reading the widget fetched for itself, and overwrote it.
-    @Test("A write carrying an older reading is dropped", arguments: [-3600.0, -300.0, 0.0])
+    //
+    // An EQUAL-dated candidate used to be dropped here too. Since
+    // fingerprick-glucose Decision 9 it is admitted when its trend differs —
+    // otherwise the arrow freezes for a whole hold while the app republishes
+    // the same displayed reading with a freshly derived one. It still cannot
+    // move the displayed reading, which is the invariant this guard protects;
+    // `GlucoseSnapshotMergeTests` covers that case.
+    @Test("A write carrying an older reading is dropped", arguments: [-3600.0, -300.0])
     func olderWriteIsDropped(_ offset: TimeInterval) {
         withSuite { defaults in
             let stored = GlucoseSnapshot.make(

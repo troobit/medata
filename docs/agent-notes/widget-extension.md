@@ -123,6 +123,29 @@ the shared WidgetKit reload budget on the co-hosted launchers.
   never-recorded state and is still written — block that and emptying the `bsl`
   history could never clear the tile.
 
+- **`supersedesStored` is gone; `merged(_:into:now:)` replaces it**
+  (fingerprick-glucose Decisions 9 and 11). Snapshot `schemaVersion` is now
+  **2**, carrying `provenance` and `holdsUntil`. Three cases, in order:
+  1. `stored.holdsUntil > now` and the candidate is `.sensor` → keep stored's
+     value, `readingDate`, `provenance` and `holdsUntil`; adopt only the
+     candidate's trend. Required for correctness: the extension fetching a
+     13:05 sensor reading knows nothing of the 13:02 blood reading holding the
+     display, and case 3 alone accepts the clobber.
+  2. Same `readingDate` AND `provenance` → admit only when the trend differs.
+     Without it the arrow freezes for the whole hold, foreground included.
+  3. Decision 19 unchanged.
+  The invariant survives in substance — the displayed reading's date never
+  decreases; cases 1 and 2 do not move it at all.
+- **`write(_:replacingDeleted:to:)`** admits a rollback regardless of dates, but
+  ONLY when the stored `readingDate` is among the removed instants. Narrow on
+  purpose: an unconditional force-write reinstates the exact Decision 19
+  regression. `replacingDeleted` defaults to empty, so every existing caller is
+  unchanged; only the Records deletion paths pass it.
+- **`holdsUntil` is an ABSOLUTE date**, computed app-side as blood instant + the
+  hold window, so the extension compares an instant it already holds and never
+  needs the app's hold-window setting. That setting stays app-private and is
+  deliberately not App Group state.
+
 - The contract is one `Codable` blob under one key in
   `UserDefaults(suiteName: "group.rtob.MeData")` — plist-level atomicity, so a
   concurrent reader sees the old blob or the new one, never a splice. Both

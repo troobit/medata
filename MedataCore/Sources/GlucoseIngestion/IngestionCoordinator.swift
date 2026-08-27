@@ -2,12 +2,15 @@ import Foundation
 import GlucoseWidgetShared
 import Persistence
 
-// Routes every source's readings through one ingestion path (Req 1.2):
-// snap each sample onto the 5-minute grid (Decision 4), collapse
-// intra-batch collisions, write the batch once through
-// `PersistenceStore.ingestLiveBsl`, and only then return — the durable ack
-// a source needs before advancing its cursor (Decision 7). Store errors
-// rethrow untouched so a failed write never advances anything.
+// Routes every source's readings through this one point (Req 1.2), and it is
+// the point where provenance decides the write path (specs/data/
+// fingerprick-glucose Req 1.1): sensor samples are snapped onto the 5-minute
+// grid (Decision 4), collapsed intra-batch and written once through
+// `PersistenceStore.ingestLiveBsl`; blood samples go to
+// `PersistenceStore.recordBloodBsl` at their exact instants. Only then does
+// this return — the durable ack a source needs before advancing its cursor
+// (Decision 7). Store errors rethrow untouched so a failed write never
+// advances anything.
 public actor IngestionCoordinator: GlucoseIngestSink {
 
     private let store: any PersistenceStore
@@ -51,12 +54,22 @@ public actor IngestionCoordinator: GlucoseIngestSink {
     public func ingest(
         _ samples: [GlucoseSample], from sourceID: String
     ) async throws -> BslIngestSummary {
+        // The routing point (specs/data/fingerprick-glucose Req 1.1). A source
+        // reports what it measured; the split into the two write paths is made
+        // here, so no source has to know one exists.
+        let sensorSamples = samples.filter { $0.provenance == .sensor }
+        let bloodSamples = samples.filter { $0.provenance == .blood }
+
         // One bucket per snapped grid mark: keep the sample whose native
         // instant is closest to the mark; ties → earliest native instant.
         // Required because the store's keep-first loop reads only committed
         // rows — two same-mark samples in one batch would otherwise race.
+        //
+        // Blood samples are absent from this entirely: the grid is a
+        // cross-source dedup device for one continuous trace, and snapping a
+        // fingerstick would falsify its instant (Decision 6).
         var buckets: [Int64: GlucoseSample] = [:]
-        for sample in samples {
+        for sample in sensorSamples {
             let mark = Self.snapToGrid(Self.instantMs(sample.nativeInstant))
             if let incumbent = buckets[mark],
                 !Self.wins(sample, over: incumbent, at: mark) {
@@ -78,12 +91,43 @@ public actor IngestionCoordinator: GlucoseIngestSink {
                 )
             }
 
-        // Durable-ack contract (Decision 7): a throw here propagates to the
-        // source, which must NOT advance its cursor.
-        let summary = try await store.ingestLiveBsl(readings)
+        // Durable-ack contract (Decision 7): a throw from EITHER path
+        // propagates to the source, which must NOT advance its cursor.
+        let sensorSummary = try await store.ingestLiveBsl(readings)
+
+        // Each blood reading is its own row at its own instant, so there is
+        // nothing to batch. `recordBloodBsl` returns nil when the sample was
+        // already stored under the same `(source_id, native_id)` — the
+        // re-delivered backfill (Req 1.4).
+        var bloodStored = 0
+        var bloodSkipped = 0
+        for sample in bloodSamples {
+            let recorded = try await store.recordBloodBsl(
+                BloodBslReading(
+                    instant: sample.nativeInstant,
+                    mmolL: GlucoseGrid.roundedMmolL(sample.mmolL),
+                    sourceID: sourceID,
+                    nativeID: sample.nativeID
+                )
+            )
+            if recorded == nil { bloodSkipped += 1 } else { bloodStored += 1 }
+        }
+
+        let summary = BslIngestSummary(
+            extracted: samples.count,
+            stored: sensorSummary.stored + bloodStored,
+            skippedExisting: sensorSummary.skippedExisting + bloodSkipped,
+            // Agreement and discrepancy are properties of the keep-first merge,
+            // which the blood path does not use.
+            agreeing: sensorSummary.agreeing,
+            discrepant: sensorSummary.discrepant
+        )
 
         discrepancyTallies[sourceID, default: 0] += summary.discrepant.count
-        if let latest = readings.map(\.timestampMs).max() {
+        let deliveredMs =
+            readings.map(\.timestampMs)
+            + bloodSamples.map { Self.instantMs($0.nativeInstant) }
+        if let latest = deliveredMs.max() {
             lastReadingMs[sourceID] = max(lastReadingMs[sourceID] ?? .min, latest)
         }
         let lastReadingAt = lastReadingMs[sourceID].map {
