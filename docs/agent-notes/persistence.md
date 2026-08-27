@@ -119,19 +119,24 @@ Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT E
 
 Nothing in `MedataCore` or `App` consumes the lookback within the activity-events spec: the covariate is RECORDED and no insulin adjustment is applied (Decision 5). insulin-dosing Req 12.4 is the intended first consumer.
 
-## Dose suggestions (insulin-dosing)
+## Dose suggestions — REMOVED at schema v12 (insulin-dosing Decision 18)
 
-`dose_suggestions` (schema **v8**; `CREATE IF NOT EXISTS` retrofits it onto v7 DBs — no DDL on legacy tables) is a derived side table like `quick_presets` / `estimation_outcomes`: **none of `saveDoseSuggestion`, `linkDose`, `doseSuggestions`, `doseSuggestion(forSourceEventID:)` touches `eventsDidChange`** (Req 7.4; the by-subject read serves the Req 6.10 history readout and has a protocol-extension default returning nil so test doubles conform without a stub), and none of them adds a key to the insulin event's metadata contract, which medreg owns and parses (Req 7.3, 9.7).
+`dose_suggestions` is **gone**, and so are `saveDoseSuggestion`, `linkDose`,
+`doseSuggestions(limit:)`, `doseSuggestion(forSourceEventID:)` and the
+`DoseSuggestionRecord` DTO. Do not add a replacement API of any kind.
 
-The version literal `'8'` lives in **three** places in `GRDBPersistenceStore.swift` — the `INSERT OR IGNORE` in `createSchema`, the `INSERT OR REPLACE` in `migrate`, and the changelog comment between them. Bump all three together or `migrate` silently re-stamps a v8 database back down on every launch.
+The dose is a pure function of recorded events and the settings in force —
+computable for any instant, including or excluding a meal — so a stored copy of
+its output was a cache with migration obligations, not a record. Every surface
+now recomputes; the ratio table lives in Settings and the meals, intakes,
+boluses and glucose it reads are already in `events`.
 
-The ratio is stored **only** as `cr_g_per_u` — grams of carbohydrate covered by one unit. "2 U per 10 g in the morning" IS 5.0 g/U, and a 60 g breakfast at 5.0 g/U is 12 U. The reciprocal is a display derivation and is never stored.
-
-`fpu` is derived by the store at save from `fat_g` and `protein_g` (`BenchmarkMeal.truthCarbsG` precedent — the caller-supplied value is ignored) and is **nil when either macro is absent**: an absent macro is unrecorded, not zero. `saveDoseSuggestion` is INSERT OR REPLACE by id so a review-screen correction rewrites the row rather than appending one per keystroke. There is **no eviction bound** — unlike `estimation_outcomes`, the longitudinal series is the product.
-
-`DoseSuggestionRecord` lives in Persistence, not in Dosing, so the Req 10.3 firewall holds. Values produced by Dosing — the suppression reason and the band — are carried as raw strings; the storage vocabularies that Persistence owns (`DoseSuggestionOutcome`, `CarbsSource`, `RatioSource`) are enums here, `EstimationOutcomeKind`-style, with the fields typed `String` so an unknown value round-trips rather than being dropped.
-
-Open, unspecified: `insulin_event_id` and `source_event_id` are not cleared by `deleteInsulinEvent`, `deleteRecords`, or the DEBUG `deleteAllData()` — the last wipes `events` wholesale while side tables survive (as they already do for `quick_presets` / `estimation_outcomes` / `benchmark_meals`). Neither spec says what should happen; after one Debug reset every ledger row points at a deleted event.
+Version 12 is the **one destructive migration** in this schema's history:
+`DROP TABLE IF EXISTS dose_suggestions`, ungated and idempotent, in `migrate()`.
+It discards the rows the developer device already held — accepted, because they
+were computed under the superseded full-subtraction rule and everything they
+were derived from survives untouched (Req 10.5). The index goes with the table.
+`DoseSuggestionsDropTests` pins the drop, the stamp, and that no event is lost.
 
 ## Dose occurrences (dose-schedule)
 
@@ -141,11 +146,12 @@ carrying its outcome. Derived side table like `dose_suggestions`: **no method
 here touches `eventsDidChange`**, so history refreshes exactly once per logged
 dose (the insulin event fires it), not twice.
 
-The version literal now reads `'9'` in the same **three** places
+The version literal now reads `'12'` in the same **three** places
 (`createSchema`'s `INSERT OR IGNORE`, `migrate`'s `INSERT OR REPLACE`, the
-changelog comment between them). Three test files assert it —
-`PersistenceTests`, `BslIngestTests`, `EstimationOutcomeTests` — plus
-`DoseSuggestionTests`'s v7-upgrade case. Bump all of them together.
+changelog comment between them). Four test files assert it —
+`PersistenceTests`, `BslIngestTests`, `EstimationOutcomeTests` and
+`DoseSuggestionsDropTests` (three cases in the last). Bump all of them
+together, or `migrate` silently re-stamps the database down on every launch.
 
 The index `dose_occurrences_schedule (schema_id, due_at)` is **UNIQUE**, not
 plain. That is load-bearing, not an optimisation: `openOccurrence` is

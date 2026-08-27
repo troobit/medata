@@ -131,12 +131,14 @@ final class EstimationOutcomeTests: XCTestCase {
         XCTAssertEqual(raw, 1_750_123_456_789)
     }
 
-    func testSchemaVersionIsStampedEleven() async throws {
+    func testSchemaVersionIsStampedTwelve() async throws {
         let q = try DatabaseQueue(path: dbURL.path)
         let version: String? = try await q.read { db in
             try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'schema_version'")
         }
-        XCTAssertEqual(version, "11", "protected_outcomes lands with schema_version 11")
+        XCTAssertEqual(
+            version, "12",
+            "protected_outcomes landed at 11; 12 drops dose_suggestions above it")
     }
 
     func testOutcomeIndexesExist() async throws {
@@ -292,7 +294,7 @@ final class EstimationOutcomeTests: XCTestCase {
 
     func testProtectedOutcomesTableIsRetrofittedWithoutAlter() async throws {
         // A DB stamped at schema 10 with no `protected_outcomes` table: the
-        // CREATE TABLE IF NOT EXISTS path adds it and the stamp moves to 11,
+        // CREATE TABLE IF NOT EXISTS path adds it and the stamp moves to 12,
         // with no ALTER on any legacy table (Decision 10 still holds).
         let legacyURL = tempDir.appendingPathComponent("legacy.sqlite")
         do {
@@ -318,7 +320,7 @@ final class EstimationOutcomeTests: XCTestCase {
              try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'schema_version'"))
         }
         XCTAssertTrue(tableExists, "the retrofit creates protected_outcomes on a v10 DB")
-        XCTAssertEqual(version, "11")
+        XCTAssertEqual(version, "12")
     }
 
     func testMarkOutcomeProtectedIsIdempotentAndIndependentOfRowExistence() async throws {
