@@ -77,7 +77,6 @@
 		59760C101F974CC8B530459B /* CarbEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469D6F69D437403394586C88 /* CarbEntrySheet.swift */; };
 		7FDE038E77DB431B8DC8CA93 /* QuickPresetEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */; };
 		4F859171975F4BD78EEA95A3 /* IntakeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4F7BBEE94C40D984FAA06D /* IntakeModel.swift */; };
-		115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B82FD1000000272C1E /* MealOverviewView.swift */; };
 		115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B92FD1000000272C1E /* TrendsView.swift */; };
 		115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BA2FD1000000272C1E /* TrendsModel.swift */; };
 		115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */; };
@@ -161,7 +160,6 @@
 		469D6F69D437403394586C88 /* CarbEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntrySheet.swift; path = ../App/CarbEntrySheet.swift; sourceTree = SOURCE_ROOT; };
 		7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QuickPresetEditSheet.swift; path = ../App/QuickPresetEditSheet.swift; sourceTree = SOURCE_ROOT; };
 		5C4F7BBEE94C40D984FAA06D /* IntakeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeModel.swift; path = ../App/IntakeModel.swift; sourceTree = SOURCE_ROOT; };
-		115DA0B82FD1000000272C1E /* MealOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealOverviewView.swift; path = ../App/MealOverviewView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0B92FD1000000272C1E /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsView.swift; path = ../App/TrendsView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0BA2FD1000000272C1E /* TrendsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsModel.swift; path = ../App/TrendsModel.swift; sourceTree = SOURCE_ROOT; };
 		115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsOptionsSheet.swift; path = ../App/TrendsOptionsSheet.swift; sourceTree = SOURCE_ROOT; };
@@ -297,7 +295,6 @@
 				6A73D3D42F510DA3497329BC /* FieldNoteWindow.swift */,
 				8E81171A36D4EA2025264E74 /* FieldNoteContext.swift */,
 				69D0CE9992D7FAB74A2F2E73 /* FieldNote.swift */,
-				115DA0B82FD1000000272C1E /* MealOverviewView.swift */,
 				115DA0B92FD1000000272C1E /* TrendsView.swift */,
 				115DA0BA2FD1000000272C1E /* TrendsModel.swift */,
 				115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */,
@@ -526,7 +523,6 @@
 				28C54E2CCCB8E60787FB08AB /* FieldNoteWindow.swift in Sources */,
 				999B36A96C8A70A57AB1ED37 /* FieldNoteContext.swift in Sources */,
 				BCF094D7BE22D3B5EA5CE8D7 /* FieldNote.swift in Sources */,
-				115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */,
 				115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */,
 				115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */,
 				115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */,

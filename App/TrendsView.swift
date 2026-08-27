@@ -358,7 +358,7 @@ struct TrendsView: View {
                     .foregroundStyle(Color.textSecondary)
             } else {
                 ForEach(model.dayMeals, id: \.id) { record in
-                    NavigationLink(value: MealRoute.overview(record)) {
+                    NavigationLink(value: MealRoute.result(record)) {
                         HStack {
                             Text(mealTime(record))
                                 .font(.subheadline.weight(.medium))

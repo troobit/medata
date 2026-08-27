@@ -468,7 +468,7 @@ nonisolated struct MaskContourSet: Sendable {
 
 // Off-MainActor decode with a per-meal cache for the contour path. The
 // colourise path above stays MainActor-bound and uncached for its read-only
-// consumer (MealOverviewView); the review surface goes through this actor so
+// consumer (ResultView); the review surface goes through this actor so
 // the trace runs off the MainActor and a re-appearance of the same meal —
 // CaptureFlowView resyncs presentation on back-gesture pop — does not re-run
 // it during the push transition.

@@ -10,10 +10,11 @@ import SwiftUI
 // CaptureFlowView).
 
 // Shared destination builder for the Records and Trends sheet stacks (both key
-// `MealRoute`, design: Navigation routes). Overview pushes the full Result —
-// whose per-food rows carry the adjustment surface (serving-adjust PRD, no
-// separate correction screen); Done pops one level; delete removes the meal
-// and unwinds to the list.
+// `MealRoute`, design: Navigation routes). `.result` is the single meal-detail
+// surface (Decision 16 — the separate overview recap is retired, so a
+// day/list row lands directly here): its per-food rows carry the adjustment
+// surface (serving-adjust PRD, no separate correction screen); Done pops one
+// level; delete removes the meal and unwinds to the list.
 @MainActor
 @ViewBuilder
 func mealRouteDestination(
@@ -22,18 +23,6 @@ func mealRouteDestination(
     path: Binding<[MealRoute]>
 ) -> some View {
     switch route {
-    case .overview(let record):
-        MealOverviewView(
-            store: store,
-            record: record,
-            onFullResult: { path.wrappedValue.append(.result(record)) },
-            onReview: {
-                #if DEBUG
-                path.wrappedValue.append(.review(record))
-                #endif
-            },
-            onDeleted: { popOne(path) }
-        )
     case .result(let record):
         ResultView(
             record: record,
@@ -44,24 +33,6 @@ func mealRouteDestination(
                 path.wrappedValue.removeAll()
             }
         )
-    #if DEBUG
-    // Retake has no meaning off the capture stack, so it and Delete share the
-    // one honest behaviour here: delete the meal and unwind.
-    case .review(let record):
-        MealReviewView(
-            record: record,
-            store: store,
-            onRecord: { popOne(path) },
-            onRetake: {
-                Task { try? await store.deleteMeal(id: record.id) }
-                path.wrappedValue.removeAll()
-            },
-            onDelete: {
-                Task { try? await store.deleteMeal(id: record.id) }
-                path.wrappedValue.removeAll()
-            }
-        )
-    #endif
     }
 }
 
