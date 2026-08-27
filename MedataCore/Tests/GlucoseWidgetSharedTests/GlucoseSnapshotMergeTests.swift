@@ -117,16 +117,70 @@ struct GlucoseSnapshotMergeTests {
     }
 
     // Same instant, different provenance: a blood reading recorded at the very
-    // instant of a sensor row is a different reading, not a trend refresh.
-    @Test("An equal-dated candidate of a different provenance is not a trend refresh")
-    func equalDatedDifferentProvenanceIsNotCaseTwo() {
+    // instant of a sensor row is a different reading, not a trend refresh — and
+    // precedence has to survive the store, not just the derivation.
+    //
+    // This previously refused, on the reasoning that the app's next publish
+    // would carry a later instant and land it. It would not: for as long as the
+    // hold runs the app republishes the BLOOD instant, so the candidate stays
+    // equal to the stored sensor date rather than becoming newer. Home derived
+    // blood locally while the Lock Screen kept showing sensor, for the whole
+    // window.
+    @Test("Blood displaces sensor at an equal instant")
+    func equalDatedBloodDisplacesSensor() {
         let stored = snapshot(6.4, at(-300), trend: .steady, provenance: .sensor)
         let candidate = snapshot(
             9.1, at(-300), trend: .steady, provenance: .blood, holdsUntil: at(600))
 
-        // Not strictly newer, so case 3 refuses it; the app's next publish,
-        // carrying a later instant, lands it.
-        #expect(GlucoseSnapshotStore.merged(candidate, into: stored, now: now) == nil)
+        let resolved = GlucoseSnapshotStore.merged(candidate, into: stored, now: now)
+
+        #expect(resolved?.mmolL == 9.1)
+        #expect(resolved?.provenance == .blood)
+    }
+
+    // The reverse never holds: a sensor reading at the same instant does not
+    // take the display off a blood one.
+    @Test("Sensor does not displace blood at an equal instant")
+    func equalDatedSensorDoesNotDisplaceBlood() {
+        let stored = snapshot(
+            9.1, at(-300), trend: .steady, provenance: .blood, holdsUntil: at(600))
+        let candidate = snapshot(6.4, at(-300), trend: .steady, provenance: .sensor)
+
+        // Case 1 keeps the held reading and takes only the arrow.
+        let resolved = GlucoseSnapshotStore.merged(candidate, into: stored, now: now)
+        #expect(resolved?.mmolL == 9.1)
+        #expect(resolved?.provenance == .blood)
+    }
+
+    // A hold is bounded by the reading it belongs to. A device clock that ran
+    // fast writes a `holdsUntil` days out; once the clock is corrected, an
+    // unbounded rule would pin that stale value on the Lock Screen until the
+    // future date arrived — the worst failure available on a surface someone
+    // reads before dosing.
+    @Test("A hold that outruns its own reading is not a hold")
+    func farFutureHoldDoesNotPinAStaleReading() {
+        let readingDate = at(-300)
+        let stored = snapshot(
+            9.1, readingDate, trend: .steady, provenance: .blood,
+            holdsUntil: readingDate.addingTimeInterval(
+                GlucoseSnapshotStore.maxHoldSeconds + 60))
+        let candidate = snapshot(6.4, at(-60), trend: .steady, provenance: .sensor)
+
+        #expect(!GlucoseSnapshotStore.isHolding(stored, now: now))
+        // So the newer sensor reading lands by case 3 instead of being held off.
+        #expect(GlucoseSnapshotStore.merged(candidate, into: stored, now: now)?.mmolL == 6.4)
+    }
+
+    @Test("A hold inside the maximum window still holds")
+    func holdWithinTheMaximumWindowHolds() {
+        let readingDate = at(-300)
+        let stored = snapshot(
+            9.1, readingDate, trend: .steady, provenance: .blood,
+            holdsUntil: readingDate.addingTimeInterval(900))
+        let candidate = snapshot(6.4, at(-60), trend: .steady, provenance: .sensor)
+
+        #expect(GlucoseSnapshotStore.isHolding(stored, now: now))
+        #expect(GlucoseSnapshotStore.merged(candidate, into: stored, now: now)?.mmolL == 9.1)
     }
 
     // MARK: - Case 3: Decision 19 unchanged
