@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -379,3 +380,66 @@ def test_devicectl_listing_is_flattened_structurally():
     assert field_pull._flatten_listing(payload, "Documents") == [
         "Documents/meals.sqlite", "Documents/notes/1-a.json",
         "Documents/notes/1-a.png"]
+
+
+def test_listing_entries_prefer_relative_paths_and_sizes():
+    payload = {"result": {"files": [
+        {"name": "x.json", "relativePath": "x.json",
+         "metadata": {"size": 7}, "resources": {"isDirectory": False}},
+        {"name": "sub", "relativePath": "sub",
+         "resources": {"isDirectory": True}}]}}
+    assert field_pull._listing_entries(payload, "Documents/notes") == [
+        ("Documents/notes/x.json", 7)]
+
+
+class StubPullTransport:
+    """A device whose files are dict entries; records what crossed the wire."""
+
+    def __init__(self, listing, payloads):
+        self.listing = listing          # {subdirectory: [(remote, size)]}
+        self.payloads = payloads        # {remote: bytes}
+        self.copied = []
+
+    def list_files(self, subdirectory):
+        if subdirectory not in self.listing:
+            raise subprocess.CalledProcessError(1, "devicectl")
+        return self.listing[subdirectory]
+
+    def copy_from(self, remote, local, size=None):
+        if remote not in self.payloads:
+            return False
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(self.payloads[remote])
+        self.copied.append(remote)
+        return True
+
+
+def test_pull_skips_present_files_at_listed_size_and_marks_completion(corpus_root):
+    pull_dir = corpus_root / "pulls" / "20260827-1"
+    (pull_dir / "captures").mkdir(parents=True)
+    (pull_dir / "captures" / "a.fixture").write_bytes(b"already-here")
+    transport = StubPullTransport(
+        {"Documents/captures": [
+            ("Documents/captures/a.fixture", len(b"already-here")),
+            ("Documents/captures/b.fixture", 3)]},
+        {"Documents/captures/b.fixture": b"new"})
+
+    hashes = field_pull.pull_files(transport, pull_dir)
+
+    # The present-at-size file was hashed without a wire copy; only the
+    # missing one crossed. Optional DB siblings missing is not a failure, so
+    # the completion marker lands.
+    assert transport.copied == ["Documents/captures/b.fixture"]
+    assert set(hashes) == {"captures/a.fixture", "captures/b.fixture"}
+    assert (pull_dir / field_pull.PULL_COMPLETE_NAME).exists()
+
+
+def test_resolve_pull_dir_resumes_only_incomplete_dirs(corpus_root):
+    from datetime import datetime, timezone
+    now = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
+    first = corpus_root / "pulls" / "20260827-1"
+    first.mkdir(parents=True)
+    assert field_pull.resolve_pull_dir(corpus_root, now) == (first, True)
+    (first / field_pull.PULL_COMPLETE_NAME).write_text("{}")
+    assert field_pull.resolve_pull_dir(corpus_root, now) == (
+        corpus_root / "pulls" / "20260827-2", False)

@@ -30,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -53,6 +54,17 @@ DEFAULT_BUNDLE_ID = "rtob.MeData"
 DB_FILES = ("meals.sqlite", "meals.sqlite-wal", "meals.sqlite-shm",
             "meals.sqlite-journal")
 LOOSE_FILES = ("slimming_state.json",)
+
+# Written at pull-dir root once every listed file landed (invisible to ingest,
+# which globs by extension). Its absence marks a pull worth resuming.
+PULL_COMPLETE_NAME = "pull_complete.json"
+
+
+def _copy_timeout(size) -> float:
+    """A wedged devicectl (locked phone, dropped link) must fail the file and
+    move on, not stall the whole pull. Floor plus ~1 MB/s of listed size;
+    unlisted sizes (the DB siblings) get the ceiling a ~400 MB bundle gets."""
+    return 120 + (size if size is not None else 400_000_000) / 1_000_000
 
 
 class DevicectlTransport:
@@ -78,20 +90,33 @@ class DevicectlTransport:
                  "--domain-identifier", self.bundle_id,
                  "--subdirectory", subdirectory,
                  "--json-output", out.name],
-                check=True, capture_output=True, text=True)
+                check=True, capture_output=True, text=True, timeout=300)
             payload = json.loads(Path(out.name).read_text())
-        return _flatten_listing(payload, subdirectory)
+        return _listing_entries(payload, subdirectory)
 
-    def copy_from(self, remote: str, local: Path) -> bool:
+    def copy_from(self, remote: str, local: Path, size=None) -> bool:
+        # The wire copy lands under a `.partial` name and is renamed only on
+        # success: a file at its final name is always complete, which is what
+        # makes a resumed pull's present-and-sized skip safe.
         local.parent.mkdir(parents=True, exist_ok=True)
-        result = self.runner(
-            ["xcrun", "devicectl", "device", "copy", "from",
-             "--device", self.device,
-             "--domain-type", "appDataContainer",
-             "--domain-identifier", self.bundle_id,
-             "--source", remote, "--destination", str(local)],
-            capture_output=True, text=True)
-        return result.returncode == 0
+        partial = local.with_name(local.name + ".partial")
+        try:
+            result = self.runner(
+                ["xcrun", "devicectl", "device", "copy", "from",
+                 "--device", self.device,
+                 "--domain-type", "appDataContainer",
+                 "--domain-identifier", self.bundle_id,
+                 "--source", remote, "--destination", str(partial)],
+                capture_output=True, text=True, timeout=_copy_timeout(size))
+        except subprocess.TimeoutExpired:
+            partial.unlink(missing_ok=True)
+            return False
+        if result.returncode != 0:
+            partial.unlink(missing_ok=True)
+            return False
+        if partial.exists():
+            os.replace(partial, local)
+        return True
 
     def copy_to(self, local: Path, remote: str) -> bool:
         result = self.runner(
@@ -102,6 +127,35 @@ class DevicectlTransport:
              "--source", str(local), "--destination", remote],
             capture_output=True, text=True)
         return result.returncode == 0
+
+
+def _listing_entries(payload, subdirectory):
+    """(remote path, byte size) pairs from `devicectl info files --json-output`.
+
+    Current envelopes carry flat `result.files[].relativePath` entries with
+    `metadata.size`; anything else falls back to the structural name walk,
+    sizeless. Size is worth preferring: it is what lets a resumed pull skip a
+    file already on disk, and what scales the per-copy timeout.
+    """
+    files = (payload.get("result") or {}).get("files") if isinstance(payload, dict) else None
+    flat = isinstance(files, list) and all(
+        not (isinstance(node, dict)
+             and (node.get("files") or node.get("contents") or node.get("children")))
+        for node in files)
+    if flat and files:
+        entries = []
+        for node in files:
+            if not isinstance(node, dict):
+                continue
+            rel = node.get("relativePath") or node.get("name")
+            if not rel or (node.get("resources") or {}).get("isDirectory"):
+                continue
+            size = (node.get("metadata") or {}).get("size")
+            entries.append(("%s/%s" % (subdirectory.rstrip("/"), rel),
+                            size if isinstance(size, int) else None))
+        if entries:
+            return sorted(set(entries))
+    return [(path, None) for path in _flatten_listing(payload, subdirectory)]
 
 
 def _flatten_listing(payload, subdirectory):
@@ -143,24 +197,79 @@ def next_pull_id(root: Path, now=None) -> str:
     return "%s-%d" % (day, len(existing) + 1)
 
 
+def resolve_pull_dir(root: Path, now=None):
+    """`(pull dir, resumed)` — the newest same-day dir without a completion
+    marker is resumed rather than restarted. A multi-gigabyte backlog pull that
+    is interrupted must keep the files it already landed; before this, every
+    ctrl-C restarted the whole copy into a fresh directory (observed 2026-08-27:
+    three sibling dirs, 9+ GB of repeated copies)."""
+    def suffix(path):
+        try:
+            return int(path.name.rsplit("-", 1)[1])
+        except ValueError:
+            return 0
+
+    day = (now or datetime.now(timezone.utc)).strftime("%Y%m%d")
+    existing = sorted((root / "pulls").glob("%s-*" % day), key=suffix)
+    if existing and not (existing[-1] / PULL_COMPLETE_NAME).exists():
+        return existing[-1], True
+    return root / "pulls" / next_pull_id(root, now), False
+
+
 def pull_files(transport, pull_dir: Path) -> dict:
-    """Copy `Documents/` down. Returns {relative path: sha256}."""
+    """Copy `Documents/` down. Returns {relative path: sha256}.
+
+    One key=value line per wire copy: a multi-gigabyte backlog with silent
+    copies is indistinguishable from a hang (which is exactly how the first
+    field pull read, and why it was interrupted twice). A file already present
+    at its listed size is hashed and skipped — `copy_from`'s partial-then-
+    rename means a final-name file is always complete.
+    """
     hashes = {}
-    wanted = []
+    wanted = []                         # (remote, size, optional)
     for subdirectory in ("Documents/notes", "Documents/captures"):
         try:
-            wanted.extend(transport.list_files(subdirectory))
+            wanted.extend((remote, size, False)
+                          for remote, size in transport.list_files(subdirectory))
         except subprocess.CalledProcessError:
             continue                    # the directory does not exist yet
-    wanted.extend("Documents/%s" % name for name in DB_FILES + LOOSE_FILES)
+    # The DB siblings and state json are wanted whole but legitimately absent
+    # (journal mode, first session) — a miss there is not a failure.
+    wanted.extend(("Documents/%s" % name, None, True)
+                  for name in DB_FILES + LOOSE_FILES)
 
-    for remote in wanted:
+    print("pull dir=%s files=%d bytes=%d"
+          % (pull_dir.name, len(wanted),
+             sum(size or 0 for _, size, _ in wanted)), flush=True)
+    copied = resumed = failed = 0
+    for n, (remote, size, optional) in enumerate(wanted, 1):
         relative = remote[len("Documents/"):]
         local = pull_dir / relative
-        if not transport.copy_from(remote, local):
-            continue                    # optional file (WAL sibling, state json)
+        if size is not None and local.is_file() and local.stat().st_size == size:
+            hashes[relative] = corpus.sha256_file(local)
+            resumed += 1
+            continue
+        started = time.monotonic()
+        if not transport.copy_from(remote, local, size):
+            if not optional:
+                failed += 1
+                print("pull copy_failed n=%d/%d file=%s" % (n, len(wanted), relative),
+                      flush=True)
+            continue
         if local.is_file():
             hashes[relative] = corpus.sha256_file(local)
+            copied += 1
+            print("pull copy n=%d/%d file=%s bytes=%d secs=%.1f"
+                  % (n, len(wanted), relative, local.stat().st_size,
+                     time.monotonic() - started), flush=True)
+    print("pull copied=%d resumed=%d failed=%d" % (copied, resumed, failed),
+          flush=True)
+    # No marker while anything failed: the next run resumes this directory and
+    # retries exactly the misses.
+    if failed == 0:
+        (pull_dir / PULL_COMPLETE_NAME).write_text(json.dumps(
+            {"files": len(wanted), "copied": copied, "resumed": resumed},
+            sort_keys=True))
     return hashes
 
 
@@ -220,8 +329,10 @@ def run(args, transport=None) -> int:
         hashes = {}
     else:
         transport = transport or DevicectlTransport(args.device, args.bundle_id)
-        pull_dir = root / "pulls" / next_pull_id(root)
+        pull_dir, resumed = resolve_pull_dir(root)
         pull_dir.mkdir(parents=True, exist_ok=True)
+        if resumed:
+            print("pull resume dir=%s" % pull_dir.name, flush=True)
         hashes = pull_files(transport, pull_dir)
 
     summary = ingest_pull(pull_dir, root, conn)
