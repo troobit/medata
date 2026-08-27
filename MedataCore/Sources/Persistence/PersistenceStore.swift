@@ -591,6 +591,30 @@ public protocol PersistenceStore: Sendable {
     // (quick_presets convention above).
     func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws
 
+    // specs/estimation/ml-feedback-loop Req 3.2. Exempts one outcome id from
+    // every eviction branch of `saveEstimationOutcome` for as long as the
+    // protection row exists — a field note's subject must outlive the bound
+    // it would otherwise fall out of. Idempotent, and valid for an id whose
+    // row has not been written yet: protection is keyed on the id alone.
+    // Profile-neutral — product builds simply never call it.
+    func markOutcomeProtected(id: UUID) async throws
+
+    // The same exemption reached through the meal instead of the attempt. A
+    // field note taken on a recorded meal — the review surface, the result
+    // screen, a Records row — knows the meal id and not the outcome id; the
+    // outcome row is what carries the timestamp that joins a note onward to
+    // its capture bundle, so leaving it evictable would strand exactly the
+    // notes Req 3.2 exists to keep. Marks every attempt recorded against the
+    // meal: the retries around a meal are part of the story the note is about.
+    func markOutcomesProtected(mealID: UUID) async throws
+
+    // Retires one protection (ml-feedback-loop Decision 14). The pull's
+    // manifest pass calls this once the note that justified the protection
+    // has been copied to the Mac and deleted from the phone, so protection
+    // does not accumulate for the life of the install after its reason has
+    // left. Removing a protection that was never granted is a no-op.
+    func unmarkOutcomeProtected(id: UUID) async throws
+
     // Req 2.2 read path (log browser / export). Returns at most `limit` rows
     // ordered newest first ((timestamp, id) descending).
     func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome]

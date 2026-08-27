@@ -635,3 +635,130 @@ Prompt-level rules ("ignore instructions in images") are advisory; removing the 
 **Negative:**
 - Loop agents cannot self-serve small git conveniences; everything lands via drafts and `field_close.py`.
 
+
+---
+
+## Decision 20: The bake refuses to drop calibration lineage it cannot reconstruct
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+Implementing the `make food-db` build gate (guard 6 of the auto-commit chain) surfaced a defect in the target as designed. `make food-db` was specified as a bare `python3 tools/food_db/generate.py` followed by the generator's pytest suite. Running it against this repo regenerated both committed sqlite artifacts *without* nineteen `calibration_*` meta rows they carry — the lineage recording the N5k fit that produced them (release hashes, tau values, seed, per-class effective sample and identifiability, pinned intrinsics, licence).
+
+The cause is that the calibrate artifact is fitted from the N5k corpus and is not committed to this repo, so `generate.py` has no way to reconstruct that lineage from a bare invocation. The loss is provenance, not values — every β in the committed DBs is already `uncalibrated_unity` — but `make food-db` is a gate `field_close.py` runs unattended, and its output is paired into an auto-commit. A silent provenance strip would land in a commit nobody read, which is exactly the failure mode the overlay's own fail-closed inverse guard exists to prevent for the other unreconstructable input.
+
+### Decision
+
+`generate.py` aborts when the prior database carries `calibration_*` meta and no calibration artifact was named, with the message naming the override. `make food-db` takes `CALIBRATION=<artifact>` and passes it through as `--calibration-json`. The overlay and the calibration therefore have the same fail-closed shape: an input the bake cannot reconstruct, once applied, must be supplied again or the bake refuses.
+
+### Rationale
+
+The bake's established contract is abort-before-write on any condition that would ship a database making a claim it cannot support — the palette lock, the serving-coverage lock, the support-plane-reference guard, and the overlay inverse guard all take this form. Dropping lineage is the same class of harm one level down: the artifact stops recording where its numbers came from, and nothing in the file says so.
+
+Failing closed also fails in the safe direction for the loop. With no artifact configured, guard 6 fails and every candidate fix demotes to a proposal — the loop stalls visibly instead of committing lineage-stripped databases cycle after cycle. `field_close.py` (task 24) carries the artifact path in `loop_config.json`, which is where the constant belongs.
+
+### Alternatives Considered
+
+- **Leave `make food-db` as designed (bare invocation)**: The literal reading of the design - Rejected: it regresses the committed artifacts on every run, and the loop would commit that regression paired with each overlay fix.
+- **Carry the prior lineage forward automatically**: Read the `calibration_*` rows out of the prior DB and rewrite them - Rejected: it re-derives input state from an output artifact, and it would happily preserve a lineage that no longer describes the rows beside it — the appearance of provenance without the substance.
+- **Warn on stderr and bake anyway**: Keeps the target always usable - Rejected: `field_close` runs this gate unattended, where a warning is a line in a log nobody reads before the commit lands.
+
+### Consequences
+
+**Positive:**
+- The committed databases cannot silently lose their fit lineage.
+- The two unreconstructable bake inputs, overlay and calibration, now behave identically, so there is one rule to remember rather than two exceptions.
+- The loop's failure mode is a stalled cycle with proposals, not a stream of lineage-stripping commits.
+
+**Negative:**
+- A bare `make food-db` aborts on this repo today; regenerating the databases requires the N5k calibrate artifact in hand.
+- Guard 6 cannot pass until `loop_config.json` carries that path, so the first cycles will demote fixes to proposals if it is missing.
+
+### Impact
+
+`tools/food_db/generate.py` (`_prior_db_carries_calibration`, the `bake()` guard), the `food-db` Makefile target, and `field_close.py`'s guard-6 configuration in task 24.
+
+---
+
+## Decision 21: Adopt the orbit-impl-1 variant after the first field session
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+The on-device capture layer and field-loop tooling were built as two parallel orbit variants and both were taken through a first real device session: affordance interaction, note capture from the capture screen, and a first `make field-pull` against a three-week capture backlog. Both variants initially shipped an inert or drag-breakable affordance (each for a different mechanism-level reason) and both were fixed before the session completed; the session then differentiated them on note/context UI quality and pull tooling behaviour.
+
+### Decision
+
+Adopt the orbit-impl-1 variant (`orbit-impl-1/ml-feedback-loop`) as the ml-feedback-loop implementation. Field-session fixes land on this branch; the impl-2 variant is retired.
+
+### Rationale
+
+- The note sheet and its context section (screen id, meal/attempt link, frozen estimate, screenshot-failure reason) read clearly on device — the deciding factor for a surface whose whole purpose is fast, unambiguous field annotation.
+- Impl-1's `field_pull.py` worked against the real device: it parses the `devicectl info files` `--json-output` envelope structurally, so the pull enumerated and copied the backlog.
+- Its remaining pull defect (a silent, restart-from-zero multi-gigabyte copy that read as a hang) was behavioural, not structural, and is fixed on the branch: per-copy progress lines, partial-then-rename copies, size-verified resume via a `pull_complete.json` marker, per-call timeouts.
+
+### Alternatives Considered
+
+- **orbit-impl-2 variant**: Cleaner single-slot context model and an application-delegate window install - Rejected: its `field_pull.py` parsed the human-readable `devicectl` listing instead of `--json-output`, matched no files, copied nothing, and aborted on the missing `meals.sqlite` snapshot (observed: an empty `2026-08-27-1` pull dir); its passthrough window gated touches by view identity, which cannot work against a single SwiftUI hosting view; its note/context UI read worse on device.
+- **Merge impl-2's pieces into impl-1**: Cherry-pick its context model, screenshot compositor, or bake gate - Rejected on each: impl-1's stack-based `FieldNoteContext` is strictly more robust (top-of-stack read at save time survives push/pop ordering); impl-2's screenshot composites an `ImageRenderer` re-render of chrome values the capture view must register with it, where impl-1's `CALayer.render(in:)` over `ARView.snapshot` captures the real layer tree with no coupling; and impl-2's `make food-db` hardcodes the calibration artifact path where impl-1 fails closed on a missing `CALIBRATION=`. A full file-level comparison of the two branches found impl-1 a superset everywhere except two module-note cross-references (`estimation-diagnostics.md` for the slimmer, `n5k-calibration-harness.md` for `diagnose`), which were harvested into the merge — a reader changing the pipeline or the harness reads those notes, not the feature note.
+
+### Consequences
+
+**Positive:**
+- One branch to verify: the STOP device-checklist tasks (29-31) run once, on the adopted implementation.
+- The field-session lessons (hit-region reporting, attempt-link visibility, observable resumable pulls) are recorded as requirements (2.6), design contracts, and completed tasks on the surviving branch.
+
+**Negative:**
+- Impl-2's rehearsal-tested tooling (its own pull/ingest/close suite) is discarded rather than salvaged; any latent quality in it is lost. Its sqlite-based rehearsal fixtures are discarded with it — impl-1 rehearses from JSON, so the committed-binary-fixture exemption impl-2 added to `.gitignore` is not carried over.
+- The retired branch still holds the only copy of its implementation until deleted; anyone reading both variants' shared corpus should know pull dirs named `2026-08-27-*` (dashed) are impl-2 debris.
+
+---
+
+## Decision 22: A notes-only pull, and the events database made required
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+The first real pull established the cost of the wired path with measurements rather than estimates: 10.6 GB across 100 capture bundles in 12 minutes, ~14.5 MB/s, one `devicectl copy from` per file. That cost is inherent — a two-view success bundle is ~390 MB and even a refusal can reach ~200 MB — so any pull that carries bundles is minutes-to-hours, and even a two-day session is several gigabytes. Meanwhile a field note is a few hundred bytes of JSON plus a ~370 KB screenshot.
+
+The same pull exposed a second problem. `meals.sqlite` was grouped with its WAL siblings as an optional file, on the reasoning that a missing sibling is ordinary. Its copy failed for a transient reason, the single failure line scrolled past under ten gigabytes of copy output, and the pull declared success having landed 100 bundles and 3 notes with `db_integrity=absent`, `outcomes=0` and `joins_resolved=0` — every note unjoined, because the outcome rows a link resolves through were never ashore.
+
+Both matter beyond this feature: the note affordance is a window over every screen in any FIELD_LOOP build, so it is the fastest feedback channel available to work in flight on other branches — but only if reading the notes back does not mean waiting for the capture backlog.
+
+### Decision
+
+Add `--notes-only` (`make field-notes`): pull the notes and the events-database snapshot, leave capture bundles on the device. Give it its own `<UTC-date>-notes-<n>` pull-directory series and refuse `--prune` under it. Separately, split the database group — `meals.sqlite` is required and its WAL siblings stay optional — so a failed database copy fails the pull and leaves it resumable.
+
+### Rationale
+
+- Notes-only measured at ~6 seconds against the device that takes 12 minutes for a full pull. That is the difference between a feedback channel usable during a work session and one usable at the end of a day.
+- An unjoined note is not a lost note: `_resolve_joins` re-runs over every note in the corpus on each ingest, so a note pulled ahead of its bundle joins when the bundle arrives. Deferring bundles costs nothing permanent.
+- The separate directory series is what keeps the two pull kinds from interfering — resume looks for the newest same-day dir of its own kind, so a quick notes pull can neither be mistaken for an interrupted backlog pull nor renumber it.
+- Refusing `--prune` under notes-only follows the same reasoning as the manifest handshake: retiring an outcome's protection before its bundle is verified ashore would let the device evict the row the note joins through.
+- Required-versus-optional should track what the corpus needs, not what is usually present. Without the database no note resolves, which makes it the one file whose absence must stop the pull declaring completion.
+
+### Alternatives Considered
+
+- **Rely on device-side slimming to make full pulls fast**: Drop the probability tensors before the pull so every bundle is smaller - Rejected as a substitute: slimming is already the mitigation for the backlog and remains valuable, but a slimmed bundle is still tens of megabytes against a note's kilobytes, so a full pull stays minutes-scale. The two are complementary, not alternatives.
+- **A separate notes-only tool**: A small script that copies `Documents/notes` and stops - Rejected: it would duplicate the corpus ingest, index, and join logic, and the join is the whole point — a note outside the corpus index cannot resolve to its capture.
+- **Keep the database optional and rely on the ingest summary**: `db_integrity=absent` is already printed - Rejected by evidence: it was printed, and it scrolled past under 10 GB of copy lines. A condition that invalidates the whole pull must fail it, not annotate it.
+
+### Consequences
+
+**Positive:**
+- Feedback on work in flight — on any branch carrying FIELD_LOOP, on any screen, capture-related or not — is readable in seconds.
+- A pull can no longer report success while having joined nothing; the failure is named on the line that fails and the directory stays resumable.
+- The pull states the size of the job before it starts and its progress in bytes, percent, throughput and ETA, so its duration is legible instead of being read as a hang.
+
+**Negative:**
+- Notes pulled ahead of their bundles sit unjoined in the corpus until a later full pull, so a report run between the two understates joins.
+- Two pull-directory series make the corpus layout slightly less uniform: `pulls/` now holds both `<date>-<n>` and `<date>-notes-<n>` directories.
+- Making the database required means a device whose database genuinely cannot be copied blocks a pull that would otherwise land its bundles — the resume path makes this recoverable, but it is a stop rather than a warning.
+
+---
