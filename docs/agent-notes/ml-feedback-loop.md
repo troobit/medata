@@ -515,6 +515,21 @@ rehearsal's scratch dirs stay isolated). Contract:
   or `no-action`.
 - **Quarantine survives the copy.** Note text moved into any other document
   stays in its JSON-escaped form (Req 4.7, Decision 19).
+- **Keep a `routed:` detail on ONE line.** `read_state` recovers routing from
+  single `  - routed:` lines; a continuation line under one is dropped on the
+  next regeneration, and a blank line inserted above one detaches it from its
+  item (the checked box survives, the record does not).
+
+**`quarantine()` escapes three characters JSON does not.** `str.splitlines()`
+honours U+0085, U+2028 and U+2029, and `json.dumps(..., ensure_ascii=False)`
+leaves all three literal — so a note carrying one used to break out of its
+evidence field and forge a ledger item, complete with a `routed:` line and a
+stolen task id. `cycle_file.quarantine` now escapes them explicitly (the same
+escapes `ensure_ascii=True` emits, so `json.loads` still round-trips, while
+ordinary accented text stays readable). Any future reader that splits lines
+inherits the fix; any future writer that reaches for `json.dumps` directly
+does not. Found by an adversarial review, not by the suite — the original
+tests only tried `\n`.
 - Routed-but-unexecuted work must land somewhere tracked in the same pass —
   a spec task or a backlog entry — because the routed: line alone is a
   record, not a scheduler.

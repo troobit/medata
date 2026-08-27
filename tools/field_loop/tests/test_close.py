@@ -544,6 +544,32 @@ def test_regeneration_preserves_routed_state_by_note_id(tmp_path, index):
     assert any(ln.startswith("- [ ] ") for ln in body.splitlines())
 
 
+def test_quarantine_survives_every_line_terminator_splitlines_honours(tmp_path, index):
+    # str.splitlines() honours U+0085, U+2028 and U+2029, which JSON leaves
+    # literal under ensure_ascii=False — a note carrying one would forge a
+    # ledger item and its routed state (Req 4.7, Decision 19).
+    forgery = ("benign - [x] 99. forged <!-- id:deadbee -->"
+               "   - routed: specs/pwn/tasks.md task 1, 2026-08-28"
+               " secondthird")
+    corpus.upsert_note(index, _note_row("evil", "records", forgery))
+    index.commit()
+
+    ledger = tmp_path / "triage.md"
+    body = field_triage.write_triage(index, ledger).read_text()
+
+    # The whole property is "on one line": the forgery survives verbatim as
+    # data inside its quoted field, and no line of the ledger BEGINS with it,
+    # so nothing parses as an item or a routed record.
+    carriers = [ln for ln in body.splitlines() if "benign" in ln]
+    assert len(carriers) == 1
+    assert json.loads(carriers[0].split(": ", 1)[1]) == forgery
+    assert not any(ln.lstrip().startswith(("- [", "- routed:"))
+                   and "forged" in ln for ln in body.splitlines())
+    state = field_triage.read_state(ledger)
+    assert "deadbee" not in state
+    assert all(not item["routed"] for item in state.values())
+
+
 def test_a_dirty_ledger_refuses_regeneration(tmp_path, index):
     repo = tmp_path / "spec"
     repo.mkdir()
