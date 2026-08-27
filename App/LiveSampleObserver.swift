@@ -73,7 +73,7 @@ enum LiveSampleMath {
     static func sample(from frame: ARFrame) -> LiveSampleObserver.Sample {
         let tilt = tiltDegrees(worldFromCamera: frame.camera.transform)
         let depth = frame.sceneDepth
-        let distance = depth.flatMap { medianDistanceCm(depthMap: $0.depthMap) }
+        let distance = depth.flatMap { nearSurfaceDistanceCm(depthMap: $0.depthMap) }
         let coverage = depth?.confidenceMap.map {
             lidarCoveragePercent(confidenceMap: $0)
         } ?? 0
@@ -129,9 +129,25 @@ enum LiveSampleMath {
         return SIMD2<Float>(sx / mag, sy / mag) * thetaDeg
     }
 
-    // Median of a centre-crop of the depth map, returned in centimetres.
-    // ARKit's depthMap is Float32 metres; nil for an empty crop.
-    static func medianDistanceCm(depthMap: CVPixelBuffer) -> Float? {
+    // Near-side percentile of a centre-crop of the depth map, returned in
+    // centimetres. ARKit's depthMap is Float32 metres; nil for an empty crop.
+    //
+    // Deliberately NOT the median (field capture C577EE9D-8F5A-480A-9F33-
+    // 96E7163A16B8 / C257CA10-81A8-4206-B140-8A205D7D1E94: a plate truly ~25 cm
+    // away read outside the 25-50 cm gate as "too far"). In a top-down capture
+    // the food sits above the table, so the food is always the CLOSEST surface
+    // in the crop and the surrounding table is farther. The crop is centred on
+    // the frame, not on the food, so a loosely framed or off-centre plate can
+    // put more than half the crop on the table — at that point the median (the
+    // pipeline's support-plane fitter documents the identical "two-surface
+    // mixture" failure at `specs/estimation/pipeline/design.md` §6.2.1) jumps
+    // straight to the table's (farther) distance instead of the food's. Taking
+    // the near-side percentile instead keeps tracking the closest cluster
+    // (the food) even when it is a minority of the crop, while still
+    // rejecting a stray near-zero noise pixel that a bare minimum would not.
+    static let nearPercentile: Float = 0.1
+
+    static func nearSurfaceDistanceCm(depthMap: CVPixelBuffer) -> Float? {
         let width = CVPixelBufferGetWidth(depthMap)
         let height = CVPixelBufferGetHeight(depthMap)
         guard width > 0, height > 0 else { return nil }
@@ -157,8 +173,9 @@ enum LiveSampleMath {
         }
         guard !metres.isEmpty else { return nil }
         metres.sort()
-        let median = metres[metres.count / 2]
-        return median * 100
+        let index = Int(Float(metres.count - 1) * nearPercentile)
+        let nearest = metres[index]
+        return nearest * 100
     }
 
     // Fraction of pixels whose normalised confidence (ARConfidenceLevel 0…2
