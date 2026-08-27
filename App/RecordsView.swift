@@ -153,6 +153,20 @@ struct RecordsView: View {
             NavigationLink(value: MealRoute.overview(meal.record)) {
                 MealRecordRow(meal: meal)
             }
+            #if FIELD_LOOP
+            // Annotate a past capture without opening it (ml-feedback-loop
+            // Req 2.1). The note links to THIS row's meal rather than to the
+            // list the screenshot will show, which is why it overrides the
+            // mounted context instead of relying on it.
+            .contextMenu {
+                Button("Field note") {
+                    FieldNoteController.shared.invoke(
+                        meal: FieldNoteMealLink(mealID: meal.record.id),
+                        screenID: "records.meal"
+                    )
+                }
+            }
+            #endif
         case .insulin(let entry):
             InsulinRecordRow(entry: entry)
         case .glucose(let reading):

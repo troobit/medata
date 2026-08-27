@@ -38,6 +38,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var state: CaptureState = .initialising
     var lastMeal: MealRecord?
     var navigationPath = NavigationPath()
+
+    #if FIELD_LOOP
+    // The outcome row the most recent attempt wrote (ml-feedback-loop Req 2.1).
+    // A refusal produces no MealRecord, so the refusal overlay has nothing else
+    // to link a field note to; `persistAttemptRecord` writes the outcome on a
+    // detached task and, before this, kept no reference to what it had saved.
+    // `timestampMs` is the same value the capture bundle's filename stem
+    // carries, which is what joins the note onward to the bundle.
+    private(set) var lastOutcome: FieldNoteMealLink?
+    #endif
     let indicators: LiveIndicatorModel
     let supportsLiDAR: Bool
     // Per-capture reference-card override (fork sheet §3.2). Seeds from the
@@ -581,10 +591,26 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                 record: merged, benchmarkMealID: inFlightBenchmarkMealID
             )
             try await store.saveEstimationOutcome(outcome)
+            #if FIELD_LOOP
+            // Stashed only after a successful write: a link to a row that was
+            // never persisted would protect an id nothing can resolve.
+            lastOutcome = FieldNoteMealLink(
+                mealID: outcome.mealID,
+                outcomeID: outcome.id,
+                timestampMs: outcome.timestampMs
+            )
+            #endif
             // Advance the baseline only once the row is durably saved: a
             // failed write must leave the window open so its errors roll into
             // the next attempt's delta instead of vanishing with the lost row.
             if let counterAtMerge { preShutterErrorBaseline = counterAtMerge }
+            #if FIELD_LOOP
+            // Post-capture pass (ml-feedback-loop Req 3.6): the footprint only
+            // grows when a bundle lands, so this is the moment worth measuring.
+            // Already off the estimation path — this whole method runs on a
+            // detached task after the attempt completed.
+            await FieldMaintenance.shared.run(reason: "post_capture")
+            #endif
         } catch {
             log.error("event=outcome.persist.failed error=\(String(describing: error), privacy: .public)")
         }
