@@ -260,7 +260,9 @@ def rehearsal(tmp_path_factory):
                 "cycle_dir": cycle_dir, "index": index, "session": session,
                 "verdict": json.loads((cycle_dir / "verdict.json").read_text()),
                 "tasks": (cycle_dir / "tasks.md").read_text(),
-                "triage": (cycle_dir / "triage.md").read_text(),
+                # The rolling ledger lands beside the cycles directory
+                # (Decision 23), not inside the cycle.
+                "triage": (cycles.parent / "triage.md").read_text(),
                 "overlay": json.loads(
                     (repo / "tools/food_db/loop_overlay.json").read_text()),
             }

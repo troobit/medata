@@ -15,6 +15,7 @@ feedback". What that does not say, and an agent needs:
 |---|---|---|
 | Read notes taken today | `make field-notes` | `ingest … notes=N`, and `db_integrity=ok` |
 | Full session, bundles included | `make field-pull` | `pull copied/resumed/failed`, then `joins_resolved` |
+| Turn notes into tracked work | `make field-triage`, then route | every item checked with a `routed:` line |
 | Re-ingest a directory already on disk | `make field-pull PULL_DIR=<path>` | idempotent by key; safe to repeat |
 | Just the Python suite | `make field-test PYTHON=/opt/homebrew/bin/python3` | Xcode's `python3` has no pytest |
 
@@ -484,12 +485,39 @@ process:
 ```
 make field-pull       devicectl -> pulls/<date>-<n>/ -> ingest -> index.sqlite
 make field-notes      notes + DB only -> pulls/<date>-notes-<n>/ -> ingest (seconds)
+make field-triage     corpus notes -> the rolling triage ledger (any time; routing
+  (routing phase)     the unchecked items is the agent step — see below)
 make field-diagnose   replay every annotated capture -> diagnoses -> cycles/cycle-<n>/tasks.md
   (agent phase)       drafts.json + any notes, written INTO the cycle directory
-make field-close      six guards -> commits or proposals -> verdict.json + triage.md
+make field-close      six guards -> commits or proposals -> verdict.json + ledger refresh
 make field-report     alignment metrics across the whole corpus (any time)
 make field-derive     training + calibration material (launching a run stays human)
 ```
+
+### The rolling triage ledger (Decision 23)
+
+`specs/estimation/ml-feedback-loop/triage.md` is where non-meal notes become
+development work. `tools/field_loop/field_triage.py` regenerates it from the
+index; `field_close` refreshes the same file (at `cycles_dir.parent`, so the
+rehearsal's scratch dirs stay isolated). Contract:
+
+- **Merge, not rewrite.** Items are keyed by note id with cycle-independent
+  ids (`field_triage.task_id`); `[x]` state and `  - routed:` detail lines
+  survive regeneration. The generator refuses a ledger with uncommitted edits
+  (`ledger_is_dirty`) so a routing pass in flight cannot be clobbered.
+- **Routing is check-off.** Each unchecked item goes to ONE destination and
+  gains `routed: <destination>, <date>` — destinations are enumerated in
+  design.md "Triage and corpus derivation": existing-spec task (including
+  enriching or unblocking in-flight work), requirement amendment
+  (developer-confirmed), bugfix via the fix-bug workflow, backlog capture
+  (handed to the backlog workflow as free-form text, NEVER as a file — the
+  backlog tooling refuses spec-folder sources by design), `already-realized`,
+  or `no-action`.
+- **Quarantine survives the copy.** Note text moved into any other document
+  stays in its JSON-escaped form (Req 4.7, Decision 19).
+- Routed-but-unexecuted work must land somewhere tracked in the same pass —
+  a spec task or a backlog entry — because the routed: line alone is a
+  record, not a scheduler.
 
 `make field-test` runs the Python suite for all of it. It is a separate target
 from `make food-db` because the two test directories both carry a `conftest.py`

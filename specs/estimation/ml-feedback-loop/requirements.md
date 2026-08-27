@@ -109,7 +109,7 @@ The test developer uses the app in the field for days at a time and needs to rec
 **Acceptance Criteria:**
 
 1. <a name="7.1"></a>Notes not linked to a meal SHALL flow through the same persistence, pull, and ingestion as meal-linked notes.
-2. <a name="7.2"></a>The loop SHALL triage non-estimation notes into structured development items grouped by originating screen, written to a committed per-pull triage artifact whose format design pins, each item carrying its note text and screenshot reference.
+2. <a name="7.2"></a>The loop SHALL triage non-estimation notes into structured development items grouped by originating screen, written to a single committed triage ledger that accretes across pulls, whose format design pins; each item SHALL carry its note text and screenshot reference, and an item's checked-off state with a recorded destination SHALL be the durable record that it has been routed, preserved across regenerations of the ledger.
 3. <a name="7.3"></a>Triaged non-estimation items SHALL NOT be auto-fixed; they route into the normal development workflow (task ledger or spec proposals).
 4. <a name="7.4"></a>Every triaged item SHALL trace back to the note or notes that produced it.
 

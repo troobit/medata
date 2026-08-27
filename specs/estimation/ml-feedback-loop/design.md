@@ -107,7 +107,20 @@ Constants (floors, ceilings, budgets, eval floors, denylist) live in `tools/fiel
 
 ### Triage and corpus derivation (Reqs 7–8)
 
-Non-meal notes are triaged by the agent phase into `cycles/cycle-<n>/triage.md` — a committed, rune-parseable task list grouped by `screen_id`, each item linking its note JSON and screenshot (7.2, 7.4) with note/screenshot text quarantined as quoted evidence fields (4.7); routing into a spec is a human step (7.3).
+Non-meal notes accrete into `specs/estimation/ml-feedback-loop/triage.md` — the rolling triage ledger: one committed, rune-parseable task list grouped by `screen_id`, each item linking its note JSON and screenshot (7.2, 7.4) with note/screenshot text quarantined as quoted evidence fields (4.7). `make field-triage` regenerates it from the corpus index at any time — seconds after a notes-only pull — and `field_close` refreshes the same file, so routing never waits on a cycle.
+
+Regeneration is a merge, not a rewrite. Items are keyed by note id with cycle-independent task ids (`task_id(0, "triage/<note-id>")`); a checked item's state and its appended `routed:` detail lines survive every regeneration, and a checked item is never re-listed elsewhere. The generator refuses to overwrite a ledger with uncommitted edits (the `require_clean` posture), so an in-flight routing pass cannot be clobbered by a pull.
+
+Routing the ledger (7.3) is the whole agent interface for non-estimation feedback, the same file-contract pattern as the cycle file — no runner, harness, or skill is named, and no external tooling reads spec folders. A routing session takes each unchecked item to exactly one destination, then checks it off with a `routed: <destination>, <YYYY-MM-DD>` detail:
+
+- an existing spec's task file — a new task, or detail added to an in-flight or blocked task that the field evidence informs or unblocks;
+- a requirement amendment to an existing spec (developer-confirmed; anchors never renumbered);
+- a bugfix, through the systematic bugfix workflow into `specs/bugfixes/<name>/`;
+- a new-spec or idea capture, handed to the backlog workflow as free-form text — never as a file;
+- `already-realized <commit or file ref>` when the repository already contains the change;
+- `no-action <reason>` when the note requests nothing (a test note, an acknowledgement).
+
+Routing records the destination; it never applies the fix in the same step (7.3) — the change itself happens as normal committed development work citing the note id. Quarantine survives the copy: any note text carried from a ledger item into another document goes verbatim in its JSON-escaped form, never unescaped (4.7, Decision 19).
 
 Training derivation (8.4–8.5) follows the merged-corpus precedent exactly: field captures become a third source with stem prefix `fld_`, contributing to train/val only — never the frozen anchor heldout — via `tools/field_loop/derive_dataset.py` emitting the `prepare_dataset.py` layout (`<split>/images`, `<split>/masks`, `splits.json`, `co_stats.json`) with the field-mapping SHA recorded alongside, and mixing policy (initial cap: field ≤ 10 % of train images) recorded in `splits.json`. Labels: relabels/confirmed classes from correction records; masks are the model's own predictions flagged `self_training: true` in per-label provenance JSON; note-derived labels record note id + interpreting model ident. Derivation respects the evaluation-floor guard (above). Calibration derivation emits `.fixture` + `run_summary.json` per the canonical contract. Retraining/recalibration commands are written into the cycle verdict; launching them stays human-gated (8.6).
 

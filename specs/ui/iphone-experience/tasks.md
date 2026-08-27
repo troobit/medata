@@ -3,25 +3,6 @@ references:
     - specs/ui/iphone-experience/requirements.md
     - specs/ui/iphone-experience/design.md
     - specs/ui/iphone-experience/decision_log.md
-reading_note: |
-  v1.0 tasks superseded by v1.1 — this list is layered. The v1.1 sections
-  ("Tab navigation + Meals tab", "Visual design", "Tilt-tolerant capture")
-  supersede earlier v1.0 task content where they conflict. The authoritative
-  current behaviour is the latest decision (UI decision log Decisions 15-20)
-  + estimation/pipeline/requirements.md. Against the as-built code:
-  - Confidence pill is four-tier (High / Moderate / Low / Very Low, retake at
-    sigma < 0.20) per Decision 17 / tasks 52-60 — the three-tier thresholds
-    (sigma < 0.60 prompt, Low/Moderate/High at 0.60/0.75) in v1.0 tasks 5, 20,
-    43 are superseded.
-  - No active auto path-selection: CapturePathDecider (tasks 8-9) exists only
-    behind the deferred #if AUTO_CAPTURE_MODE flag (research Req 3.9 /
-    Decision 35); the captureMode toggle is authoritative.
-  - .forcingTwoView removed from CaptureState (Decision 35) — 8 cases.
-  - OS floor is iOS 26.5 (research Req 1.2 / §0; UI Decision 4's iOS-17 baseline
-    is superseded).
-  - Retention picker + IFCDB toggle removed (research §0 / Decision 39).
-  Held in front matter (not a body blockquote) so `rune` can parse the ledger;
-  root-level prose breaks the parser. See decision_log Decision 21.
 ---
 # UI — Implementation Tasks
 
@@ -104,7 +85,7 @@ reading_note: |
   - The whole file is wrapped in `#if AUTO_CAPTURE_MODE` — dormant in v1 (research Req 3.9 / Decision 35).
   - enum CapturePathDecider { static func decide(supportsLiDAR: Bool, latestCoveragePercent: Float) -> CapturePath { supportsLiDAR && latestCoveragePercent >= 80 ? .singleViewLidar : .twoViewSfs } }
   - Make the tests from task 8 pass
-  - Blocked-by: 7pbwp4a (Write tests for CapturePathDecider boundary table)
+  - Blocked-by: 7pbwp4a (Write tests for CapturePathDecider boundary table deferred `AUTO_CAPTURE_MODE` path)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1)
 
@@ -320,7 +301,7 @@ reading_note: |
   - `eventsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
   - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
   - Decision: 15
-  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, eventsDidChange))
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods allMeals, deleteMeal, eventsDidChange)
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
@@ -363,7 +344,7 @@ reading_note: |
   - Add `enum ResultPresentation { case justCaptured, historyDetail }` and a `mode: ResultPresentation` field to `ResultView`.
   - Extract `ConfidencePill(sigmaMeal:)` into a small shared component so `MealRow` can reuse the same rendering.
   - Existing Photo-tab call site passes `.justCaptured`; new Meals-tab call site (task 37) passes `.historyDetail`.
-  - Blocked-by: 7pbwp51 (Write tests for ResultView presentation mode (justCaptured vs historyDetail))
+  - Blocked-by: 7pbwp51 (Write tests for ResultView presentation mode justCaptured vs historyDetail)
   - Stream: 2
   - Requirements: [19.4](requirements.md#19.4)
 
@@ -396,7 +377,7 @@ reading_note: |
   - Add `NSPhotoLibraryUsageDescription` Info.plist string ("MeData reads thumbnails of your captured meal photos to show them in your meal history.").
   - Do NOT set a custom tab-bar appearance — the system Liquid Glass material on iOS 26.5 is required (Req §18.4).
   - Decision: 15
-  - Blocked-by: 7pbwp53 (Implement MealsTabView (list, empty state, swipe delete, navigation destination)), 7pbwp55 (Add tabSelectionChanged(to:) method to CaptureFlowModel)
+  - Blocked-by: 7pbwp53 (Implement MealsTabView list, empty state, swipe delete, navigation destination), 7pbwp55 (Add tabSelectionChangedto: method to CaptureFlowModel)
   - Stream: 2
   - Requirements: [18.1](requirements.md#18.1), [18.2](requirements.md#18.2), [18.3](requirements.md#18.3), [18.4](requirements.md#18.4), [18.6](requirements.md#18.6)
 
@@ -445,7 +426,7 @@ reading_note: |
   - Auto-hide via `Task.sleep(5_000_000_000)` started when state enters `.ready` and all values in-range; cancelled on any out-of-range write or tap.
   - Delete `App/LiveIndicatorView.swift` and remove its references from `CaptureFlowView`.
   - Decision: 16
-  - Blocked-by: 7pbwp5a (Write tests for LiveIndicatorBadge (consolidated chip, auto-hide, re-show on tap or out-of-range))
+  - Blocked-by: 7pbwp5a (Write tests for LiveIndicatorBadge consolidated chip, auto-hide, re-show on tap or out-of-range)
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3), [20.4](requirements.md#20.4)
 
@@ -492,7 +473,7 @@ reading_note: |
   - Dynamic Type clamp at AX5: maximum display size 88pt to prevent overflow.
   - Action row (`Retake` outline + `Done` solid) hidden in `mode == .historyDetail` (per task 36).
   - Tests: numeric transition under reduced-motion; carb total clamps at AX5; placeholder chip presence/absence matches `segmenterSource`.
-  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view (icon + label + value)), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view icon + label + value), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
   - Stream: 2
   - Requirements: [20.2](requirements.md#20.2), [20.8](requirements.md#20.8), [20.11](requirements.md#20.11), [20.12](requirements.md#20.12)
 
@@ -502,7 +483,7 @@ reading_note: |
   - Thumbnail target size = 2× row width, NOT `PHImageManagerMaximumSize`.
   - Whole row is the navigation tap target; press feedback `.scale(0.98)` 100ms.
   - Tests: photo aspect ratio is 4:3 for every row regardless of source asset shape; carb-total digits don't shift width on scroll-in (monospaced-digit); placeholder chip presence matches `segmenterSource`.
-  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view (icon + label + value)), 7pbwp50 (Implement MealRow view)
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view icon + label + value), 7pbwp50 (Implement MealRow view)
   - Stream: 2
   - Requirements: [20.9](requirements.md#20.9), [20.10](requirements.md#20.10)
 
@@ -511,7 +492,7 @@ reading_note: |
   - Refusal: `.sheet(item: $model.refusal) { failure in RefusalSheet(failure: failure, retry: { model.retry() }) }`.
   - Delete dead references to `LiveIndicatorView` and `RefusalBanner`.
   - Tests: XCUITest covers the close button, flash toggle, mode-pill switch, shutter armed state, refusal-sheet present/dismiss; existing v1.0 XCUITest for refusal copy is rewritten to expect the sheet, not the banner.
-  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp5b (Implement LiveIndicatorBadge; supersede LiveIndicatorView), 7pbwp5c (Implement CaptureTopBar (close + flash/torch)), 7pbwp5d (Rewrite CaptureModeToggle as capsule pill), 7pbwp5e (Implement ShutterButton (76pt circle, press feedback)), 7pbwp5f (Replace RefusalBanner with RefusalSheet bottom sheet)
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp5b (Implement LiveIndicatorBadge; supersede LiveIndicatorView), 7pbwp5c (Implement CaptureTopBar close + flash/torch), 7pbwp5d (Rewrite CaptureModeToggle as capsule pill), 7pbwp5e (Implement ShutterButton 76pt circle, press feedback), 7pbwp5f (Replace RefusalBanner with RefusalSheet bottom sheet)
   - Stream: 2
   - Requirements: [20.2](requirements.md#20.2), [20.3](requirements.md#20.3), [20.4](requirements.md#20.4), [20.5](requirements.md#20.5), [20.6](requirements.md#20.6), [20.7](requirements.md#20.7)
 
@@ -576,5 +557,12 @@ reading_note: |
   - Delete the prior one-line "uncertain estimate" prompt and its Retake button from `ResultView.swift` — superseded by task 59.
   - Update any XCUITest cases that asserted the prompt appeared at σ ≈ 0.55 to instead assert no prompt at that range and the new prompt at σ < 0.20.
   - Decision: 17
-  - Blocked-by: 7pbwp5p (Implement Very-Low-confidence surface on `ResultView` (inline explanation + Retake / Keep as-is)), surface, surface, surface, surface, surface, surface, surface
+  - Blocked-by: 7pbwp5p (Implement Very-Low-confidence surface on `ResultView` inline explanation + Retake / Keep as-is), surface, surface, surface, surface, surface, surface, surface
   - Requirements: [9.3](requirements.md#9.3)
+
+## Field defects
+
+- [ ] 61. Working-distance gate reports too-far at 25 cm, blocking the shutter at the in-range boundary
+  - Field report: one-view LiDAR mode; 25 cm from a plate of bread; shutter said too far. Req [3.1](requirements.md#3.1) pins the gate to 25-50 cm; at-boundary reading suggests an exclusive comparison; a measurement error; or an inverted too-far/too-close label
+  - Evidence: field notes C257CA10-81A8-4206-B140-8A205D7D1E94 and C577EE9D-8F5A-480A-9F33-96E7163A16B8 in specs/estimation/ml-feedback-loop/triage.md (screenshots in the corpus)
+  - Fix through the fix-bug workflow; cite the note ids in the commit

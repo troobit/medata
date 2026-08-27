@@ -254,3 +254,13 @@ references:
   - Separate <date>-notes-<n> dir series so it cannot resume or renumber an interrupted backlog pull; refuses --prune, which would retire an outcome protection before its bundle is ashore.
   - Verified on device 2026-08-27: 3 notes + 152 outcome rows + 23 correction rows ingested, db_integrity=ok.
   - Requirements: [3.9](requirements.md#3.9)
+
+## Triage routing
+
+- [x] 37. Rolling triage ledger: field_triage.py, make field-triage, merge-preserving regeneration
+  - Extract the triage writer from field_close into field_triage.py: rolling ledger at cycles_dir.parent/triage.md; merge not rewrite (checked state and routed: details preserved by note-keyed ids task_id(0; triage/<note-id>)); refuse a dirty ledger; field_close refreshes the same file; make field-triage target
+  - Requirements: [7.2](requirements.md#7.2)
+
+- [x] 38. First routing pass over the rolling triage ledger
+  - Route every unchecked ledger item to one destination per the design's routing contract and check it off with routed: <destination>; <date>
+  - Requirements: [7.3](requirements.md#7.3)
