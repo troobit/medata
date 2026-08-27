@@ -31,6 +31,10 @@ public actor HealthKitGlucoseSource: GlucoseSource {
 
     private let healthStore = HKHealthStore()
     private let glucoseType = HKQuantityType(.bloodGlucose)
+    // Which writers are blood meters (specs/data/fingerprick-glucose Req 1.1).
+    // Ordinary app-private UserDefaults state, shared with the Settings list
+    // that sets it — never App Group state.
+    private let writers = HealthKitWriterRegistry()
 
     private var sink: (any GlucoseIngestSink)?
     private var observerQuery: HKObserverQuery?
@@ -71,7 +75,7 @@ public actor HealthKitGlucoseSource: GlucoseSource {
             // report `.connected`, or arm the observer below.
             guard generation == connectionGeneration else { return }
             // Keep-first makes a reconnection's re-run idempotent (Req 2.3).
-            _ = try await sink.ingest(backfill.map(Self.glucoseSample(from:)), from: id)
+            _ = try await sink.ingest(backfill.map(glucoseSample(from:)), from: id)
             guard generation == connectionGeneration else { return }
             noteDelivered(backfill)
         } catch {
@@ -165,7 +169,7 @@ public actor HealthKitGlucoseSource: GlucoseSource {
         isIngesting = true
         defer { isIngesting = false }
         let (samples, newAnchor) = try await queryAnchored(from: Self.loadAnchor())
-        _ = try await sink.ingest(samples.map(Self.glucoseSample(from:)), from: id)
+        _ = try await sink.ingest(samples.map(glucoseSample(from:)), from: id)
         Self.saveAnchor(newAnchor)
         noteDelivered(samples)
     }
@@ -222,11 +226,25 @@ public actor HealthKitGlucoseSource: GlucoseSource {
         }
     }
 
-    private static func glucoseSample(from sample: HKQuantitySample) -> GlucoseSample {
-        GlucoseSample(
+    // Records the writer as observed and maps it through the registry
+    // (Reqs 1.1, 1.2, 1.5). Keying on the bundle identifier rather than
+    // `HKDevice`, which any writer may leave nil; an unclassified writer yields
+    // `.sensor`, so an unrecognised app is never mistaken for a meter.
+    //
+    // `nativeID` stays the sample's own uuid, which is what makes the 90-day
+    // backfill safe to re-run for blood readings too (Req 1.4, Decision 10).
+    private func glucoseSample(from sample: HKQuantitySample) -> GlucoseSample {
+        let source = sample.sourceRevision.source
+        writers.observe(
+            bundleID: source.bundleIdentifier,
+            displayName: source.name,
+            deviceName: sample.device?.name,
+            deviceManufacturer: sample.device?.manufacturer)
+        return GlucoseSample(
             nativeInstant: sample.startDate,
-            mmolL: sample.quantity.doubleValue(for: mmolPerLitre),
-            nativeID: sample.uuid.uuidString)
+            mmolL: sample.quantity.doubleValue(for: Self.mmolPerLitre),
+            nativeID: sample.uuid.uuidString,
+            provenance: writers.provenance(for: source.bundleIdentifier))
     }
 
     // MARK: - Anchor persistence (Req 2.5)
