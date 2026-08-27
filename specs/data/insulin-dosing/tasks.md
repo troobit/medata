@@ -366,7 +366,7 @@ metadata:
   - Stream: 1
   - Requirements: [6.10](requirements.md#6.10), [6.11](requirements.md#6.11), [6.12](requirements.md#6.12), [6.2](requirements.md#6.2), [6.8](requirements.md#6.8)
 
-- [ ] 36. Gate — make test (both totals), make build-app, make spell <!-- id:idz0015 -->
+- [x] 36. Gate — make test (both totals), make build-app, make spell <!-- id:idz0015 -->
   - Report the XCTest and swift-testing totals separately; the Dosing and Persistence suites carry the phase's executable coverage
   - Blocked-by: idz0014 (The working, one tap away, on every readout surface wiring/UI)
   - Stream: 1
