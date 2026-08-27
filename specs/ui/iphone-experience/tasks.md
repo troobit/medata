@@ -562,7 +562,7 @@ references:
 
 ## Field defects
 
-- [ ] 61. Working-distance gate reports too-far at 25 cm, blocking the shutter at the in-range boundary
+- [x] 61. Working-distance gate reports too-far at 25 cm, blocking the shutter at the in-range boundary
   - Field report: one-view LiDAR mode; 25 cm from a plate of bread; shutter said too far. Req [3.1](requirements.md#3.1) pins the gate to 25-50 cm; at-boundary reading suggests an exclusive comparison; a measurement error; or an inverted too-far/too-close label
   - Evidence: field notes C257CA10-81A8-4206-B140-8A205D7D1E94 and C577EE9D-8F5A-480A-9F33-96E7163A16B8 in specs/estimation/ml-feedback-loop/triage.md (screenshots in the corpus)
   - Fix through the fix-bug workflow; cite the note ids in the commit
