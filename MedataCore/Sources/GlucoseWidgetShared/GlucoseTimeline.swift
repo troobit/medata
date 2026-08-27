@@ -4,9 +4,16 @@ import Foundation
 // what its state is allowed to show, so a stale reading structurally cannot
 // carry a status token or an arrow (Req 4.4) and a >30-minute reading
 // structurally cannot carry a number.
+//
+// `provenance` rides on the two value-carrying cases and on neither of the
+// others, for the same structural reason (fingerprick-glucose Req 3.5): the
+// requirement binds surfaces REPORTING a current value, and past thirty minutes
+// there is no value left to qualify.
 public enum GlucoseRender: Equatable, Sendable {
-    case fresh(value: String, status: GlucoseBandStatus, trend: GlucoseTrend?)
-    case stale(value: String, age: String)
+    case fresh(
+        value: String, status: GlucoseBandStatus, trend: GlucoseTrend?,
+        provenance: GlucoseProvenance)
+    case stale(value: String, age: String, provenance: GlucoseProvenance)
     case lastReading(age: String)
     case neverRecorded
 }
@@ -56,12 +63,22 @@ public enum GlucoseTimeline {
         // (Req 5.5).
         let age = max(0, date.timeIntervalSince(readingDate))
         let value = String(format: "%.1f", mmolL)
+        // Absent means sensor, exactly as it does in the stored row (Req 7.1) —
+        // a v2 snapshot written before a blood reading ever existed, and every
+        // sensor derivation, leave the field nil.
+        //
+        // `holdsUntil` is deliberately NOT consulted here. The ladder measures a
+        // reading's age from its own instant (Req 3.6), so a held reading ages
+        // normally and reaches the fresh/stale boundary at 15 minutes whether it
+        // is holding the display or not.
+        let provenance = snapshot.provenance ?? .sensor
 
         if age <= staleAge {
-            return .fresh(value: value, status: status, trend: snapshot.trend)
+            return .fresh(
+                value: value, status: status, trend: snapshot.trend, provenance: provenance)
         }
         if age <= lastReadingAge {
-            return .stale(value: value, age: ageString(age))
+            return .stale(value: value, age: ageString(age), provenance: provenance)
         }
         return .lastReading(age: ageString(age))
     }

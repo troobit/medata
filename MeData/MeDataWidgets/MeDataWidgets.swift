@@ -2,18 +2,20 @@ import SwiftUI
 import WidgetKit
 
 // MeData launcher widgets — PRD specs/regression-suggestion-integration
-// (Lock screen widget context). Two STATIC widget kinds: lock-screen accessory
-// widgets carry a single tap target each, so "Log dose" and "Capture" are
-// separate widgets the user places side by side. Neither displays data — each
-// deep-links into the app (App/AppRoot.swift handleDeepLink), so neither has a
-// persistence import. Keep them that way: the App Group and the snapshot read
-// belong to the data-driven glucose kind in GlucoseWidget.swift alone.
+// (Lock screen widget context). Three STATIC widget kinds: lock-screen
+// accessory widgets carry a single tap target each, so "dose", "Capture" and
+// "BSL" are separate widgets the user places side by side. None of them
+// displays data — each deep-links into the app (App/AppRoot.swift
+// handleDeepLink), so none has a persistence import. Keep them that way: the
+// App Group and the snapshot read belong to the data-driven glucose kind in
+// GlucoseWidget.swift alone.
 
 @main
 struct MeDataWidgetBundle: WidgetBundle {
     var body: some Widget {
         InsulinDoseWidget()
         CaptureWidget()
+        GlucoseAddWidget()
         GlucoseWidget()
     }
 }
@@ -61,6 +63,28 @@ struct CaptureWidget: Widget {
         }
         .configurationDisplayName("Capture")
         .description("Opens the meal capture camera.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .systemSmall])
+    }
+}
+
+// The glucose-entry launcher (fingerprick-glucose Req 2.2). Its kind is
+// `ie.medata.widget.glucose.add`, distinct from the data-driven
+// `ie.medata.widget.glucose` in GlucoseWidget.swift — two widgets about the
+// same measurement, one that shows it and one that records it, and WidgetKit
+// keys placement, reload budget and timeline on the kind string. Reusing the
+// data kind would make a launcher share the glucose tile's reload budget and
+// replace its tap destination.
+//
+// A launcher, so it stays on the launcher rules: no App Group, no persistence,
+// no network, policy `.never`.
+struct GlucoseAddWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "ie.medata.widget.glucose.add", provider: LauncherProvider()) { _ in
+            LauncherView(symbol: "drop.fill", label: "BSL")
+                .widgetURL(URL(string: "medata://glucose/add"))
+        }
+        .configurationDisplayName("BSL")
+        .description("Opens the blood glucose entry.")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .systemSmall])
     }
 }

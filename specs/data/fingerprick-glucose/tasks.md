@@ -117,7 +117,7 @@ references:
 
 ## App and widget surfaces
 
-- [ ] 12. Write GlucoseSnapshotSource provenance-decode and hold-window tests (Red) <!-- id:3sphmgn -->
+- [x] 12. Write GlucoseSnapshotSource provenance-decode and hold-window tests (Red) <!-- id:3sphmgn -->
   - A row written by recordBloodBsl surfaces as .blood; a row written by ingestLiveBsl, which carries no provenance key, surfaces as .sensor — Req 7.1 satisfied by absence, with nothing rewritten. An unrecognised provenance string also falls back to .sensor.
   - End to end over a real store: a blood row inside the window is the snapshot's displayed reading while a newer sensor row exists, and stops being it once the window elapses.
   - Blocked-by: 3sphmge (Implement precedence and the sensor-only trend in GlucoseDerivation Green), 3sphmgi (Implement BloodBslReading and recordBloodBsl Green)
@@ -125,7 +125,7 @@ references:
   - Requirements: [3.7](requirements.md#3.7), [7.1](requirements.md#7.1)
   - References: MedataCore/Tests/PersistenceTests/
 
-- [ ] 13. Implement the provenance decode, hold-window setting, and app-side pass-through (Green) <!-- id:3sphmgo -->
+- [x] 13. Implement the provenance decode, hold-window setting, and app-side pass-through (Green) <!-- id:3sphmgo -->
   - SettingsKeys.glucoseHoldWindowSeconds (medata.glucose.holdWindowSeconds), default 900 — app-private, deliberately NOT App Group state (Decision 8).
   - GlucoseSnapshotSource.current(store:now:holdWindow:) decodes metadata.provenance onto each GlucoseReading and forwards the window.
   - HomeGlucoseModel and GlucoseWidgetPublisher both read the setting and pass it, so home and the published snapshot resolve the same reading (Req 3.7).
@@ -134,7 +134,7 @@ references:
   - Requirements: [3.2](requirements.md#3.2), [3.7](requirements.md#3.7), [7.1](requirements.md#7.1)
   - References: MedataCore/Sources/Persistence/GlucoseSnapshotSource.swift, App/SettingsKeys.swift, App/HomeGlucoseModel.swift, App/GlucoseWidgetPublisher.swift
 
-- [ ] 14. Write GlucoseTimeline provenance-render and staleness tests (Red) <!-- id:3sphmgp -->
+- [x] 14. Write GlucoseTimeline provenance-render and staleness tests (Red) <!-- id:3sphmgp -->
   - A blood-provenance snapshot renders naming blood; a sensor one renders exactly as today.
   - The ladder still measures age from readingDate, so a blood reading held for the full default window reaches the 15-minute boundary exactly — holdsUntil must not shift the ladder.
   - Blocked-by: 3sphmgc (Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot)
@@ -142,7 +142,7 @@ references:
   - Requirements: [3.5](requirements.md#3.5), [3.6](requirements.md#3.6)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 15. Name provenance on the lock-screen widget and keep its own fetch sensor-labelled (Green) <!-- id:3sphmgq -->
+- [x] 15. Name provenance on the lock-screen widget and keep its own fetch sensor-labelled (Green) <!-- id:3sphmgq -->
   - GlucoseRender / GlucoseTimeline.render carry provenance through to the view, and GlucoseWidget.swift names it beside the value.
   - The extension's own vendor fetch builds GlucoseReading with the literal .sensor and passes holdWindow 0; its write now goes through merged, so a sensor fetch landing during a hold contributes trend only.
   - Blocked-by: 3sphmgp (Write GlucoseTimeline provenance-render and staleness tests Red), 3sphmgg (Implement merged and the deletion-authorised write Green)
@@ -150,7 +150,7 @@ references:
   - Requirements: [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [3.8](requirements.md#3.8)
   - References: MedataCore/Sources/GlucoseWidgetShared/GlucoseTimeline.swift, MeData/MeDataWidgets/GlucoseWidget.swift
 
-- [ ] 16. Build the glucose entry sheet and its model <!-- id:3sphmgr -->
+- [x] 16. Build the glucose entry sheet and its model <!-- id:3sphmgr -->
   - New App/GlucoseEntryModel.swift and App/GlucoseEntrySheet.swift, both needing the four-place project.pbxproj registration (docs/agent-notes/ui-capture-flow.md).
   - Autofocused numeric pad with implicit tenths: digits shift in from the right and the value is formatted live so the decimal point is visible rather than remembered. Every value in 1.0-30.0 takes at most three digits plus Save.
   - Back-dating reuses the compact DatePicker(selection:in:...Date()) row from App/InsulinDoseSheet.swift and is not on the path to Save.
@@ -161,7 +161,7 @@ references:
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6)
   - References: App/GlucoseEntrySheet.swift, App/GlucoseEntryModel.swift, App/InsulinDoseSheet.swift, MeData/MeData.xcodeproj/project.pbxproj
 
-- [ ] 17. Add the BSL control to the Dose row and route the reading to Graph <!-- id:3sphmgs -->
+- [x] 17. Add the BSL control to the Dose row and route the reading to Graph <!-- id:3sphmgs -->
   - A BSL Button joins doseRoute's row, the pair echoing ingestRow with the prominent and plain treatments inverted — Dose plain in the leading slot, BSL accent-prominent in the trailing slot; it presents the entry sheet (Decision 5). With dose-schedule's attempt-2 OutstandingDoseControl active, that control occupies the Dose slot beside BSL.
   - The glucose header becomes a route to Graph via onGraph, matching the lock-screen widget's tap destination, and is no longer display-only (home-router Req 4.8 redefined by Decision 5).
   - Renders snapshot.provenance beside the value.
@@ -171,7 +171,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1), [2.7](requirements.md#2.7), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7)
   - References: App/HomeView.swift, App/HomeGlucoseModel.swift
 
-- [ ] 18. Add the medata://glucose/add deep link <!-- id:3sphmgt -->
+- [x] 18. Add the medata://glucose/add deep link <!-- id:3sphmgt -->
   - A .glucoseSheet case joins DeepLinkTarget and handleDeepLink's (glucose, /add) match, reusing the pendingDeepLink dismiss-and-resume sequencing the insulin sheet already uses so it works from any app state, including with another sheet or full-screen cover up.
   - Wiring only — no preceding test.
   - Blocked-by: 3sphmgr (Build the glucose entry sheet and its model)
@@ -179,7 +179,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1)
   - References: App/AppRoot.swift
 
-- [ ] 19. Add the glucose launcher widget <!-- id:3sphmgu -->
+- [x] 19. Add the glucose launcher widget <!-- id:3sphmgu -->
   - A fourth Widget mirroring InsulinDoseWidget: LauncherProvider, LauncherView, widgetURL medata://glucose/add, kind ie.medata.widget.glucose.add — distinct from the data-driven ie.medata.widget.glucose — and the same supportedFamilies. Add it to MeDataWidgetBundle.
   - Wiring only — no preceding test.
   - Blocked-by: 3sphmgt (Add the medata://glucose/add deep link)
@@ -187,7 +187,7 @@ references:
   - Requirements: [2.2](requirements.md#2.2)
   - References: MeData/MeDataWidgets/MeDataWidgets.swift
 
-- [ ] 20. Draw blood readings as a distinct marker series on the Graph <!-- id:3sphmgv -->
+- [x] 20. Draw blood readings as a distinct marker series on the Graph <!-- id:3sphmgv -->
   - TrendsModel.reload decodes provenance when building the glucose series; TrendsView keeps the existing LineMark over sensor readings alone, so the trace is drawn unbroken across a blood instant, and adds blood readings as a separate PointMark series.
   - App/UI: no preceding test.
   - Blocked-by: 3sphmgi (Implement BloodBslReading and recordBloodBsl Green)
@@ -195,7 +195,7 @@ references:
   - Requirements: [4.2](requirements.md#4.2)
   - References: App/TrendsModel.swift, App/TrendsView.swift
 
-- [ ] 21. Label provenance on the Records glucose row <!-- id:3sphmgw -->
+- [x] 21. Label provenance on the Records glucose row <!-- id:3sphmgw -->
   - loadGlucose carries provenance onto GlucoseRow, keeping Event.id (records-deletion Decision 13); the row labels it.
   - Ordering, the swipe gesture and the bulk actions are untouched — Req 6.1 needs no change.
   - App/UI: no preceding test.
@@ -204,7 +204,7 @@ references:
   - Requirements: [4.3](requirements.md#4.3), [6.1](requirements.md#6.1)
   - References: App/RecordsModel.swift, App/RecordsView.swift
 
-- [ ] 22. Route deleted bsl instants to the snapshot write <!-- id:3sphmgx -->
+- [x] 22. Route deleted bsl instants to the snapshot write <!-- id:3sphmgx -->
   - RecordsModel.delete and deleteBulk collect the removed bsl timestamps — including the date-range and delete-all purges from specs/ui/records-deletion — and hand them to the publisher, which passes them as replacingDeleted:. Deletions of other event types pass nothing and behave as today.
   - Needs a route from RecordsModel, constructed in RecordsView, to the publisher owned by App.swift; pick one seam and use it for all three deletion paths.
   - App wiring over a store policy already covered by task 4's tests.
@@ -213,7 +213,7 @@ references:
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)
   - References: App/RecordsModel.swift, App/GlucoseWidgetPublisher.swift, App/App.swift, App/RecordsView.swift
 
-- [ ] 23. Add the Apple Health writer-classification list and the hold-window control to Settings <!-- id:3sphmgy -->
+- [x] 23. Add the Apple Health writer-classification list and the hold-window control to Settings <!-- id:3sphmgy -->
   - GlucoseConnectionsView gains an Apple Health writers section listing every observed writer — bundle id, display name, and device name/manufacturer when known — each with a blood/sensor picker, taking effect on subsequently arriving samples only.
   - SettingsView gains the hold-window control bound to SettingsKeys.glucoseHoldWindowSeconds; above 15 minutes a held reading can render as stale (Decision 3), which the control should make evident without disclaimer copy.
   - This surface is what makes the Contour classification settable without a rebuild.

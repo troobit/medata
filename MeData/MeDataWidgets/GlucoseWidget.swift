@@ -43,7 +43,7 @@ struct GlucoseProvider: TimelineProvider {
     // and chose not to fetch", and "we fetched and it failed".
     private enum FetchOutcome: String {
         case notConnected, readingYoung, gated, noSession, requestFailed, derivedEmpty, notNewer,
-            refreshed
+            held, refreshed
     }
 
     nonisolated func placeholder(in context: Context) -> GlucoseEntry {
@@ -140,12 +140,18 @@ struct GlucoseProvider: TimelineProvider {
             .map {
                 GlucoseReading(
                     timestamp: GlucoseGrid.snap($0.instant),
-                    mmolL: GlucoseGrid.roundedMmolL(GlucoseGrid.mmolL(fromMgPerDl: $0.mgPerDl)))
+                    mmolL: GlucoseGrid.roundedMmolL(GlucoseGrid.mmolL(fromMgPerDl: $0.mgPerDl)),
+                    // The literal is stated, not defaulted. This is a CGM feed:
+                    // every reading it can ever carry is sensor data, and the
+                    // extension has no database and therefore no way to see a
+                    // blood reading at all (fingerprick-glucose Decision 8).
+                    provenance: .sensor)
             }
             .sorted { $0.timestamp < $1.timestamp }
-        // Hold window 0: this fetch is vendor sensor data by construction, so
-        // there is never a blood reading here to hold (fingerprick-glucose
-        // Decision 8). The app publishes the resolved hold in the snapshot.
+        // Hold window 0, by design and not by omission: with no blood reading
+        // in `readings` there is nothing here a window could hold, so any value
+        // would resolve the same reading. The hold is resolved app-side and
+        // reaches this process as the snapshot's absolute `holdsUntil`.
         let derived = GlucoseDerivation.snapshot(from: readings, now: now, holdWindow: 0)
         guard derived != .neverRecorded else { return (nil, .derivedEmpty) }
         // The store is monotonic in `readingDate` (Req 1.8, Decision 19), so a
@@ -154,7 +160,17 @@ struct GlucoseProvider: TimelineProvider {
         // what nil means here. The same branch covers a nil suite or an encode
         // failure: nothing was written, so render what is there.
         guard GlucoseSnapshotStore.write(derived) else { return (nil, .notNewer) }
-        return (derived, .refreshed)
+        // Render what the STORE resolved, never the candidate. `merged` case 1
+        // admits this write while a blood reading holds the display, but keeps
+        // the held reading and takes only the fresh trend from it
+        // (fingerprick-glucose Req 3.8): a sensor fetch landing mid-hold
+        // contributes an arrow, not a value. Rendering `derived` here would put
+        // the sensor number back on the Lock Screen for this whole timeline
+        // while the App Group correctly held the blood one — the exact clobber
+        // Req 3.8 exists to prevent, one layer up from where it was fixed.
+        let resolved = GlucoseSnapshotStore.read()
+        guard resolved != .neverRecorded else { return (nil, .derivedEmpty) }
+        return (resolved, resolved.readingDate == derived.readingDate ? .refreshed : .held)
     }
 
     // getTimeline must return promptly, so the vendor call gets a short leash;
@@ -266,12 +282,16 @@ struct GlucoseWidgetView: View {
     @ViewBuilder
     private var circular: some View {
         switch entry.render {
-        case let .fresh(value, status, trend):
+        case let .fresh(value, status, trend, provenance):
             VStack(spacing: 0) {
                 Text(value)
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(tint(status))
+                // The mark joins the qualifier row rather than taking a row of
+                // its own: this family is a ~40 pt disc and already has two
+                // lines in it.
                 HStack(spacing: 2) {
+                    bloodMark(provenance)
                     if let token = token(status) {
                         Text(token)
                             .font(.system(size: 11, weight: .bold))
@@ -287,10 +307,13 @@ struct GlucoseWidgetView: View {
                     }
                 }
             }
-        case let .stale(value, _):
-            Text(value)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .opacity(Self.staleOpacity)
+        case let .stale(value, _, provenance):
+            HStack(spacing: 2) {
+                bloodMark(provenance)
+                Text(value)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+            }
+            .opacity(Self.staleOpacity)
         case let .lastReading(age):
             VStack(spacing: 0) {
                 Image(systemName: "clock").font(.system(size: 12))
@@ -306,9 +329,10 @@ struct GlucoseWidgetView: View {
     @ViewBuilder
     private var rectangular: some View {
         switch entry.render {
-        case let .fresh(value, status, trend):
+        case let .fresh(value, status, trend, provenance):
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    bloodMark(provenance)
                     Text(value)
                         .font(.system(.title2, design: .rounded).weight(.semibold))
                         .foregroundStyle(tint(status))
@@ -327,9 +351,12 @@ struct GlucoseWidgetView: View {
                 }
                 freshAge
             }
-        case let .stale(value, age):
+        case let .stale(value, age, provenance):
             VStack(alignment: .leading, spacing: 1) {
-                Text(value).font(.system(.title2, design: .rounded).weight(.semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    bloodMark(provenance)
+                    Text(value).font(.system(.title2, design: .rounded).weight(.semibold))
+                }
                 Text(age).font(.caption2)
             }
             .opacity(Self.staleOpacity)
@@ -354,8 +381,9 @@ struct GlucoseWidgetView: View {
     @ViewBuilder
     private var small: some View {
         switch entry.render {
-        case let .fresh(value, status, trend):
+        case let .fresh(value, status, trend, provenance):
             VStack(spacing: 2) {
+                bloodMark(provenance)
                 Text(value)
                     .font(.system(size: 44, weight: .semibold, design: .rounded))
                     .foregroundStyle(tint(status))
@@ -374,8 +402,9 @@ struct GlucoseWidgetView: View {
                 }
                 freshAge
             }
-        case let .stale(value, age):
+        case let .stale(value, age, provenance):
             VStack(spacing: 2) {
+                bloodMark(provenance)
                 Text(value).font(.system(size: 44, weight: .semibold, design: .rounded))
                 Text(age).font(.caption)
             }
@@ -397,10 +426,14 @@ struct GlucoseWidgetView: View {
     @ViewBuilder
     private var inline: some View {
         switch entry.render {
-        case let .fresh(value, status, trend):
-            Text([token(status), value, trend?.arrow].compactMap { $0 }.joined(separator: " "))
-        case let .stale(value, age):
-            Text("\(value) · \(age)")
+        case let .fresh(value, status, trend, provenance):
+            Text(
+                [bloodWord(provenance), token(status), value, trend?.arrow]
+                    .compactMap { $0 }.joined(separator: " "))
+        case let .stale(value, age, provenance):
+            Text(
+                [bloodWord(provenance), "\(value) · \(age)"]
+                    .compactMap { $0 }.joined(separator: " "))
         case let .lastReading(age):
             Text("Last reading \(age)")
         case .neverRecorded:
@@ -417,6 +450,33 @@ struct GlucoseWidgetView: View {
         if let readingDate = entry.readingDate {
             Text(readingDate, style: .relative).font(.caption2)
         }
+    }
+
+    // MARK: Provenance channel (fingerprick-glucose Req 3.5)
+
+    // Names the displayed reading's provenance beside the value. Blood is
+    // marked and sensor is not, following the LO/HI token idiom two functions
+    // down: on a Lock Screen accessory there is room for one qualifier at most,
+    // and sensor is the state of every reading this app has ever shown — an
+    // absent mark IS the sensor reading, and the mark is what carries
+    // information. A word would not fit the ~40 pt circular disc at all.
+    //
+    // `drop.fill` rather than a letter because the accessory families render
+    // vibrant monochrome, where a glyph survives and a one-character
+    // abbreviation reads as noise beside the LO/HI token.
+    @ViewBuilder
+    private func bloodMark(_ provenance: GlucoseProvenance) -> some View {
+        if provenance == .blood {
+            Image(systemName: "drop.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .accessibilityLabel("Blood reading")
+        }
+    }
+
+    // The inline family is a single string with no room for a symbol run, so it
+    // names the provenance in words on the same absent-means-sensor rule.
+    private func bloodWord(_ provenance: GlucoseProvenance) -> String? {
+        provenance == .blood ? "Blood" : nil
     }
 
     // MARK: Status channel (Req 4.2, Decision 7)

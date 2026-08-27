@@ -192,7 +192,8 @@ struct MedataApp: App {
                     glucoseConnections: glucoseConnections,
                     visionCardDetector: visionCardDetector,
                     preShutterSegmenter: preShutterSegmenter,
-                    adjustRouter: doseAdjustRouter
+                    adjustRouter: doseAdjustRouter,
+                    glucoseWidget: glucoseWidgetPublisher
                 )
                 #if DEBUG
                 if let uiTestHarness {
