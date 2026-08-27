@@ -346,7 +346,7 @@ metadata:
   - Stream: 1
   - Requirements: [6.11](requirements.md#6.11)
 
-- [ ] 34. Dissolve DoseSuggestionModel into DoseComputation + DoseSeedHolder (wiring) <!-- id:idz0013 -->
+- [x] 34. Dissolve DoseSuggestionModel into DoseComputation + DoseSeedHolder (wiring) <!-- id:idz0013 -->
   - Delete App/DoseSuggestionModel.swift: the pure helper DoseComputation.outcome(for:store:) computes per surface on appearance (no shared readout state, no refresh/clear choreography, no environment model); DoseSeedHolder is the only shared object — arm(_:)/take() with the 45-minute lifetime (Req 6.4, Decision 19)
   - Fail-loud classification (Req 4.9): an insulin event whose metadata cannot be classified as bolus/basal is a Debug assertion, never a silent compactMap drop
   - refresh call sites in MealReviewView / CarbEntrySheet / ResultView / AppRoot move to local .task computation; arm() arms only for a seed of ≥ 1 U (Req 6.4)
@@ -357,7 +357,7 @@ metadata:
   - Stream: 1
   - Requirements: [6.4](requirements.md#6.4), [6.6](requirements.md#6.6), [6.9](requirements.md#6.9), [4.8](requirements.md#4.8)
 
-- [ ] 35. The working, one tap away, on every readout surface (wiring/UI) <!-- id:idz0014 -->
+- [x] 35. The working, one tap away, on every readout surface (wiring/UI) <!-- id:idz0014 -->
   - Tap on the readout (review line, manual entry line, ResultView detail) opens the working: base line, one line per reduction (− x U, for insulin on board), the unrounded result, the rounding step — lines sum at every step (12.0 − 1.4 = 10.6 → 11 U)
   - History recomputes identically — no recorded-row path exists after task 33; given units beside the readout pair by the ±45-minute window over insulin events (Req 6.10)
   - Reveal-not-act: nothing written, no control; accessibility custom action per design-direction §2.6
