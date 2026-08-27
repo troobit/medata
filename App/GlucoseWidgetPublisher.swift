@@ -79,7 +79,26 @@ actor GlucoseWidgetPublisher {
     // enforced in the store so the widget's own writes obey it too). An
     // unchanged recompute — the common case for a tick from an insulin or
     // intake write — costs one read and nothing else.
-    private func publishIfChanged(trigger: String) async {
+    // The deletion route (fingerprick-glucose Req 6.2). Recomputing after a
+    // delete yields a snapshot carrying an OLDER `readingDate` than the stored
+    // one — the reading that would have shown had the deleted one never been
+    // recorded — and every case of the monotonic guard rejects it, so without
+    // this the widget goes on rendering a reading that no longer exists.
+    //
+    // `removed` is what narrows the rollback: the store admits it only when the
+    // stored snapshot's own `readingDate` is among these instants, so a
+    // rollback can discard only a reading the app has just destroyed and a
+    // newer extension fetch the app never saw is left alone.
+    //
+    // The `eventsDidChange` tick the delete also fires cannot do this job: it
+    // knows a row went away but not which one. Both converge whichever order
+    // the actor runs them in — one writes, the other then finds nothing to
+    // change.
+    func publishRemoval(of removed: [Date]) async {
+        await publishIfChanged(trigger: "delete", replacingDeleted: removed)
+    }
+
+    private func publishIfChanged(trigger: String, replacingDeleted removed: [Date] = []) async {
         let now = Date()
         let snapshot = await currentSnapshot(now: now)
         let stored = GlucoseSnapshotStore.read()
@@ -95,7 +114,7 @@ actor GlucoseWidgetPublisher {
         // from a database that has not ingested them yet is a REGRESSION, not
         // an update — the store drops it (Req 1.8, Decision 19) and there is
         // nothing to reload. Seen in the field at both prime and tick.
-        guard GlucoseSnapshotStore.write(snapshot) else {
+        guard GlucoseSnapshotStore.write(snapshot, replacingDeleted: removed) else {
             log.notice("""
                 event=publish.dropped trigger=\(trigger, privacy: .public) \
                 reason=notNewer \
@@ -124,7 +143,12 @@ actor GlucoseWidgetPublisher {
     // The last 24 hours of `bsl` rows condensed into the snapshot, shared with
     // the home page's latest-reading header via `GlucoseSnapshotSource`.
     private func currentSnapshot(now: Date) async -> GlucoseSnapshot {
-        let snapshot = await GlucoseSnapshotSource.current(store: store, now: now)
+        // Same reader as `HomeGlucoseModel`, so the published snapshot and the
+        // home header can never resolve different readings (Req 3.7). The
+        // window stays app-private: what crosses to the extension is the
+        // resolved absolute `holdsUntil` on the snapshot (Decision 8).
+        let snapshot = await GlucoseSnapshotSource.current(
+            store: store, now: now, holdWindow: GlucoseHoldWindow.seconds())
         // Confirms or refutes the skew diagnosis from the field: if this fires,
         // the old `...now` window bound was hiding this row from the widget.
         if let readingDate = snapshot.readingDate, readingDate > now {

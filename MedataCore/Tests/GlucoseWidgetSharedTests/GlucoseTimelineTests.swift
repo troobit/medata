@@ -22,13 +22,17 @@ struct GlucoseTimelineTests {
     func freshBand(_ age: TimeInterval) {
         #expect(
             GlucoseTimeline.render(snapshot, at: at(age))
-                == .fresh(value: "6.4", status: .inRange, trend: .risingSlow))
+                == .fresh(value: "6.4", status: .inRange, trend: .risingSlow, provenance: .sensor))
     }
 
     @Test("Past fifteen minutes and up to thirty the value is stale")
     func staleBand() {
-        #expect(GlucoseTimeline.render(snapshot, at: at(901)) == .stale(value: "6.4", age: "15m"))
-        #expect(GlucoseTimeline.render(snapshot, at: at(1800)) == .stale(value: "6.4", age: "30m"))
+        #expect(
+            GlucoseTimeline.render(snapshot, at: at(901))
+                == .stale(value: "6.4", age: "15m", provenance: .sensor))
+        #expect(
+            GlucoseTimeline.render(snapshot, at: at(1800))
+                == .stale(value: "6.4", age: "30m", provenance: .sensor))
     }
 
     @Test("Past thirty minutes the value is dropped for a last-reading label")
@@ -50,15 +54,16 @@ struct GlucoseTimelineTests {
             mmolL: 11.2, readingDate: readingDate, trend: nil, status: .high)
         #expect(
             GlucoseTimeline.render(trendless, at: readingDate)
-                == .fresh(value: "11.2", status: .high, trend: nil))
+                == .fresh(value: "11.2", status: .high, trend: nil, provenance: .sensor))
     }
 
     @Test("The value is rendered to one decimal place")
     func valueFormatting() {
         let whole = GlucoseSnapshot.make(
             mmolL: 6, readingDate: readingDate, trend: nil, status: .inRange)
-        #expect(GlucoseTimeline.render(whole, at: readingDate)
-            == .fresh(value: "6.0", status: .inRange, trend: nil))
+        #expect(
+            GlucoseTimeline.render(whole, at: readingDate)
+                == .fresh(value: "6.0", status: .inRange, trend: nil, provenance: .sensor))
     }
 
     // MARK: - Age string (Req 5.5)
@@ -77,7 +82,7 @@ struct GlucoseTimelineTests {
     func futureReadingClampsToFresh() {
         #expect(
             GlucoseTimeline.render(snapshot, at: at(-600))
-                == .fresh(value: "6.4", status: .inRange, trend: .risingSlow))
+                == .fresh(value: "6.4", status: .inRange, trend: .risingSlow, provenance: .sensor))
     }
 
     // MARK: - renderPoints (Req 5.4)
@@ -87,8 +92,8 @@ struct GlucoseTimelineTests {
         let points = GlucoseTimeline.renderPoints(snapshot, from: readingDate)
         #expect(points.map(\.date) == [readingDate, at(901), at(1801)])
         #expect(points.map(\.render) == [
-            .fresh(value: "6.4", status: .inRange, trend: .risingSlow),
-            .stale(value: "6.4", age: "15m"),
+            .fresh(value: "6.4", status: .inRange, trend: .risingSlow, provenance: .sensor),
+            .stale(value: "6.4", age: "15m", provenance: .sensor),
             .lastReading(age: "30m")
         ])
     }
@@ -99,7 +104,7 @@ struct GlucoseTimelineTests {
         let points = GlucoseTimeline.renderPoints(snapshot, from: reference)
         #expect(points.map(\.date) == [reference, at(1801)])
         #expect(points.map(\.render) == [
-            .stale(value: "6.4", age: "16m"),
+            .stale(value: "6.4", age: "16m", provenance: .sensor),
             .lastReading(age: "30m")
         ])
     }
@@ -160,5 +165,63 @@ struct GlucoseTimelineTests {
                 Issue.record("no next boundary from \(last) but the ladder is not terminal")
             }
         }
+    }
+
+    // MARK: - Provenance on the render (fingerprick-glucose Reqs 3.5, 3.6)
+
+    private var bloodSnapshot: GlucoseSnapshot {
+        .make(
+            mmolL: 9.1, readingDate: readingDate, trend: .steady, status: .inRange,
+            provenance: .blood, holdsUntil: readingDate.addingTimeInterval(900))
+    }
+
+    @Test("A blood snapshot renders naming blood, in both value-carrying states")
+    func bloodProvenanceIsNamed() {
+        #expect(
+            GlucoseTimeline.render(bloodSnapshot, at: readingDate)
+                == .fresh(value: "9.1", status: .inRange, trend: .steady, provenance: .blood))
+        #expect(
+            GlucoseTimeline.render(bloodSnapshot, at: at(901))
+                == .stale(value: "9.1", age: "15m", provenance: .blood))
+    }
+
+    // Req 7.1 reaching the render layer: a snapshot written by a build that
+    // knew nothing of provenance carries nil, and must render as the sensor
+    // reading it is rather than as an absent state.
+    @Test("A snapshot with no provenance renders as sensor")
+    func absentProvenanceRendersSensor() {
+        #expect(
+            GlucoseTimeline.render(snapshot, at: readingDate)
+                == .fresh(value: "6.4", status: .inRange, trend: .risingSlow, provenance: .sensor))
+    }
+
+    // Req 3.6, and the trap the whole hold rule could have fallen into: the
+    // ladder measures age from `readingDate`, NOT from `holdsUntil`. A blood
+    // reading held for the full default window therefore reaches the fresh/
+    // stale boundary at exactly 15 minutes, the coincidence Decision 3 chose
+    // the default for — one second later it is stale, held or not.
+    @Test("holdsUntil does not shift the staleness ladder")
+    func holdDoesNotShiftTheLadder() {
+        #expect(
+            GlucoseTimeline.render(bloodSnapshot, at: at(900))
+                == .fresh(value: "9.1", status: .inRange, trend: .steady, provenance: .blood))
+        #expect(
+            GlucoseTimeline.render(bloodSnapshot, at: at(901))
+                == .stale(value: "9.1", age: "15m", provenance: .blood))
+        #expect(GlucoseTimeline.nextBoundary(bloodSnapshot, after: readingDate) == at(901))
+        // A window three times the default moves neither boundary.
+        let longHold = GlucoseSnapshot.make(
+            mmolL: 9.1, readingDate: readingDate, trend: .steady, status: .inRange,
+            provenance: .blood, holdsUntil: readingDate.addingTimeInterval(2700))
+        #expect(GlucoseTimeline.renderPoints(longHold, from: readingDate).map(\.date)
+            == [readingDate, at(901), at(1801)])
+    }
+
+    // The value is dropped past thirty minutes, so there is no reported value
+    // for a provenance to qualify (Req 3.5 binds surfaces REPORTING a value).
+    @Test("The terminal states carry no provenance")
+    func terminalStatesCarryNoProvenance() {
+        #expect(GlucoseTimeline.render(bloodSnapshot, at: at(1801)) == .lastReading(age: "30m"))
+        #expect(GlucoseTimeline.render(.neverRecorded, at: readingDate) == .neverRecorded)
     }
 }

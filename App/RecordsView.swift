@@ -1,3 +1,4 @@
+import GlucoseWidgetShared
 import Persistence
 import PortableContracts
 import SwiftUI
@@ -23,9 +24,12 @@ struct RecordsView: View {
     @State private var showDateRangeSheet = false
     @State private var showDeleteAllConfirm = false
 
-    init(store: any PersistenceStore) {
+    // `glucoseWidget` is the deletion route to the published snapshot
+    // (fingerprick-glucose Req 6.2) and nothing else — this surface never
+    // reads it. nil under the UI-test harness, which builds no publisher.
+    init(store: any PersistenceStore, glucoseWidget: GlucoseWidgetPublisher? = nil) {
         self.store = store
-        _model = State(initialValue: RecordsModel(store: store))
+        _model = State(initialValue: RecordsModel(store: store, glucoseWidget: glucoseWidget))
     }
 
     var body: some View {
@@ -307,14 +311,31 @@ private struct InsulinRecordRow: View {
 
 // Glucose row: mmol/L (Req 3.2, metric-only). Read-only — no navigation, no
 // delete (Req 3.5).
+//
+// Both provenances are listed and both are labelled (fingerprick-glucose
+// Reqs 4.3, 6.1). The swipe gesture, the ordering and the bulk actions are
+// untouched: a blood reading is deleted by exactly the gestures a sensor
+// reading is, which is why Req 6.1 needed no code at all.
 private struct GlucoseRecordRow: View {
     let reading: GlucoseRow
 
     var body: some View {
-        TimelineRow(glyph: "drop.fill", glyphTint: Color.seriesGlucose, timestamp: reading.timestamp) {
-            Text(String(format: "%.1f mmol/L", reading.mmolL))
-                .font(.headline.monospacedDigit())
-                .foregroundStyle(Color.textPrimary)
+        TimelineRow(
+            glyph: "drop.fill",
+            // The Graph's two glucose series, in the same two colours, so a
+            // marker there and a row here are recognisably the same reading.
+            glyphTint: reading.provenance == .blood
+                ? Color.seriesGlucoseBlood : Color.seriesGlucose,
+            timestamp: reading.timestamp
+        ) {
+            HStack(spacing: 8) {
+                Text(String(format: "%.1f mmol/L", reading.mmolL))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                Text(reading.provenanceLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+            }
         }
         .accessibilityIdentifier("records.row.glucose")
     }

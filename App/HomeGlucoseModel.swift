@@ -47,6 +47,11 @@ final class HomeGlucoseModel {
     }
 
     func reload() async {
-        snapshot = await GlucoseSnapshotSource.current(store: store, now: Date())
+        // The hold window is read per reload, not cached: changing it in
+        // Settings takes effect on the next `eventsDidChange` tick without a
+        // relaunch (Req 3.2). `GlucoseWidgetPublisher` reads the same value, so
+        // home and the widget resolve the same reading (Req 3.7).
+        snapshot = await GlucoseSnapshotSource.current(
+            store: store, now: Date(), holdWindow: GlucoseHoldWindow.seconds())
     }
 }

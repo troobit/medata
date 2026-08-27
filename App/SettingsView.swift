@@ -1,4 +1,5 @@
 import Dosing
+import GlucoseWidgetShared
 import Pipeline
 import SwiftUI
 
@@ -58,6 +59,13 @@ struct SettingsView: View {
     private var ratioSource = "manual"
     @AppStorage(SettingsKeys.ratioFitRef)
     private var ratioFitRef = ""
+    // How long a blood reading outranks a newer sensor reading
+    // (specs/data/fingerprick-glucose Req 3.2). Seconds on disk, minutes in the
+    // control. App-private and deliberately not App Group state: what crosses
+    // to the widget is the resolved absolute `holdsUntil`, never this
+    // (Decision 8).
+    @AppStorage(SettingsKeys.glucoseHoldWindowSeconds)
+    private var glucoseHoldWindowSeconds: Double = GlucoseHoldWindow.defaultSeconds
 
     private var captureModeBinding: Binding<CaptureMode> {
         Binding(
@@ -107,6 +115,24 @@ struct SettingsView: View {
                     showsGlucoseImport = true
                 } label: {
                     Label("Import LibreLink screenshots", systemImage: "waveform.path.ecg")
+                }
+                Stepper(value: $glucoseHoldWindowSeconds,
+                        in: GlucoseHoldWindow.rangeSeconds,
+                        step: 300) {
+                    LabeledContent(
+                        "Blood hold", value: Self.minutesLabel(glucoseHoldWindowSeconds))
+                }
+                .accessibilityIdentifier("settings.glucoseHoldWindow")
+                // The one thing a longer window silently changes: the staleness
+                // ladder measures a reading's age from its own instant and knows
+                // nothing of the hold (Decision 3), so past this point a held
+                // reading renders as stale while still holding. Stated as the
+                // number it is, and only where the two diverge — a fact about
+                // the render, not a warning about the setting.
+                if glucoseHoldWindowSeconds > GlucoseTimeline.staleAge {
+                    LabeledContent(
+                        "Renders stale after",
+                        value: Self.minutesLabel(GlucoseTimeline.staleAge))
                 }
                 // Explainer footnote removed under the developer-phase copy rule
                 // (Req 14.5 / Decision 21).
@@ -385,6 +411,13 @@ struct SettingsView: View {
             defer { isSeedingMeal = false }
             try? await store.save(SettingsView.demoMeal(), artefacts: [])
         }
+    }
+
+    // Seconds on disk, minutes on screen — the key is named in seconds so the
+    // reader hands a `TimeInterval` straight to the derivation with no unit
+    // conversion in between, and this is the one place that converts.
+    private static func minutesLabel(_ seconds: TimeInterval) -> String {
+        "\(Int((seconds / 60).rounded())) min"
     }
 
     private static func demoMeal() -> MealRecord {

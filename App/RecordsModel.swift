@@ -14,10 +14,18 @@ final class RecordsModel {
     private(set) var rows: [RecordRow] = []
 
     private let store: any PersistenceStore
+    // The one seam for all three deletion paths (fingerprick-glucose Req 6.2).
+    // Held here rather than called from the view because there are three delete
+    // call sites in `RecordsView` — the swipe, the bulk confirm and the
+    // date-range purge — and they funnel through the two functions below; a
+    // fourth added later inherits the route by construction. nil under the
+    // UI-test harness, which builds no publisher.
+    private let glucoseWidget: GlucoseWidgetPublisher?
     private var subscription: Task<Void, Never>?
 
-    init(store: any PersistenceStore) {
+    init(store: any PersistenceStore, glucoseWidget: GlucoseWidgetPublisher? = nil) {
         self.store = store
+        self.glucoseWidget = glucoseWidget
     }
 
     // No deinit: under MainActor-default isolation a deinit cannot touch
@@ -72,6 +80,11 @@ final class RecordsModel {
             // home-router Req 3.5). A reading inside the live ingestion
             // window may re-ingest on the next poll — accepted.
             try? await store.deleteBslEvent(id: reading.id)
+            // Req 6.2: every current-value surface must now report what it
+            // would have reported had this reading never existed. The instant
+            // is what authorises the snapshot to roll back past the monotonic
+            // guard, and only for this reading.
+            await glucoseWidget?.publishRemoval(of: [reading.timestamp])
         case .intake(let record):
             try? await store.deleteIntakeEntry(id: record.id)
         case .activity(let entry):
@@ -87,16 +100,27 @@ final class RecordsModel {
     func deleteBulk(_ rowsToDelete: [RecordRow]) async {
         var mealIDs: [UUID] = []
         var eventIDs: [UUID] = []
+        // Collected alongside the ids, so the date-range and delete-all purges
+        // (records-deletion) reach Req 6.2 by the same route the swipe does —
+        // both call this function.
+        var removedGlucose: [Date] = []
         for row in rowsToDelete {
             switch row {
             case .meal(let meal): mealIDs.append(meal.id)
             case .insulin(let entry): eventIDs.append(entry.id)
-            case .glucose(let reading): eventIDs.append(reading.id)
+            case .glucose(let reading):
+                eventIDs.append(reading.id)
+                removedGlucose.append(reading.timestamp)
             case .intake(let record): eventIDs.append(record.id)
             case .activity(let entry): eventIDs.append(entry.id)
             }
         }
         try? await store.deleteRecords(mealIDs: mealIDs, eventIDs: eventIDs)
+        // Deletions carrying no glucose row pass nothing and behave exactly as
+        // they did — the rollback is never authorised by an unrelated purge.
+        if !removedGlucose.isEmpty {
+            await glucoseWidget?.publishRemoval(of: removedGlucose)
+        }
     }
 
     // Rows inside a closed date range — the source for the date-range purge
@@ -218,11 +242,17 @@ final class RecordsModel {
 
     // Maps `.bsl` Events directly to GlucoseRow, keeping Event.id — does NOT
     // reuse TrendsModel's glucose decoder, which drops the id (Decision 13).
+    // Provenance comes from the shared `GlucoseSnapshotSource.provenance(of:)`
+    // (fingerprick-glucose Req 4.3) rather than a fourth reading of the same
+    // metadata key; the id is what this loader still cannot borrow.
     private func loadGlucose() async -> [RecordRow] {
         let events = (try? await store.events(in: Self.allTime, type: EventType.bsl)) ?? []
         return events.compactMap { event -> RecordRow? in
             guard let mmolL = event.value else { return nil }
-            return .glucose(GlucoseRow(id: event.id, timestamp: event.timestamp, mmolL: mmolL))
+            return .glucose(
+                GlucoseRow(
+                    id: event.id, timestamp: event.timestamp, mmolL: mmolL,
+                    provenance: GlucoseSnapshotSource.provenance(of: event)))
         }
     }
 }
