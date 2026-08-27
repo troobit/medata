@@ -63,15 +63,27 @@ def read_state(path) -> dict:
 
 
 def ledger_is_dirty(path) -> bool:
-    """Uncommitted edits to the ledger — the state a rebuild must not eat."""
+    """Uncommitted edits to the ledger — the state a rebuild must not eat.
+
+    Fails CLOSED. Only one failure stands aside: no git repository at all,
+    which is the tests' scratch directories and a corpus checked out loose.
+    Every other failure — git missing, a timeout, an unreadable parent — is
+    reported dirty, because the question this answers is "may I overwrite
+    someone's routing work", and an unanswerable question is not a yes.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return False        # no ledger yet: no routing state to lose
     try:
         result = subprocess.run(
-            ["git", "-C", str(Path(path).parent), "status", "--porcelain",
-             "--", Path(path).name],
+            ["git", "-C", str(path.parent), "status", "--porcelain",
+             "--", path.name],
             capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0 and bool(result.stdout.strip())
+        return True
+    if result.returncode != 0:
+        return "not a git repository" not in (result.stderr or "").lower()
+    return bool(result.stdout.strip())
 
 
 def write_triage(conn, ledger_path) -> Path:

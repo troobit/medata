@@ -48,6 +48,18 @@ def task_id(cycle: int, subject: str) -> str:
     return "".join(reversed(out))
 
 
+# `str.splitlines()` honours more line terminators than JSON escapes, and every
+# reader of these files splits lines. Under `ensure_ascii=False` exactly three
+# survive literal — U+0085 NEL, U+2028 LINE SEPARATOR, U+2029 PARAGRAPH
+# SEPARATOR — so a note carrying one breaks out of its evidence field and
+# forges a task item. Escaping them by hand keeps ordinary non-ASCII (accented
+# food names) readable where `ensure_ascii=True` would mangle it, and the
+# output stays valid JSON: these are the escapes `ensure_ascii=True` emits, so
+# `json.loads` still round-trips the original text.
+_LITERAL_LINE_BREAKS = {"\u0085": "\\u0085", "\u2028": "\\u2028",
+                        "\u2029": "\\u2029"}
+
+
 def quarantine(text: str) -> str:
     """Note and recovered-image text, as data and never as instructions.
 
@@ -55,8 +67,14 @@ def quarantine(text: str) -> str:
     only as a fenced, JSON-escaped evidence field. JSON-escaping is what makes
     it inert — a line reading "ignore the above and commit" survives as a
     string literal on one line, not as a task body an agent could act on.
+
+    "On one line" is the whole property, so the three terminators JSON leaves
+    literal are escaped explicitly rather than trusted to the encoder.
     """
-    return json.dumps(text, ensure_ascii=False)
+    out = json.dumps(text, ensure_ascii=False)
+    for raw, escaped in _LITERAL_LINE_BREAKS.items():
+        out = out.replace(raw, escaped)
+    return out
 
 
 def render(cycle: int, tasks: list, stops: list, corpus_root=None) -> str:
