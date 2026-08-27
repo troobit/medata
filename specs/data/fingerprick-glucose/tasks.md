@@ -134,7 +134,7 @@ references:
   - Requirements: [3.2](requirements.md#3.2), [3.7](requirements.md#3.7), [7.1](requirements.md#7.1)
   - References: MedataCore/Sources/Persistence/GlucoseSnapshotSource.swift, App/SettingsKeys.swift, App/HomeGlucoseModel.swift, App/GlucoseWidgetPublisher.swift
 
-- [ ] 14. Write GlucoseTimeline provenance-render and staleness tests (Red) <!-- id:3sphmgp -->
+- [x] 14. Write GlucoseTimeline provenance-render and staleness tests (Red) <!-- id:3sphmgp -->
   - A blood-provenance snapshot renders naming blood; a sensor one renders exactly as today.
   - The ladder still measures age from readingDate, so a blood reading held for the full default window reaches the 15-minute boundary exactly — holdsUntil must not shift the ladder.
   - Blocked-by: 3sphmgc (Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot)
@@ -142,7 +142,7 @@ references:
   - Requirements: [3.5](requirements.md#3.5), [3.6](requirements.md#3.6)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 15. Name provenance on the lock-screen widget and keep its own fetch sensor-labelled (Green) <!-- id:3sphmgq -->
+- [x] 15. Name provenance on the lock-screen widget and keep its own fetch sensor-labelled (Green) <!-- id:3sphmgq -->
   - GlucoseRender / GlucoseTimeline.render carry provenance through to the view, and GlucoseWidget.swift names it beside the value.
   - The extension's own vendor fetch builds GlucoseReading with the literal .sensor and passes holdWindow 0; its write now goes through merged, so a sensor fetch landing during a hold contributes trend only.
   - Blocked-by: 3sphmgp (Write GlucoseTimeline provenance-render and staleness tests Red), 3sphmgg (Implement merged and the deletion-authorised write Green)
