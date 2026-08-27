@@ -606,6 +606,22 @@ Collision suffixes (`-2`, `-3`) belong to the *outcome* segment in
 `corpus.split_stem`: they identify a distinct bundle, and folding them together
 would join a note to the wrong capture.
 
+**`.offset` is a render-time translation; geometry callbacks never see it.**
+The affordance button in `FieldNoteWindow.swift` is dragged via `.offset`, but
+`onGeometryChange` reports the un-offset layout frame — so the hit region the
+passthrough window allows through must be computed as
+`homeFrame.offsetBy(offset)` and re-reported on `.onChange(of: offset)`.
+Without that, the first drag left the hit region parked at the bottom-trailing
+home corner: the visible button sat outside it, dead to taps and further
+drags, and because the offset persists in UserDefaults the breakage survived
+relaunches. Field-verified failure mode, 2026-08 device session.
+
+**The capture cover always carries `lastOutcome`, not only during refusal.**
+An attempt can fail without rendering a results surface *or* the refusal
+overlay; the `(outcomeID, timestampMs)` stash is the only join key such a
+failure has, so a note taken from any capture state links to the most recent
+attempt (Req 2.6).
+
 ### The loop rehearsal
 
 `tools/field_loop/tests/test_rehearsal.py` runs one whole cycle — pull, ingest,
