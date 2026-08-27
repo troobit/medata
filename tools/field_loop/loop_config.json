@@ -1,0 +1,41 @@
+{
+  "_": "Every threshold the loop enforces, in one place (ml-feedback-loop design, 'Guards on every auto-commit'). Code reads these; it does not carry its own defaults, so a number here is the number that fired.",
+
+  "cluster_max_gap_s": 120,
+  "_cluster": "Attempts chain into a same-scene cluster at gaps no larger than this, and the chain SPLITS when the dominant class changes or adjacent argmax class sets are disjoint. Transitive chaining alone would merge dish A and dish B captured 90 s apart and feed the false inconsistency to the regression flag.",
+
+  "attribution_floor_percentile": 90,
+  "attribution_floor_min_pairs": 3,
+  "_floor": "Req 4.3. The device-vs-replay delta below which no gap component may be attributed to a data cause, taken over SKEW-FREE pairs only: once the loop lands fixes, HEAD-vs-device drift would otherwise absorb the loop's own effect and report it as replay noise. Below min_pairs the floor is unmeasured and every fix demotes to a proposal.",
+
+  "evidence_min_captures": 5,
+  "evidence_min_clusters": 2,
+  "_evidence": "Req 5.3. An auto-applied value change needs this many distinct captures, spread over this many clusters, all agreeing in direction.",
+
+  "per_cycle_drift_ceiling": 0.15,
+  "lifetime_drift_ceiling": 0.30,
+  "_drift": "Symmetric, both directions. The per-cycle ceiling is a rate limiter, not a bound (1.15^10 is about 4x), so the lifetime ceiling is anchored to the ORIGINAL CoFID/AFCD source value and is what actually bounds drift.",
+
+  "max_commits_per_cycle": 5,
+  "column_cooldown_cycles": 1,
+  "_dof": "One degree of freedom per class per cycle, plus a cooldown on the column that moved: fix_id-keyed denylisting cannot see cross-column oscillation on the same class.",
+
+  "eval_floor_per_cell": 5,
+  "_eval_floor": "Derivation refuses to consume captures when doing so would drop any (class, capture mode) evaluation cell below this, so the metric cannot quietly go `insufficient` through its own training appetite.",
+
+  "min_cell": 10,
+  "_min_cell": "Report cells below this carry `insufficient` rather than a figure, following tools/shortlist_hit_rate.py.",
+
+  "field_train_share_cap": 0.10,
+  "_mixing": "Req 8.5. Field captures may be at most this share of merged train images, so one developer's kitchen, plates, and lighting cannot dominate the corpus.",
+
+  "loop_branch": "field-loop",
+  "commit_coauthor": "Medata field loop <field-loop@medata.invalid>",
+  "_commit": "Req 5.7: every auto-commit is marked as machine authorship. The address is deliberately unroutable — nobody is meant to reply to the loop.",
+
+  "calibration_artifact": null,
+  "_calibration": "Decision 20: `make food-db` aborts rather than re-bake a database that carries calibration lineage without the artifact that produced it. With this null the build gate fails and every fix demotes to a proposal — the safe direction.",
+
+  "denylist": [],
+  "_denylist": "Fix ids a prior verdict flagged as regressive (Req 5.7). The loop never re-applies one."
+}

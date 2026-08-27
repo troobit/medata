@@ -49,6 +49,13 @@ struct MealOverviewView: View {
             .padding(24)
         }
         .background(Color.surfacePrimary)
+        #if FIELD_LOOP
+        // Meal-linked note context (ml-feedback-loop Req 2.1). No estimate
+        // snapshot: this surface shows the recorded totals and offers no
+        // adjustment, so the full displayed estimate belongs to the Result
+        // screen one push further in.
+        .fieldScreen("meal.overview", meal: FieldNoteMealLink(mealID: record.id))
+        #endif
         // Deliberately untitled (snaqui Req 4).
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

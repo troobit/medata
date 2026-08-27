@@ -63,7 +63,22 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import numpy as np
+# numpy, if this interpreter has it. The proto reader below is pure stdlib and
+# `tools/field_loop/` imports it rather than forking it (ml-feedback-loop
+# design, "Deterministic diagnosis"), so a hard top-level import here would
+# make the whole field-loop package — and its stdlib-only test suite —
+# unrunnable without numpy. Every numpy-using function in this file still gets
+# a numpy or a clear error, never a None.
+try:
+    import numpy as np
+except ModuleNotFoundError:                              # pragma: no cover
+    class _NumpyMissing:
+        def __getattr__(self, name):
+            raise ModuleNotFoundError(
+                "candidate_probe.%s needs numpy; rerun with an interpreter "
+                "that has it, e.g. /opt/homebrew/bin/python3" % name)
+
+    np = _NumpyMissing()
 
 # PbMealFixture field numbers (MedataCore/Sources/PortableContracts/Schemas/MealFixture.proto).
 F_FIXTURE_ID = 1

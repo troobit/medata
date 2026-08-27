@@ -406,7 +406,35 @@ struct ResultView: View {
         .sheet(item: $presetDraft) { draft in
             QuickPresetEditSheet(store: store, preset: draft, isNew: true)
         }
+        #if FIELD_LOOP
+        // Meal-linked note context (ml-feedback-loop Req 2.1 / 2.4). The
+        // snapshot follows the pending per-row adjustments, so the figures the
+        // note freezes are the figures on screen — which is why the modifier
+        // takes a value rather than a closure captured at mount.
+        .fieldScreen(
+            "meal.result",
+            meal: FieldNoteMealLink(mealID: record.id),
+            estimate: fieldEstimateSnapshot
+        )
+        #endif
     }
+
+    #if FIELD_LOOP
+    private var fieldEstimateSnapshot: EstimateSnapshot {
+        EstimateSnapshot(
+            foods: foodRows.map { row in
+                EstimateSnapshotFood(
+                    classID: row.id,
+                    displayName: row.displayName,
+                    massG: pendingGramsFor(row),
+                    carbsG: pendingCarbs(row)
+                )
+            },
+            displayedTotalCarbsG: Double(heroCarbsG),
+            displayedTotalMassG: pendingTotalMassG
+        )
+    }
+    #endif
 
     // Hero (§6.1, revised by snaqui Req 1): the carb total the user is eating —
     // scaled live while adjusting, corrected when a correction is recorded,

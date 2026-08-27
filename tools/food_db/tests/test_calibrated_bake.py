@@ -11,7 +11,9 @@ clamped class -> calibration-quality warning, never silent acceptance (5.6);
 mixture -> single-dominant supersession recorded in lineage meta, read from
 the PRIOR DB (5.2); density-basis spot-check aborting on rice/pasta (5.3);
 lineage meta incl. pinned intrinsics model and licence CC BY 4.0 (1.5/5.5);
-palette lock running on the calibrated path (5.7).
+palette lock running on the calibrated path (5.7); and the inverse guard that
+a bare re-bake over a DB carrying calibration lineage aborts rather than
+dropping it (ml-feedback-loop Req 5.2).
 """
 
 import json
@@ -279,3 +281,30 @@ def test_palette_lock_aborts_calibrated_bake_on_version_mismatch(
     monkeypatch.setattr(generate, "PALETTE_VERSION", "v9-drifted")
     with pytest.raises(SystemExit, match="palette"):
         bake_with(out_dir, artifact({"white_rice": entry(0.82)}))
+
+
+# --- calibration inverse guard (ml-feedback-loop Req 5.2) ---
+
+def test_bare_rebake_over_calibration_lineage_aborts(out_dir):
+    # The calibrate artifact is fitted from the N5k corpus and is not in this
+    # repo, so a bare re-bake cannot reconstruct the lineage the committed
+    # databases carry. `make food-db` is a build gate the feedback loop runs
+    # unattended, where dropping it would land in a commit nobody read.
+    bake_with(out_dir, artifact({"white_rice": entry(0.82)}))
+    with pytest.raises(SystemExit, match="--calibration-json"):
+        generate.bake()
+    # Fail before write: the prior lineage survives.
+    assert meta(generate.COFID_DB)["calibration_licence"] == "CC BY 4.0"
+
+
+def test_bare_bake_is_fine_without_prior_calibration_lineage(out_dir):
+    generate.bake()
+    generate.bake()  # must not raise — no lineage to drop
+    assert not any(k.startswith("calibration_") for k in meta(generate.COFID_DB))
+
+
+def test_naming_the_artifact_again_rebakes_cleanly(out_dir):
+    bake_with(out_dir, artifact({"white_rice": entry(0.82)}))
+    db = bake_with(out_dir, artifact({"white_rice": entry(0.82)}))
+    assert meta(db)["calibration_licence"] == "CC BY 4.0"
+    assert fetch(db, "white_rice")["beta"] == pytest.approx(0.82)

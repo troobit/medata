@@ -231,6 +231,15 @@ private struct NoOpStore: PersistenceStore {
     func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws {
         fatalError("unused")
     }
+    func markOutcomeProtected(id: UUID) async throws {
+        fatalError("unused")
+    }
+    func markOutcomesProtected(mealID: UUID) async throws {
+        fatalError("unused")
+    }
+    func unmarkOutcomeProtected(id: UUID) async throws {
+        fatalError("unused")
+    }
     func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome] {
         fatalError("unused")
     }

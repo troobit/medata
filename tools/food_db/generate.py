@@ -21,6 +21,13 @@ Run from repo root: python3 tools/food_db/generate.py
 Requirements: python3 (no external deps beyond stdlib sqlite3)
 """
 
+# PEP 604 annotations (`list | None`) are evaluated at def time without this,
+# and the end-to-end bake test invokes whatever bare `python3` resolves to —
+# /usr/bin/python3 is 3.9 on macOS, which raises TypeError on import. Deferring
+# annotation evaluation keeps the bake runnable on the system interpreter; the
+# pytest gate still runs under a modern one.
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -47,6 +54,20 @@ _PALETTE_MARKER = "static let standard"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CLASS_PALETTE_SWIFT = _REPO_ROOT / "MedataCore/Sources/Segmentation/ClassPalette.swift"
+
+# The feedback loop's overlay file (ml-feedback-loop Req 5.1): the ONLY file
+# that loop may auto-edit. Read from this fixed committed path BY DEFAULT, with
+# no opt-in flag — an opt-in overlay would silently regenerate the DBs without
+# landed fixes on any plain invocation — and with the fail-closed inverse guard
+# in _prior_db_carries_overlay: a prior DB claiming LOOP_OVERLAY provenance
+# while the file is absent aborts the bake.
+#
+# Anchored to the repo, not to cwd like OUTPUT_DIR. Inputs are repo-relative
+# (see _CLASS_PALETTE_SWIFT above), outputs cwd-relative — EndToEndCalibrateBake
+# runs this script from a temp directory so the baked DBs land there, and a
+# cwd-relative overlay path would make that bake silently overlay-free while
+# `make food-db` bakes with it.
+OVERLAY_JSON = str(_REPO_ROOT / "tools" / "food_db" / "loop_overlay.json")
 
 
 def class_palette_version() -> str:
@@ -362,13 +383,19 @@ SOLID_SERVINGS = [
 SOLID_SERVINGS_ABSENT: frozenset = frozenset()
 
 
-def verify_solid_servings() -> None:
+def verify_solid_servings(foods: list | None = None,
+                          servings: list | None = None) -> None:
     """Coverage lock for solid_servings (serving-adjust PRD Req 1): a class id
     not among the solid palette classes (an orphan or a liquid) aborts, and so
     does a solid class in neither SOLID_SERVINGS nor SOLID_SERVINGS_ABSENT.
-    Runs before anything is written."""
-    solids = {row[0] for row in FOOD_DATA[:SOLID_CLASS_COUNT]}
-    served = {row[0] for row in SOLID_SERVINGS}
+    Runs before anything is written.
+
+    Takes the tables as arguments so the bake can lock the POST-overlay rows:
+    a loop overlay does not get to bypass the precision rule below."""
+    foods = FOOD_DATA if foods is None else foods
+    servings = SOLID_SERVINGS if servings is None else servings
+    solids = {row[0] for row in foods[:SOLID_CLASS_COUNT]}
+    served = {row[0] for row in servings}
     stray = sorted((served | set(SOLID_SERVINGS_ABSENT)) - solids)
     if stray:
         raise SystemExit(
@@ -393,7 +420,7 @@ def verify_solid_servings() -> None:
     # note round-trip error is at most 0.005 * grams_per_unit, so every
     # grams_per_unit must stay below 100 g or a logged row could reopen with
     # a phantom pending adjustment.
-    oversized = sorted(row[0] for row in SOLID_SERVINGS if row[3] >= 100)
+    oversized = sorted(row[0] for row in servings if row[3] >= 100)
     if oversized:
         raise SystemExit(
             f"class(es) {oversized} have grams_per_unit >= 100 — the "
@@ -426,10 +453,250 @@ DENSITY_TOLERANCE_FACTOR = 1.8
 SUPPORT_PLANE_REFERENCE_IN_USE = "foodSupport"
 
 
-def _load_calibration(path: str) -> dict:
+# --- Loop overlay (ml-feedback-loop Req 5.1/5.2, Decisions 9 and 18) --------
+#
+# The provenance a loop-authored value carries. It never forges CoFID/AFCD:
+# an overridden cell rewrites its own row's source column to this, so no row
+# claims a source for a value it no longer holds.
+OVERLAY_SOURCE = "LOOP_OVERLAY"
+
+# β is fitted against the SOURCE densities, so a class whose density or
+# composition the overlay moves has no valid β until a human refit. Its
+# beta_status/beta_provenance read this and _apply_calibration skips it.
+# BetaCalibrationStatus in Swift has no such case, so GRDBFoodDatabase's
+# `?? .uncalibratedUnity` fallback reads it as uncalibrated — which is exactly
+# what it is; the DB simply records the more specific reason.
+OVERLAY_BETA_STATUS = "uncalibrated_overlay_base"
+
+# Column allowlist with declared physical bounds (inclusive). β, the palette,
+# and the class set are outside the overlay by construction — an off-allowlist
+# column is refused, never quietly ignored.
+#   density               g/cm³, spanning salad leaves to yeast extract
+#   composition columns   g per 100 g — a mass fraction cannot exceed 100
+#   grams_per_unit        a household unit from a teaspoon to a large loaf;
+#                         verify_solid_servings additionally holds the < 100 g
+#                         ServingNote precision rule on the post-overlay rows
+#   serving_ml            a shot glass to a two-litre jug
+OVERLAY_COLUMNS = {
+    "density":                        (0.05, 2.0),
+    "carbs_mono_100":                 (0.0, 100.0),
+    "protein_100":                    (0.0, 100.0),
+    "fat_100":                        (0.0, 100.0),
+    "fibre_100":                      (0.0, 100.0),
+    "solid_servings.grams_per_unit":  (5.0, 500.0),
+    "liquid_servings.serving_ml":     (10.0, 2000.0),
+}
+
+# FOOD_DATA tuple positions (the INSERT order at the top of this file).
+_F_DENSITY, _F_BETA, _F_BETA_STATUS = 2, 8, 9
+_F_DENSITY_SOURCE, _F_COMPOSITION_SOURCE, _F_BETA_PROVENANCE = 10, 11, 12
+_FOODS_COLUMN_INDEX = {"density": _F_DENSITY, "carbs_mono_100": 4,
+                       "protein_100": 5, "fat_100": 6, "fibre_100": 7}
+# Which source column an override rewrites: density overrides are a geometric
+# claim, composition overrides a nutritional one, and they must not smear.
+_COMPOSITION_COLUMNS = frozenset({"carbs_mono_100", "protein_100",
+                                  "fat_100", "fibre_100"})
+_SOLID_GRAMS_PER_UNIT, _SOLID_SOURCE = 3, 5
+_LIQUID_SERVING_ML, _LIQUID_SOURCE = 3, 4
+
+_OVERLAY_REQUIRED_KEYS = ("class_id", "column", "value", "basis", "fix_id",
+                          "applied_at")
+
+
+def _load_overlay(path: str) -> list:
+    """Load and validate the loop overlay. Mirrors _load_calibration's
+    fail-before-write contract: every rejection raises SystemExit with nothing
+    written, so a malformed overlay leaves the committed DBs standing.
+
+    Validated: entry shape, known class, allowlisted column, numeric value
+    inside its declared physical bounds, a basis citing the notes and/or
+    captures that motivated the change (Req 5.1), a resolvable side-table key,
+    and no cell targeted twice.
+    """
+    with open(path, encoding="utf-8") as fh:
+        overlay = json.load(fh)
+    if not isinstance(overlay, list):
+        raise SystemExit(
+            f"loop overlay {path} must be a JSON list of entries, got "
+            f"{type(overlay).__name__}")
+
+    known_classes = {row[0] for row in FOOD_DATA}
+    solid_classes = {row[0] for row in SOLID_SERVINGS}
+    liquid_keys = {(row[0], row[1], row[2]) for row in LIQUID_SERVINGS}
+    seen = {}
+    for index, entry in enumerate(overlay):
+        where = f"loop overlay {path} entry {index}"
+        if not isinstance(entry, dict):
+            raise SystemExit(f"{where} is not an object")
+        missing = [k for k in _OVERLAY_REQUIRED_KEYS if k not in entry]
+        if missing:
+            raise SystemExit(f"{where} is missing required key(s) "
+                             f"{', '.join(missing)}")
+
+        class_id = entry["class_id"]
+        if class_id not in known_classes:
+            raise SystemExit(
+                f"{where} names unknown class '{class_id}' — the class set is "
+                "outside the overlay by construction")
+
+        column = entry["column"]
+        if column not in OVERLAY_COLUMNS:
+            raise SystemExit(
+                f"{where} targets column '{column}', which is not on the "
+                f"overlay allowlist ({', '.join(sorted(OVERLAY_COLUMNS))})")
+
+        value = entry["value"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise SystemExit(f"{where} value must be numeric, got {value!r}")
+        low, high = OVERLAY_COLUMNS[column]
+        if not low <= float(value) <= high:
+            raise SystemExit(
+                f"{where} sets {class_id}.{column} to {value}, outside the "
+                f"declared physical bounds {low}-{high}")
+
+        basis = entry["basis"]
+        if not isinstance(basis, dict):
+            raise SystemExit(f"{where} basis is not an object")
+        notes = basis.get("notes") or []
+        captures = basis.get("captures") or []
+        if not notes and not captures:
+            raise SystemExit(
+                f"{where} cites neither notes nor captures — every "
+                "auto-applied value change names the evidence that moved it "
+                "(Req 5.1)")
+
+        # Side-table keys. solid_servings is keyed by class alone; a
+        # liquid_servings cell needs its region and vessel too.
+        if column.startswith("solid_servings.") and class_id not in solid_classes:
+            raise SystemExit(
+                f"{where} targets {class_id}, which has no solid_servings row")
+        if column.startswith("liquid_servings."):
+            for key in ("region", "vessel"):
+                if not entry.get(key):
+                    raise SystemExit(
+                        f"{where} targets liquid_servings without a '{key}' — "
+                        "that table is keyed (class_id, region, vessel)")
+            key = (class_id, entry["region"], entry["vessel"])
+            if key not in liquid_keys:
+                raise SystemExit(
+                    f"{where} names no liquid_servings row: {key}")
+
+        target = (column, class_id, entry.get("region"), entry.get("vessel"))
+        if target in seen:
+            raise SystemExit(
+                f"{where} and entry {seen[target]} both set {class_id}."
+                f"{column} — a cell overridden twice has no defined value")
+        seen[target] = index
+    return overlay
+
+
+def _apply_overlay(overlay: list | None) -> tuple:
+    """Return post-overlay copies of the in-memory tables, plus the classes
+    whose β the overlay invalidated.
+
+    Copies, never mutation: the module tables stay at their source values so a
+    re-bake in the same process is idempotent. Applied BEFORE INSERT and BEFORE
+    _apply_calibration (Decision 18) — β fitted against the source density must
+    never ship on top of an overlay density.
+    """
+    foods = [list(row) for row in FOOD_DATA]
+    solid = [list(row) for row in SOLID_SERVINGS]
+    liquid = [list(row) for row in LIQUID_SERVINGS]
+    if not overlay:
+        return foods, solid, liquid, frozenset()
+
+    foods_by_class = {row[0]: row for row in foods}
+    solid_by_class = {row[0]: row for row in solid}
+    liquid_by_key = {(row[0], row[1], row[2]): row for row in liquid}
+    invalidated = set()
+
+    for entry in overlay:
+        class_id, column, value = entry["class_id"], entry["column"], \
+            float(entry["value"])
+        if column in _FOODS_COLUMN_INDEX:
+            row = foods_by_class[class_id]
+            row[_FOODS_COLUMN_INDEX[column]] = value
+            if column in _COMPOSITION_COLUMNS:
+                row[_F_COMPOSITION_SOURCE] = OVERLAY_SOURCE
+            else:
+                row[_F_DENSITY_SOURCE] = OVERLAY_SOURCE
+            # Density and composition are both terms the β fit rests on.
+            row[_F_BETA] = 1.0
+            row[_F_BETA_STATUS] = OVERLAY_BETA_STATUS
+            row[_F_BETA_PROVENANCE] = OVERLAY_BETA_STATUS
+            invalidated.add(class_id)
+        elif column == "solid_servings.grams_per_unit":
+            row = solid_by_class[class_id]
+            row[_SOLID_GRAMS_PER_UNIT] = value
+            row[_SOLID_SOURCE] = OVERLAY_SOURCE
+        else:  # liquid_servings.serving_ml — the only other allowlisted column
+            row = liquid_by_key[(class_id, entry["region"], entry["vessel"])]
+            row[_LIQUID_SERVING_ML] = value
+            row[_LIQUID_SOURCE] = OVERLAY_SOURCE
+
+    return foods, solid, liquid, frozenset(invalidated)
+
+
+def _prior_db_carries_overlay(db_path: str) -> bool:
+    """Fail-closed inverse guard (Decision 18): does the PRIOR committed DB
+    hold loop-authored values? If it does and the overlay file has gone
+    missing, a plain bake would silently un-land every fix, so it must abort
+    instead. Checks the meta lineage first (it covers side-table-only
+    overlays, which rewrite no foods row) and the provenance columns after.
+    """
+    if not os.path.exists(db_path):
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        try:
+            recorded = conn.execute(
+                "SELECT v FROM meta WHERE k = 'overlay_json'").fetchone()
+            if recorded and json.loads(recorded[0]):
+                return True
+            marked = conn.execute(
+                "SELECT 1 FROM foods WHERE density_source = ? "
+                "OR composition_source = ? LIMIT 1",
+                (OVERLAY_SOURCE, OVERLAY_SOURCE)).fetchone()
+            return marked is not None
+        except (sqlite3.OperationalError, json.JSONDecodeError):
+            return False  # pre-overlay schema: nothing to un-land
+    finally:
+        conn.close()
+
+
+def _prior_db_carries_calibration(db_path: str) -> bool:
+    """Does the PRIOR committed DB hold calibration lineage?
+
+    Same fail-closed reasoning as _prior_db_carries_overlay, for the other
+    input the bake cannot reconstruct on its own: the calibrate artifact is
+    produced from the N5k corpus and is not in this repo, so a bare re-bake
+    would quietly drop every ``calibration_*`` meta row the committed
+    artifacts carry — and `make food-db` is a build gate the loop runs
+    unattended (ml-feedback-loop Req 5.2), where a silent provenance loss
+    would land in a commit nobody read.
+    """
+    if not os.path.exists(db_path):
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM meta WHERE k LIKE 'calibration\\_%' ESCAPE '\\' "
+                "LIMIT 1").fetchone()
+            return row is not None
+        except sqlite3.OperationalError:
+            return False  # pre-meta schema: nothing to drop
+    finally:
+        conn.close()
+
+
+def _load_calibration(path: str, density_by_class: dict | None = None) -> dict:
     """Load and validate the calibrate JSON artifact (design §DB bake handoff
     contract — the sole stream B↔C interface). Aborts before anything is
     written: unknown classes and a failed density spot-check are hard errors.
+
+    ``density_by_class`` carries the POST-overlay densities so the spot-check
+    reports the ρ the bake is actually about to write (Decision 18).
     """
     with open(path, encoding="utf-8") as fh:
         cal = json.load(fh)
@@ -486,7 +753,8 @@ def _load_calibration(path: str) -> dict:
             f"calibration JSON {path} carries β entries for liquid class(es) "
             f"{liquid_entries} — liquids never enter the β fit (Req 4.7)"
         )
-    density_by_class = {row[0]: row[2] for row in FOOD_DATA}
+    if density_by_class is None:
+        density_by_class = {row[0]: row[_F_DENSITY] for row in FOOD_DATA}
     for class_id in DENSITY_SPOT_CHECK_CLASSES:
         entry = classes.get(class_id)
         if entry is None:
@@ -523,9 +791,15 @@ def _read_prior_provenance(db_path: str) -> dict:
 
 
 def _apply_calibration(conn: sqlite3.Connection, cal: dict,
-                       prior_provenance: dict) -> None:
+                       prior_provenance: dict,
+                       overlay_invalidated: frozenset = frozenset()) -> None:
     """Write per-row β/status/provenance (device_verified stays 0 — only the
     device-spot-check spec flips it, Req 5.4) and the lineage meta rows.
+
+    Classes in ``overlay_invalidated`` are skipped: their density or
+    composition moved under the overlay, so the fitted β no longer describes
+    them and they stay at ``uncalibrated_overlay_base`` until a human refit
+    (ml-feedback-loop Decision 18).
 
     Cross-dataset provenance (cross-dataset-calibration Req 6.1/7.2): entries
     carrying ``contributing_datasets`` / ``single_source_uncorroborated``
@@ -546,7 +820,11 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
     cross_dataset_artifact = any(
         "contributing_datasets" in e or "single_source_uncorroborated" in e
         for e in cal["classes"].values())
+    overlay_skipped = []
     for class_id, entry in sorted(cal["classes"].items()):
+        if class_id in overlay_invalidated:
+            overlay_skipped.append(class_id)
+            continue
         # Req 5.4: β fitted under another reference is NOT applied. A single
         # artifact spans two references by construction — the mixture path keeps
         # the plate-region flood fill permanently (Decision 17) — so a mismatch
@@ -580,6 +858,13 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
                                   "from": "n5k_mixture",
                                   "to": "n5k_single_dominant"})
 
+    if overlay_skipped:
+        print(
+            f"calibration: {len(overlay_skipped)} class(es) not applied — the "
+            "loop overlay moved their density or composition, so the fitted β "
+            f"no longer describes them (Decision 18): "
+            f"{', '.join(overlay_skipped)}", file=sys.stderr)
+
     if reference_skipped:
         print(
             f"calibration: {len(reference_skipped)} class(es) not applied — "
@@ -592,6 +877,7 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
         "calibration_beta_pool": cal.get("betaPool"),
         "calibration_support_plane_reference": cal.get("support_plane_reference"),
         "calibration_reference_skipped_classes": json.dumps(reference_skipped),
+        "calibration_overlay_invalidated_classes": json.dumps(overlay_skipped),
         "calibration_n5k_release": lineage.get("n5k_release"),
         "calibration_n5k_metadata_version": lineage.get("n5k_metadata_version"),
         "calibration_mapping_artifact_version":
@@ -661,22 +947,49 @@ def bake(calibration_json: str | None = None) -> None:
     β/status/provenance and the calibration lineage are baked in (Req 5.2-5.7);
     without it the uncalibrated defaults are unchanged.
 
+    The loop overlay at OVERLAY_JSON is read whenever it is present — no flag,
+    no opt-in (ml-feedback-loop Req 5.1) — and applied to the in-memory rows
+    before INSERT and before the calibration.
+
     Wrapped in a function (not run at import) so the palette-lock predicate can be
     unit-tested without rebaking the tracked DB artefacts.
     """
     # Palette <-> DB lock (Req 8.4 label + Req 5.7/7.2 content): abort before
     # writing anything if the bake has drifted from ClassPalette.
     verify_palette_lock(PALETTE_VERSION)
-    # Serving coverage lock (serving-adjust PRD Req 1): same abort-first rule.
-    verify_solid_servings()
+
+    # Loop overlay (ml-feedback-loop Req 5.1/5.2), loaded before anything is
+    # written. Absent-but-previously-applied is the fail-closed case: baking
+    # over it would silently un-land every landed fix.
+    overlay = None
+    if os.path.exists(OVERLAY_JSON):
+        overlay = _load_overlay(OVERLAY_JSON)
+    elif _prior_db_carries_overlay(COFID_DB):
+        raise SystemExit(
+            f"{COFID_DB} carries {OVERLAY_SOURCE} provenance but no overlay "
+            f"file is present at {OVERLAY_JSON} — baking would silently drop "
+            "every landed loop fix. Bake aborted (ml-feedback-loop Req 5.1)")
+    foods, solid_servings, liquid_servings, overlay_invalidated = \
+        _apply_overlay(overlay)
+
+    # Serving coverage lock (serving-adjust PRD Req 1): same abort-first rule,
+    # run on the POST-overlay rows so an overlay cannot bypass it.
+    verify_solid_servings(foods, solid_servings)
 
     # Load + validate the calibration BEFORE touching any output: unknown
     # classes and the Req 5.3 density spot-check abort with nothing written.
     calibration = None
     prior_provenance = {}
     if calibration_json is not None:
-        calibration = _load_calibration(calibration_json)
+        calibration = _load_calibration(
+            calibration_json,
+            density_by_class={row[0]: row[_F_DENSITY] for row in foods})
         prior_provenance = _read_prior_provenance(COFID_DB)
+    elif _prior_db_carries_calibration(COFID_DB):
+        raise SystemExit(
+            f"{COFID_DB} carries calibration lineage but no calibration "
+            "artifact was named — baking would drop it. Rerun with "
+            "--calibration-json <artifact> (make food-db CALIBRATION=<artifact>)")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -699,28 +1012,41 @@ def bake(calibration_json: str | None = None) -> None:
 
     conn.executemany(
         "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        FOOD_DATA
+        foods
     )
     # Canonical servings and sub-class rows live in the CoFID DB only: they are
     # lookup tables, not composition data, so one home avoids merge semantics
     # (the AFCD DB carries the empty tables from the shared schema).
     conn.executemany(
         "INSERT INTO liquid_servings VALUES (?,?,?,?,?)",
-        LIQUID_SERVINGS
+        liquid_servings
     )
     conn.executemany(
         "INSERT INTO solid_servings VALUES (?,?,?,?,?,?)",
-        SOLID_SERVINGS
+        solid_servings
     )
     conn.executemany(
         "INSERT INTO liquid_subclasses VALUES (?,?,?,?,?)",
         LIQUID_SUBCLASSES
     )
+    # Overlay lineage, following the calibration_* meta keys precedent. Written
+    # to the CoFID DB only: the overlay touches no AFCD row, and recording it
+    # there would claim a provenance those rows do not carry.
+    if overlay:
+        conn.executemany(
+            "INSERT OR REPLACE INTO meta VALUES (?, ?)", [
+                ("overlay_json", json.dumps(overlay)),
+                ("overlay_fix_ids",
+                 json.dumps(sorted({e["fix_id"] for e in overlay}))),
+                ("overlay_beta_invalidated_classes",
+                 json.dumps(sorted(overlay_invalidated))),
+            ])
     if calibration is not None:
-        _apply_calibration(conn, calibration, prior_provenance)
+        _apply_calibration(conn, calibration, prior_provenance,
+                           overlay_invalidated)
     conn.commit()
     conn.close()
-    print(f"Generated {COFID_DB} with {len(FOOD_DATA)} food classes.")
+    print(f"Generated {COFID_DB} with {len(foods)} food classes.")
 
     # --- AFCD database ---
     if os.path.exists(AFCD_DB):
@@ -743,8 +1069,10 @@ def bake(calibration_json: str | None = None) -> None:
     if calibration is not None:
         # β is per-class, not per-source: keep the AFCD rows consistent so the
         # CoFID-wins COALESCE returns calibrated values whichever DB serves
-        # the class. Classes absent from AFCD_DATA update zero rows.
-        _apply_calibration(conn, calibration, prior_provenance)
+        # the class. Classes absent from AFCD_DATA update zero rows. The
+        # overlay invalidation is per-class too, so it travels here as well.
+        _apply_calibration(conn, calibration, prior_provenance,
+                           overlay_invalidated)
     conn.commit()
     conn.close()
     print(f"Generated {AFCD_DB} with {len(AFCD_DATA)} food classes.")
