@@ -137,13 +137,19 @@ struct FieldNoteSheet: View {
     private var contextSection: some View {
         Section("Context") {
             LabeledContent("Screen", value: controller.pendingScreenID)
+            // Whether this note is tied to an attempt must be readable at a
+            // glance — from the capture screen a bare truncated id was not,
+            // and an unlinked note said nothing at all. A linked attempt
+            // shows when it happened; an unlinked note says so outright.
             if let meal = controller.pendingMeal {
                 if let mealID = meal.mealID {
                     LabeledContent("Meal", value: mealID.uuidString.prefix(8).lowercased())
                 }
-                if let outcomeID = meal.outcomeID {
-                    LabeledContent("Attempt", value: outcomeID.uuidString.prefix(8).lowercased())
+                if meal.outcomeID != nil || meal.timestampMs != nil {
+                    LabeledContent("Attempt", value: attemptDescription(meal))
                 }
+            } else {
+                LabeledContent("Attempt", value: "none linked")
             }
             if let estimate = controller.pendingEstimate {
                 LabeledContent(
@@ -163,6 +169,19 @@ struct FieldNoteSheet: View {
             }
         }
         .font(.footnote)
+    }
+
+    // "40 sec. ago" answers the capture-screen question — WHICH attempt this
+    // note will join — in the terms the developer is thinking in; the short id
+    // stays for the Mac-side join.
+    private func attemptDescription(_ meal: FieldNoteMealLink) -> String {
+        let id = meal.outcomeID.map { String($0.uuidString.prefix(8)).lowercased() }
+        guard let timestampMs = meal.timestampMs else { return id ?? "linked" }
+        let when = Date(timeIntervalSince1970: Double(timestampMs) / 1000)
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        let ago = formatter.localizedString(for: when, relativeTo: Date())
+        return id.map { "\($0) · \(ago)" } ?? ago
     }
 }
 #endif

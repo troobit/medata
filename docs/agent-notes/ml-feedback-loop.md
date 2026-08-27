@@ -620,7 +620,25 @@ relaunches. Field-verified failure mode, 2026-08 device session.
 An attempt can fail without rendering a results surface *or* the refusal
 overlay; the `(outcomeID, timestampMs)` stash is the only join key such a
 failure has, so a note taken from any capture state links to the most recent
-attempt (Req 2.6).
+attempt (Req 2.6). The sheet's Context section states the link (short id +
+relative age, or `none linked`) — first field session could not tell.
+
+**A field pull over a backlog is hours, not minutes — and must say so.**
+~200-400 MB per fixture, one `devicectl copy from` per file; the first pull
+(three-week backlog) ran silent, read as a hang, and was interrupted twice,
+re-copying everything each time (9+ GB of repeats across sibling dirs).
+`field_pull.py` now prints one key=value line per copy, lands copies as
+`.partial` + rename, resumes the newest same-day dir lacking its
+`pull_complete.json` marker by skipping files present at listed size, and
+times out wedged `devicectl` calls per-file. Do not "clean up" the marker
+file: its absence is the resume signal.
+
+**`devicectl info files --json-output` is the only listing worth parsing.**
+The envelope carries flat `result.files[].relativePath` + `metadata.size`
+(sizes drive resume-skip and copy timeouts); `_listing_entries` falls back to
+the structural name walk when the shape shifts. The retired impl-2 variant
+parsed the human-readable stdout instead, matched nothing, and pulled zero
+files — the shape is not an implementation detail.
 
 ### The loop rehearsal
 

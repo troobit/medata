@@ -679,3 +679,41 @@ Failing closed also fails in the safe direction for the loop. With no artifact c
 ### Impact
 
 `tools/food_db/generate.py` (`_prior_db_carries_calibration`, the `bake()` guard), the `food-db` Makefile target, and `field_close.py`'s guard-6 configuration in task 24.
+
+---
+
+## Decision 21: Adopt the orbit-impl-1 variant after the first field session
+
+**Date**: 2026-08-27
+**Status**: accepted
+
+### Context
+
+The on-device capture layer and field-loop tooling were built as two parallel orbit variants and both were taken through a first real device session: affordance interaction, note capture from the capture screen, and a first `make field-pull` against a three-week capture backlog. Both variants initially shipped an inert or drag-breakable affordance (each for a different mechanism-level reason) and both were fixed before the session completed; the session then differentiated them on note/context UI quality and pull tooling behaviour.
+
+### Decision
+
+Adopt the orbit-impl-1 variant (`orbit-impl-1/ml-feedback-loop`) as the ml-feedback-loop implementation. Field-session fixes land on this branch; the impl-2 variant is retired.
+
+### Rationale
+
+- The note sheet and its context section (screen id, meal/attempt link, frozen estimate, screenshot-failure reason) read clearly on device — the deciding factor for a surface whose whole purpose is fast, unambiguous field annotation.
+- Impl-1's `field_pull.py` worked against the real device: it parses the `devicectl info files` `--json-output` envelope structurally, so the pull enumerated and copied the backlog.
+- Its remaining pull defect (a silent, restart-from-zero multi-gigabyte copy that read as a hang) was behavioural, not structural, and is fixed on the branch: per-copy progress lines, partial-then-rename copies, size-verified resume via a `pull_complete.json` marker, per-call timeouts.
+
+### Alternatives Considered
+
+- **orbit-impl-2 variant**: Cleaner single-slot context model and an application-delegate window install - Rejected: its `field_pull.py` parsed the human-readable `devicectl` listing instead of `--json-output`, matched no files, copied nothing, and aborted on the missing `meals.sqlite` snapshot (observed: an empty `2026-08-27-1` pull dir); its passthrough window gated touches by view identity, which cannot work against a single SwiftUI hosting view; its note/context UI read worse on device.
+- **Merge impl-2's pieces into impl-1**: Cherry-pick its context model - Rejected: impl-1's stack-based `FieldNoteContext` is strictly more robust (top-of-stack read at save time survives push/pop ordering), so there is no piece worth the graft.
+
+### Consequences
+
+**Positive:**
+- One branch to verify: the STOP device-checklist tasks (29-31) run once, on the adopted implementation.
+- The field-session lessons (hit-region reporting, attempt-link visibility, observable resumable pulls) are recorded as requirements (2.6), design contracts, and completed tasks on the surviving branch.
+
+**Negative:**
+- Impl-2's rehearsal-tested tooling (its own pull/ingest/close suite) is discarded rather than salvaged; any latent quality in it is lost.
+- The retired branch still holds the only copy of its implementation until deleted; anyone reading both variants' shared corpus should know pull dirs named `2026-08-27-*` (dashed) are impl-2 debris.
+
+---

@@ -41,6 +41,7 @@ The test developer uses the app in the field for days at a time and needs to rec
 3. <a name="2.3"></a>The free text SHALL be stored verbatim; quantities in household measures (spoons, slices, servings, fractions) are expected content and SHALL NOT be parsed on device.
 4. <a name="2.4"></a>WHEN a meal-linked note is saved, the system SHALL snapshot the estimate the developer was looking at (detected classes and the displayed masses/carbs), so that later reprocessing or corrections cannot change what the note was about.
 5. <a name="2.5"></a>A capture MAY carry multiple notes; a later note SHALL NOT overwrite an earlier one.
+6. <a name="2.6"></a>WHEN the affordance is invoked from the capture surface and an attempt has already persisted an outcome row, the note SHALL link to the most recent attempt (outcome id + timestamp) even though no results or refusal surface rendered — an attempt that fails before rendering any surface still yields a linked failure note.
 
 ### 3. Persistence and batch handoff
 

@@ -222,3 +222,24 @@ references:
   - Blocked-by: i6u18c9 (Build the loop-rehearsal dry-run test and miniature fixtures), i6u18cb (STOP: field-profile on-device pass)
   - Stream: 2
   - Requirements: [4.8](requirements.md#4.8), [6.1](requirements.md#6.1), [6.3](requirements.md#6.3), [8.7](requirements.md#8.7)
+
+## Field-test fixes
+
+- [x] 32. Fix the affordance hit region: follow the dragged button <!-- id:i6u18ce -->
+  - First device session: one drag parked the window hit region at the home corner forever (.offset is render-only, invisible to onGeometryChange); the persisted offset kept the button dead across relaunches
+  - FieldNoteOverlay reports homeFrame.offsetBy(offset), re-reports on every offset change, and clamps a committed park to the window bounds
+  - Stream: 2
+  - Requirements: [1.1](requirements.md#1.1)
+
+- [x] 33. Link capture-screen notes to the most recent attempt and show link state in the sheet <!-- id:i6u18cf -->
+  - An attempt can fail before rendering any results or refusal surface; the capture cover now always carries the persistAttemptRecord stash so the note still links (Req 2.6)
+  - Sheet context section: linked attempt shows short id + relative time; an unlinked note reads Attempt: none linked — first device session could not tell whether a capture-screen note was tied to an attempt
+  - Stream: 2
+  - Requirements: [2.1](requirements.md#2.1), [2.6](requirements.md#2.6)
+
+- [x] 34. field_pull: per-copy progress, size-verified resume, wire timeouts <!-- id:i6u18cg -->
+  - A silent multi-gigabyte backlog copy is indistinguishable from a hang (2026-08-27: interrupted twice, three sibling pull dirs, 9+ GB re-copied); one key=value line per wire copy now shows throughput
+  - Copies land as .partial then rename; resolve_pull_dir resumes the newest same-day dir without a pull_complete.json marker, skipping files already present at their listed size
+  - devicectl calls carry timeouts (300 s listing; 120 s + ~1 s/MB per copy) so a wedged copy fails the file and moves on; failures leave the marker unwritten so the next run retries exactly the misses
+  - Stream: 3
+  - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
