@@ -188,16 +188,62 @@ public enum GlucoseTrendMath {
 // extension-side fetch (which adds the vendor call).
 public enum GlucoseDerivation {
 
-    // Newest row is the reading, the trailing window drives the trend.
+    // Precedence (Reqs 3.1, 3.3, 3.4, 3.9) plus the single-provenance trend.
     // `readings` is expected in ascending timestamp order — the store's
     // `(timestamp ASC, id ASC)` order — so the last row is the most recent one.
-    public static func snapshot(from readings: [GlucoseReading], now: Date) -> GlucoseSnapshot {
+    //
+    // `holdWindow` is deliberately NOT defaulted. The widget extension holds no
+    // blood readings at all (its vendor fetch is sensor data by construction),
+    // so it passes 0 and gets today's behaviour exactly; the app passes the
+    // setting. A default would let a caller acquire hold semantics by accident.
+    public static func snapshot(
+        from readings: [GlucoseReading], now: Date, holdWindow: TimeInterval
+    ) -> GlucoseSnapshot {
         guard let latest = readings.last else { return .neverRecorded }
+
+        // The one comparison that decides the hold. Req 3.9 needs no branch of
+        // its own: a reading back-dated further than the window simply is not
+        // inside it. Strict, so Req 3.3's "when the window HAS elapsed" resumes
+        // the sensor reading at the boundary rather than one tick later.
+        let windowStart = now.addingTimeInterval(-holdWindow)
+        let holding = readings.last {
+            $0.provenance == .blood && $0.timestamp > windowStart
+        }
+
+        let displayed = holding ?? latest
         return GlucoseSnapshot.make(
-            mmolL: latest.mmolL,
-            readingDate: latest.timestamp,
-            trend: GlucoseTrendMath.trend(readings, now: now),
-            status: GlucoseTrendMath.bandStatus(latest.mmolL)
+            mmolL: displayed.mmolL,
+            readingDate: displayed.timestamp,
+            trend: trend(from: readings, now: now),
+            status: GlucoseTrendMath.bandStatus(displayed.mmolL),
+            provenance: displayed.provenance,
+            // Absolute, and only while a hold is actually in force: a blood
+            // reading displayed merely for want of anything newer has nothing
+            // to protect against (Decision 8).
+            holdsUntil: holding.map { $0.timestamp.addingTimeInterval(holdWindow) }
         )
+    }
+
+    // The trend over ONE provenance at a time (Req 5.1, Decision 7).
+    //
+    // A fingerstick dropped into a regression over interstitial values does not
+    // measure a change in glucose; it measures the gap between two measurement
+    // modalities, and the arrow would report that gap as a rate. So the sensor
+    // series is regressed alone. When it cannot satisfy the existing
+    // count-and-span rules — no sensor connected, session ended — the blood
+    // readings are regressed alone under those same rules, because fingersticks
+    // against fingersticks carry no such step. A mixed series is never
+    // regressed, and when neither provenance qualifies there is no trend
+    // (Req 5.2).
+    //
+    // Sensor-first rather than newest-first, so entering one blood reading
+    // cannot flip a live arrow onto a sparse blood regression.
+    public static func trend(from readings: [GlucoseReading], now: Date) -> GlucoseTrend? {
+        if let sensorTrend = GlucoseTrendMath.trend(
+            readings.filter { $0.provenance == .sensor }, now: now) {
+            return sensorTrend
+        }
+        return GlucoseTrendMath.trend(
+            readings.filter { $0.provenance == .blood }, now: now)
     }
 }
