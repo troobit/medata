@@ -143,7 +143,10 @@ struct GlucoseProvider: TimelineProvider {
                     mmolL: GlucoseGrid.roundedMmolL(GlucoseGrid.mmolL(fromMgPerDl: $0.mgPerDl)))
             }
             .sorted { $0.timestamp < $1.timestamp }
-        let derived = GlucoseDerivation.snapshot(from: readings, now: now)
+        // Hold window 0: this fetch is vendor sensor data by construction, so
+        // there is never a blood reading here to hold (fingerprick-glucose
+        // Decision 8). The app publishes the resolved hold in the snapshot.
+        let derived = GlucoseDerivation.snapshot(from: readings, now: now, holdWindow: 0)
         guard derived != .neverRecorded else { return (nil, .derivedEmpty) }
         // The store is monotonic in `readingDate` (Req 1.8, Decision 19), so a
         // derivation that is not newer than what is stored is dropped — and
