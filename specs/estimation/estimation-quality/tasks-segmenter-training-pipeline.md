@@ -18,10 +18,27 @@ references:
 
 ## Gated run
 
-- [ ] 6. STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage (multi-hour local MPS/GPU; changes the shipped artefact) — human/compute-gated, do not run autonomously <!-- id:pgctxeb -->
-  - Queue position R1 — head of the serial run queue below, and the only run with a settled recipe. Run it before anything in the MetaFood3D phase: it is the baseline the corpus experiments are measured against
-  - Recipe (post-Decision-25 lever space): --loss combined --class-weighting sqrt_inverse --photometric-augment on the merged corpus at step parity with the incumbent; inverse-frequency weighting stays deleted as the attributed staple-killer
-  - Judge on heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors. Either outcome needs a decision entry in segmenter-foundation/decision_log.md
+- [x] 6. STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage (multi-hour local MPS/GPU; changes the shipped artefact) — human/compute-gated, do not run autonomously <!-- id:pgctxeb -->
+  - RUN COMPLETE 2026-08-28 — VERDICT: NOT ADOPTED (segmenter-foundation Decision 35). R1 = eb18a668c6ce
+  - recipe --loss combined --class-weighting sqrt_inverse --photometric-augment on data/merged_foodseg_foodrec2022 at incumbent parity (36 classes
+  - 513
+  - 12 epochs
+  - batch 16
+  - lr 1e-3
+  - poly-0.9)
+  - Measured on heldout_leakfree (182 images): mean food-class IoU 0.3787 against the incumbent ab812dc3aa9d at 0.3927
+  - a regression of 0.0139. Per staple: bread_white +0.0507
+  - but pasta -0.1372
+  - chips_fries -0.0953
+  - white_rice -0.0895
+  - potato_boiled -0.0237
+  - Fails both halves of the promotion criterion
+  - so the incumbent stays and the bundled segmenter.mlpackage is unchanged. Checkpoint and build/lineage-r1.json retained as the baseline R3's ablation reads against
+  - The shape — one weak staple up
+  - three strong staples down — is the signature of the class re-weighting
+  - matching Decision 25's attribution of inverse-frequency weighting as the staple-killer. Probable
+  - not measured: three levers moved at once
+  - which is why task 10 is an ablation
   - Blocked-by: pgctxe6 (Add a class-imbalance-aware loss option to tools/segmenter/train.py via a CLI flag --loss {ce,weighted_ce,focal,dice,combined}; omitting it reproduces todays unweighted nn.CrossEntropyLoss byte-for-byte in the recorded train_config), pgctxe7 (Express loss selection and class-weight computation as pure, torch-free-testable helpers; record the selected loss + weighting scheme in the checkpoint and build/lineage.json train_config), pgctxe8 (Add torch-free unit tests under tools/segmenter/tests/ covering weight-derivation and loss-selection; they pass without torch and the tools pytest suite stays green), pgctxe9 (Add opt-in photometric colour/brightness/contrast augmentation applied to the image only never the mask, off by default, recorded in train_config), pgctxea (Document the recommended next run as a single copy-pasteable command in docs/ml-training.md section 4, consistent with the resume/caffeinate run-hygiene guidance; run make spell clean)
 
 - [x] 7. STOP — on-device deploy + capture verification that overlay speckle is gone and readings are stable (physical iPhone + human) — the real acceptance gate, cannot be automated <!-- id:pgctxec -->
@@ -53,16 +70,18 @@ references:
   - The mixing ratio is both the lever and the risk: these renders reach 11 palette classes, so an unweighted mix shifts class balance toward exactly those and can buy tail coverage with a staple regression — the failure mode Decision 25 already recorded once
   - Judge on heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors (segmenter-foundation Decisions 5 and 14). Pass an absolute --lineage path or metrics land in a stray nested tree, and seed train_config.arch or run_validation.py fails fast
   - Needs a decision entry either way, in segmenter-foundation/decision_log.md where the corpus and recipe verdicts live
-  - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Build a training corpus from the MetaFood3D Blender renders agent-executable, no GPU)
+  - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Spike — settle the MetaFood3D mask route, then judge whether the corpus is worth building agent-executable, no GPU)
 
 - [ ] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
-  - RE-SCOPED 2026-08-14 by segmenter-foundation Decision 34. The original premise was "mixing-ratio or staple-targeted follow-up, shape set by R2's verdict"; both halves were about the synthetic corpus and died with R2's withdrawal under Decision 33. Decision 33 kept this task's queue position but left it with no question, which is what Decision 34 repairs
-  - The premise now comes from R1 itself. Task 6 changes THREE levers at once — --loss combined, --class-weighting sqrt_inverse, --photometric-augment — so any outcome other than a clean win is unattributable: a regression could belong to the loss, the weighting, the augmentation, or an interaction, and one verdict cannot separate them
-  - Deliberately unspecified until R1 returns. If R1 is a clean win with no staple regression beyond the 0.02 tolerance, THIS RUN DOES NOT HAPPEN and its machine time returns to the queue. If R1 regresses or is ambiguous, remove ONE lever and hold the rest — the controlled design Decisions 24 and 25 used to attribute the staple collapse to inverse-frequency weighting, where the co-occurrence run and the combined-loss run "share only the inverse-frequency weighting and both regress the staples broadly"
-  - Same judging surface as R1, unchanged: heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors (Decisions 5 and 14). Pass an absolute --lineage path or metrics land in a stray nested tree, and seed train_config.arch or run_validation.py fails fast
-  - ONE MACHINE, STRICTLY SERIAL — do not start this while another run is in flight. Clamshell rig with caffeinate -is per docs/agent-notes; the resume sidecar caps a reboot at one lost epoch
-  - Needs a decision entry either way in segmenter-foundation/decision_log.md, where the corpus and recipe verdicts live
-  - Interactions stay unresolved by design: isolating one lever from three does not settle a two-lever interaction, and Decision 34 does not schedule a further run for that
+  - PREMISE SUPPLIED 2026-08-28 by R1's verdict (segmenter-foundation Decision 35). R1 regressed the anchor by 0.0139 with one weak staple up (bread_white +0.0507) and three strong ones down (pasta -0.1372
+  - chips_fries -0.0953
+  - white_rice -0.0895). Three levers moved at once
+  - so the cause is not attributable as it stands
+  - R3 is the ablation that separates them. Isolate the class weighting FIRST: re-run at identical parity with --class-weighting none and the other two levers held (--loss combined --photometric-augment). If that recovers the staples
+  - the weighting is the cause and Decision 25's attribution extends to the milder sqrt_inverse scheme
+  - Judge on heldout_leakfree against ab812dc3aa9d at 0.3927 with the 0.45 staple floors
+  - and read the per-staple table in Decision 35 rather than the mean alone — the mean hid a redistribution
+  - Serial queue: one run at a time on the one machine. Either outcome earns its own decision entry
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
 
 - [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question <!-- id:8l5zdrf -->
