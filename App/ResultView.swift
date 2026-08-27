@@ -495,7 +495,6 @@ struct ResultView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
                     DoseHistoryLine.spokenLine(doseReadout, givenUnits: givenUnits) ?? "")
-                .accessibilityAction(named: "Show working") { showingWorking = true }
                 .accessibilityIdentifier("result.doseLine")
             }
             if showsEstimatedLine {
