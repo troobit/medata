@@ -33,6 +33,21 @@ package, null, null]}`); the first array element is always the name.
    snapshot. Store errors rethrow untouched — durable-ack contract (Decision 7): a throwing
    ingest means the source must NOT advance its cursor/anchor.
 
+**Provenance routing (fingerprick-glucose)**: step 1 is now preceded by a partition on
+`GlucoseSample.provenance`. Sensor samples take steps 1–3 exactly as described; blood
+samples skip the grid and the bucketing entirely and go one at a time through
+`store.recordBloodBsl` at their exact instants. Sources stay unaware of the split — a
+source reports what it measured, the coordinator decides how it is stored, which is what
+keeps "sensor ingestion behaves as it does today" structural rather than a rule to
+remember. `provenance` defaults `.sensor`, so LibreLinkUp, the screenshot import and the
+heartbeat source needed no change.
+
+The returned `BslIngestSummary` accounts for both halves: `extracted` is the whole batch,
+`stored`/`skippedExisting` sum the two paths, and `agreeing`/`discrepant` stay sensor-only
+because they are properties of the keep-first merge the blood path does not use.
+`lastReadingMs` advances on blood instants too. A throw from **either** store call
+propagates, so the durable-ack contract is unchanged.
+
 mg/dL → mmol/L conversion lives on `GlucoseSample.init(nativeInstant:mgPerDl:nativeID:)`
 (÷ 18.0182, UNROUNDED). The coordinator's step 3 is the single rounding point (one
 decimal, before the store's duplicate/discrepancy comparison) — do not add rounding

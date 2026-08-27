@@ -45,7 +45,11 @@ public enum GlucoseSnapshotSource {
         let readings = events.compactMap { event in
             event.value.map { GlucoseReading(timestamp: event.timestamp, mmolL: $0) }
         }
-        return snapshot(from: readings, now: now)
+        // Zero window until the provenance decode and the app-side setting land
+        // (specs/data/fingerprick-glucose tasks 12 and 13): with every reading
+        // still reading back as `.sensor`, a window of any size would resolve
+        // the same reading anyway.
+        return snapshot(from: readings, now: now, holdWindow: 0)
     }
 
     // The pure half moved to `GlucoseDerivation` (GlucoseWidgetShared) when the
@@ -54,7 +58,9 @@ public enum GlucoseSnapshotSource {
     // the publisher, one rung further out: two surfaces deriving "the latest
     // reading and its trend" independently is how they drift. This forward
     // keeps `import Persistence` enough for app-side callers.
-    public static func snapshot(from readings: [GlucoseReading], now: Date) -> GlucoseSnapshot {
-        GlucoseDerivation.snapshot(from: readings, now: now)
+    public static func snapshot(
+        from readings: [GlucoseReading], now: Date, holdWindow: TimeInterval
+    ) -> GlucoseSnapshot {
+        GlucoseDerivation.snapshot(from: readings, now: now, holdWindow: holdWindow)
     }
 }

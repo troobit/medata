@@ -145,6 +145,9 @@ private struct NoOpPersistenceStore: PersistenceStore {
     func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary {
         fatalError("unused")
     }
+    func recordBloodBsl(_ reading: BloodBslReading) async throws -> UUID? {
+        fatalError("unused")
+    }
     func saveInsulinDose(_ dose: InsulinDose) async throws {
         fatalError("unused")
     }
