@@ -35,9 +35,10 @@ enum DoseWorking {
         var lines: [Line] = [
             Line(
                 id: "working.base",
-                text: "\(grams(readout.carbsG)) ÷ \(readout.ratioLabel) "
+                text: "\(grams(readout.carbsG)) ÷ \(ratio(readout.gramsPerUnit)) "
                     + "= \(decimalUnits(dose.baseUnits))",
-                spoken: "\(grams(readout.carbsG)) divided by \(readout.spokenRatio) "
+                spoken: "\(grams(readout.carbsG)) divided by "
+                    + "\(spokenRatio(readout.gramsPerUnit)) "
                     + "is \(spokenDecimalUnits(dose.baseUnits))"
             )
         ]
@@ -73,6 +74,17 @@ enum DoseWorking {
     /// Grams, to the nearest whole gram — the figure the surface already shows.
     private static func grams(_ value: Double) -> String {
         "\(Int(value.rounded())) g"
+    }
+
+    /// The base line states the divisor to one decimal too — `5.0 g/U`, not
+    /// the readout line's shorter `5 g/U`: here it is a term in an equation
+    /// that must be checkable against the figures either side of it.
+    private static func ratio(_ value: Double) -> String {
+        String(format: "%.1f g/U", value)
+    }
+
+    private static func spokenRatio(_ value: Double) -> String {
+        String(format: "%.1f grams per unit", value)
     }
 
     /// The base, reduction and unrounded-result terms state at least one
