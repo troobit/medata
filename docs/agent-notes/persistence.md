@@ -313,6 +313,32 @@ schema change at all — provenance lives in `metadata`.
 - Range is 1...30 mmol/L, `bloodGlucoseOutOfRange` — the entry pad cannot
   express anything else; the guard is for a deep link or a future caller.
 
+### Reading provenance back out
+
+`GlucoseSnapshotSource.provenance(of: Event)` and `.reading(from: Event)` are
+the **only** decode of `metadata.provenance`, and they are public for that
+reason: THREE app surfaces read it off `bsl` rows — the snapshot derivation,
+the Graph's trace/marker split (`TrendsModel.reload`) and the Records row
+label (`RecordsModel.loadGlucose`). A second spelling of "an absent key is a
+sensor reading" is how one of them starts calling a blood reading a sensor
+one. `RecordsModel` still cannot use `reading(from:)` itself, because
+`GlucoseReading` carries no `Event.id` (records-deletion Decision 13) — it
+calls `provenance(of:)` alone.
+
+`GlucoseSnapshotSource.current(store:now:holdWindow:)` takes the window and
+does **not** default it, for the reason `GlucoseDerivation.snapshot` states:
+hold semantics must be asked for, never acquired by accident. Both app-side
+callers — `HomeGlucoseModel.reload` and `GlucoseWidgetPublisher` — read it from
+`GlucoseHoldWindow.seconds()` (App/SettingsKeys.swift), which is what makes
+"home and the widget report the same reading" structural rather than two
+literals kept in step. That reader is `nonisolated` because the publisher is an
+`actor` and deliberately not `@MainActor`; the key is
+`medata.glucose.holdWindowSeconds`, default 900, app-private and NOT App Group
+state (Decision 8).
+
+Read the window per reload rather than caching it, so changing it in Settings
+takes effect on the next `eventsDidChange` tick without a relaunch.
+
 ## GRDB version note
 
 `DatabaseQueue.read {}` is async in GRDB 6 — always `try await`. `Database.CheckpointMode` uses `.truncate` (not `.truncating`). The Archive throwing initializer is `try Archive(url:accessMode:)`.
