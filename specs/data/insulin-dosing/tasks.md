@@ -241,7 +241,7 @@ metadata:
   - Stream: 1
   - Requirements: [11.1](requirements.md#11.1), [11.3](requirements.md#11.3), [11.5](requirements.md#11.5)
 
-- [ ] 21. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
+- [x] 21. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
   - PbUserCorrection gains corrected_fat_g and corrected_protein_g, written from Macros.reDerive, which already computes both
   - The cheapest gate to clear and independent of every other fat stage: without it the fat figure is least trustworthy on exactly the meals that got the most human attention
   - Until this lands, fat_stale flags those rows and any fat rule refuses them
@@ -312,33 +312,33 @@ metadata:
 
 ## Phase 9 — Decisions 17/18: carbs-only whole-unit rule, recompute everywhere
 
-- [ ] 29. Red — DosingTests for the amended rule <!-- id:idz000y -->
+- [x] 29. Red — DosingTests for the amended rule <!-- id:idz000y -->
   - Failing tests against the current DoseSuggester: dose = carbs ÷ ratio − unoffset IOB floored at 0; rounding half away from zero on the final value with Req 5.2 examples (3.5→4, 3.4→3, 0.6→1); reductionUnits capped at the base so base − reduction = exact at every input; a 0 U result is .suggested (rendered) with no seedable amount; .suppressed only for a nil carb total; no belowMeaningfulDose or belowControlMinimum outcomes exist
   - Increment fixed at 1 U — DosableIncrement.permitted collapses per the design; tests assert no 0.5 U path survives
   - Existing fixtures for the IOB curve (design fixture table) stay untouched
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.4](requirements.md#5.4)
 
-- [ ] 30. Green — DoseSuggester implements the amended rule <!-- id:idz000z -->
+- [x] 30. Green — DoseSuggester implements the amended rule <!-- id:idz000z -->
   - MedataCore/Sources/Dosing/DoseSuggester.swift: DoseInputs takes unoffset IOB; SuggestedDose carries reductionUnits and the unrounded result for the working; .suppressed slims to its SuppressionReason (noCarbTotal only); ruleID/ruleVersion bookkeeping deleted — nothing recorded pools (Decision 18)
   - The physiological IOB total is no longer computed anywhere unless a surface consumes it — design says it is not
   - Blocked-by: idz000y (Red — DosingTests for the amended rule)
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [4.7](requirements.md#4.7), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [10.2](requirements.md#10.2)
 
-- [ ] 31. Red — DosingTests for food-offset window membership <!-- id:idz0010 -->
+- [x] 31. Red — DosingTests for food-offset window membership <!-- id:idz0010 -->
   - Failing tests for the pure membership rule the design places in Dosing: a bolus within ±45 min of any logged meal or intake instant is food-offset and excluded; pre-bolus (dose 20 min before a meal) excluded; freestanding correction bolus counted; boundary at exactly ±45 min per the design's stated inclusivity; events query window is instant − (360+45) min … instant
   - Blocked-by: idz000z (Green — DoseSuggester implements the amended rule)
   - Stream: 1
   - Requirements: [4.8](requirements.md#4.8)
 
-- [ ] 32. Green — unoffset membership implemented in Dosing <!-- id:idz0011 -->
+- [x] 32. Green — unoffset membership implemented in Dosing <!-- id:idz0011 -->
   - Pure function over (boluses, meal/intake instants, subject instant); no store types cross the firewall (Req 10.3); consumed by DoseSuggestionModel in task 34
   - Blocked-by: idz0010 (Red — DosingTests for food-offset window membership)
   - Stream: 1
   - Requirements: [4.8](requirements.md#4.8), [10.3](requirements.md#10.3)
 
-- [ ] 33. Drop dose_suggestions — migration test then removal <!-- id:idz0012 -->
+- [x] 33. Drop dose_suggestions — migration test then removal <!-- id:idz0012 -->
   - Persistence test first: a database at the current version with dose_suggestions rows migrates clean, the table is gone, the version stamp bumps once — the literal lives in three places in GRDBPersistenceStore.swift (docs/agent-notes/persistence.md)
   - Delete saveDoseSuggestion / linkDose / doseSuggestion(forSourceEventID:) / doseSuggestions(limit:) and the DoseSuggestionRecord DTO; export path no longer carries rows
   - Requirement 7 is superseded in full — no replacement API of any kind

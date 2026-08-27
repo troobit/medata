@@ -691,36 +691,6 @@ public protocol PersistenceStore: Sendable {
     // ordered newest first ((created_at, id) descending).
     func benchmarkMeals() async throws -> [BenchmarkMeal]
 
-    // specs/data/insulin-dosing Req 7.1, 7.2, 7.4. Persists one dose
-    // suggestion — made or suppressed — as INSERT OR REPLACE by id, so a
-    // review-screen correction rewrites the same row rather than appending one
-    // per keystroke. `fpu` is DERIVED HERE from `fatG` and `proteinG`
-    // (`DoseSuggestionRecord.fatProteinUnits`), ignoring the caller-supplied
-    // value, so a later change to the formula cannot silently reinterpret old
-    // rows. Suggestion rows are not `events` rows: no `eventsDidChange`
-    // interaction (quick_presets / estimation_outcomes convention above), and
-    // no key of the insulin event's metadata contract is added, altered or
-    // extended (Req 7.3, 9.7). There is no eviction bound — unlike
-    // `estimation_outcomes`, the longitudinal series is the product.
-    func saveDoseSuggestion(_ row: DoseSuggestionRecord) async throws
-
-    // Req 7.5. Associates a recorded dose with the suggestion it refers to:
-    // an UPDATE of `given_units` and `insulin_event_id` on the side table
-    // ONLY. The insulin event is not read, rewritten or touched. Does not
-    // notify `eventsDidChange`.
-    func linkDose(
-        suggestionID: UUID, insulinEventID: UUID, givenUnits: Double
-    ) async throws
-
-    // Req 7.2 read path (ledger review / export). Returns at most `limit` rows
-    // ordered newest first ((timestamp, id) descending).
-    func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord]
-
-    // Req 6.10 read path: the newest recorded suggestion for one meal or
-    // intake, so a history surface can render the row's values verbatim
-    // (Req 6.11 — never a recomputation). Nil when the subject has no row.
-    func doseSuggestion(forSourceEventID id: UUID) async throws -> DoseSuggestionRecord?
-
     // specs/data/dose-schedule Req 2.1, 2.2. Opens the occurrence for one
     // scheduled dose at one due instant, returning the row whether it was just
     // created or already existed. Idempotent by construction: a UNIQUE
@@ -771,13 +741,4 @@ public protocol PersistenceStore: Sendable {
     // Carries the `dueAt`/`closedAt` pairs the interval and cutoff are meant to
     // be set from once real use has accumulated (design.md open question 1).
     func doseOccurrences(limit: Int) async throws -> [DoseOccurrence]
-}
-
-extension PersistenceStore {
-    // Default: no recorded suggestion. Lets stores that never persist
-    // suggestions (test doubles) conform without a stub; the real store
-    // overrides with the `dose_suggestions` query.
-    public func doseSuggestion(forSourceEventID id: UUID) async throws -> DoseSuggestionRecord? {
-        nil
-    }
 }

@@ -77,58 +77,48 @@ struct DoseBandTests {
     func beforeSpringTransition() {
         let london = calendar("Europe/London")
         let meal = instant(utc, 2026, 3, 29, 0, 30)
-        let reading = DoseBand.reading(at: meal, calendar: london)
 
-        #expect(reading.localHour == 0)
-        #expect(reading.utcHour == 0)
-        #expect(reading.utcOffsetSeconds == 0)
-        #expect(reading.band == .overnight)
+        #expect(DoseBand.localHour(at: meal, calendar: london) == 0)
+        #expect(DoseBand.band(at: meal, calendar: london) == .overnight)
     }
 
     @Test("The hour displayed after the spring transition bands on that hour")
     func afterSpringTransition() {
         let london = calendar("Europe/London")
+        // 01:30 UTC is 02:30 BST: the clock jumped, and 02 is the hour that
+        // was displayed.
         let meal = instant(utc, 2026, 3, 29, 1, 30)
-        let reading = DoseBand.reading(at: meal, calendar: london)
 
-        #expect(reading.localHour == 2)
-        #expect(reading.utcHour == 1)
-        #expect(reading.utcOffsetSeconds == 3600)
-        #expect(reading.band == .overnight)
+        #expect(DoseBand.localHour(at: meal, calendar: london) == 2)
+        #expect(DoseBand.band(at: meal, calendar: london) == .overnight)
     }
 
-    @Test("An hour that bands differently in local and UTC time records both")
+    // MARK: - Local time decides, not UTC (Req 2.2)
+
+    @Test("An hour that bands differently in local and UTC time bands locally")
     func localAndUTCDisagree() {
         let london = calendar("Europe/London")
         // 05:30 UTC is 06:30 BST — breakfast on the developer's clock, and
-        // still an overnight hour on medreg's. The disagreement is exactly
-        // what the recorded hour pair measures (Req 2.5).
+        // still an overnight hour on medreg's. The band follows the local
+        // clock, which is what "my morning" means.
         let meal = instant(utc, 2026, 3, 29, 5, 30)
-        let reading = DoseBand.reading(at: meal, calendar: london)
 
-        #expect(reading.localHour == 6)
-        #expect(reading.utcHour == 5)
-        #expect(reading.band == .breakfast)
-        #expect(DoseBand.band(forLocalHour: reading.utcHour) == .overnight)
+        #expect(DoseBand.localHour(at: meal, calendar: london) == 6)
+        #expect(DoseBand.band(at: meal, calendar: london) == .breakfast)
+        #expect(DoseBand.band(at: meal, calendar: utc) == .overnight)
     }
 
-    // MARK: - A non-UTC zone (Req 2.5)
-
-    @Test("A far-from-UTC zone records differing hours and a matching offset")
+    @Test("A far-from-UTC zone bands on its own wall clock")
     func nonUTCZone() {
         let sydney = calendar("Australia/Sydney")
-        // 21:30 UTC on 15 January is 08:30 the next morning in Sydney (+11).
+        // 21:30 UTC on 15 January is 08:30 the next morning in Sydney (+11):
+        // breakfast there, dinner on the UTC clock.
         let meal = instant(utc, 2026, 1, 15, 21, 30)
-        let reading = DoseBand.reading(at: meal, calendar: sydney)
 
-        #expect(reading.localHour == 8)
-        #expect(reading.utcHour == 21)
-        #expect(reading.localHour != reading.utcHour)
-        #expect(reading.utcOffsetSeconds == 11 * 3600)
-        #expect(reading.band == .breakfast)
+        #expect(DoseBand.localHour(at: meal, calendar: sydney) == 8)
+        #expect(DoseBand.band(at: meal, calendar: sydney) == .breakfast)
 
-        // The offset is the one that reconciles the two hours.
-        let shifted = (reading.utcHour + reading.utcOffsetSeconds / 3600) % 24
-        #expect(shifted == reading.localHour)
+        #expect(DoseBand.localHour(at: meal, calendar: utc) == 21)
+        #expect(DoseBand.band(at: meal, calendar: utc) == .dinner)
     }
 }

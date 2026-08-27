@@ -1,4 +1,5 @@
 import Foods
+import Macros
 import Pipeline
 import SwiftUI
 
@@ -680,9 +681,32 @@ struct ResultView: View {
             }
             return (classId: row.id, amount: .grams(pendingGramsFor(row)))
         })
+        // insulin-dosing Req 8.3 / 8.8 (F1): the adjusted masses carry their
+        // own fat and protein, so a corrected meal stops reading the original
+        // pipeline figures. Absent — not zero — where no class resolves.
+        if let derived = correctedFatAndProtein() {
+            correction.correctedFatG = Float(derived.fatG)
+            correction.correctedProteinG = Float(derived.proteinG)
+        }
         Task {
             try? await store.appendCorrection(mealId: record.id, correction: correction)
         }
+    }
+
+    // Derived from the adjusted masses through the shared `Macros` derivation,
+    // keyed by the CURRENT class so a relabelled food carries its new food's
+    // composition (insulin-dosing Req 8.3).
+    private func correctedFatAndProtein() -> (fatG: Double, proteinG: Double)? {
+        guard let database = Self.foodDatabase else { return nil }
+        var massGByClassID: [String: Double] = [:]
+        for row in foodRows {
+            let classID = correctedClassIds[row.id] ?? row.id
+            massGByClassID[classID, default: 0] += pendingGramsFor(row)
+        }
+        return Macros.correctedFatAndProtein(
+            massGByClassID: massGByClassID,
+            database: database,
+            edition: record.databaseEdition)
     }
 
     // Summary card (§6.3): thumbnail (with §6.8 fallback and the mask overlay,
