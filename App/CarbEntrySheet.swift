@@ -90,22 +90,28 @@ struct CarbEntryContent: View {
         // an absent segment, not a placeholder.
         CarbAmountField(text: $model.carbsText, identifier: "carb.amount") {
             if let readout = doseReadout {
-                (
-                    Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
-                        + Text(readout.unitsLabel).fontWeight(.semibold)
-                )
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(Color.textSecondary)
-                // Gated on Reduce Motion like every other animated numeral
-                // (design-direction §2.4; ui-ux review 2026-08-25).
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: readout)
-                // Req 6.12: the tap reveals the working and writes nothing.
-                .contentShape(Rectangle())
-                .onTapGesture { showingWorking = true }
-                .accessibilityLabel(readout.spokenUnits)
-                .accessibilityAction(named: "Show working") { showingWorking = true }
-                .accessibilityIdentifier("carb.doseSuggestion")
+                // `Text + Text` is deprecated from iOS 26. Interpolating the
+                // two runs into one `Text` is the replacement and preserves
+                // both the separator's own opacity and the label's own weight.
+                // Deliberately still ONE `Text`: the tap target and the
+                // `accessibilityLabel` below rely on this being a single
+                // element, which an HStack of runs would split in two.
+                let separator = Text(" · ")
+                    .foregroundStyle(Color.textSecondary.opacity(0.45))
+                let units = Text(readout.unitsLabel).fontWeight(.semibold)
+                Text("\(separator)\(units)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+                    // Gated on Reduce Motion like every other animated numeral
+                    // (design-direction §2.4; ui-ux review 2026-08-25).
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .smooth, value: readout)
+                    // Req 6.12: the tap reveals the working and writes nothing.
+                    .contentShape(Rectangle())
+                    .onTapGesture { showingWorking = true }
+                    .accessibilityLabel(readout.spokenUnits)
+                    .accessibilityAction(named: "Show working") { showingWorking = true }
+                    .accessibilityIdentifier("carb.doseSuggestion")
             }
         }
         .sheet(isPresented: $showingWorking) {

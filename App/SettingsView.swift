@@ -389,6 +389,13 @@ struct SettingsView: View {
         }
     }
 
+    // Seconds on disk, minutes on screen — the key is named in seconds so the
+    // reader hands a `TimeInterval` straight to the derivation with no unit
+    // conversion in between, and this is the one place that converts.
+    private static func minutesLabel(_ seconds: TimeInterval) -> String {
+        "\(Int((seconds / 60).rounded())) min"
+    }
+
     #if DEBUG
     private func seedDemoGlucose() {
         guard let grdb = store as? GRDBPersistenceStore else { return }
@@ -411,13 +418,6 @@ struct SettingsView: View {
             defer { isSeedingMeal = false }
             try? await store.save(SettingsView.demoMeal(), artefacts: [])
         }
-    }
-
-    // Seconds on disk, minutes on screen — the key is named in seconds so the
-    // reader hands a `TimeInterval` straight to the derivation with no unit
-    // conversion in between, and this is the one place that converts.
-    private static func minutesLabel(_ seconds: TimeInterval) -> String {
-        "\(Int((seconds / 60).rounded())) min"
     }
 
     private static func demoMeal() -> MealRecord {
