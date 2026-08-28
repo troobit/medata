@@ -257,6 +257,26 @@ one while it exists.
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
 window is unhittable; details and the log tells are in the sections below.
 
+### `#if DEBUG` symbols are invisible to the Debug loop
+
+The daily loop is `make deploy-device` (Debug), and Debug compiles every
+`#if DEBUG` block, so a helper declared inside one and called from code
+*outside* one builds clean all day and fails only at `make deploy-release`:
+
+    error: type 'SettingsView' has no member 'minutesLabel'
+    make: *** [deploy-release] Error 65
+
+Error 65 from a deploy target is the compiler, not the device, the model or
+devicectl — read the `error:` line above it and ignore the install machinery.
+`SettingsView.swift` hit exactly this: `minutesLabel` — a plain formatter used
+by the always-compiled Blood-hold rows — was written next to the demo-seeding
+helpers inside the file's `#if DEBUG` block (fixed 2026-08-28).
+
+The rule when adding to a file that has a `#if DEBUG` block: a member is
+debug-only if and only if **every** caller is. Anything reached from shipping
+code goes above the `#if`. Only `make deploy-release` and `make build-product`
+can catch a breach, so run one of them before claiming an app change is done.
+
 ## Pulling app data off the device without sudo (field triage)
 
 `make logs-device` needs sudo (tethered `log collect` requires root). The
