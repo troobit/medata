@@ -55,6 +55,7 @@
 		115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */; };
 		11AA0001300000000272C1E0 /* MealReviewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0002300000000272C1E0 /* MealReviewModel.swift */; };
 		11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0004300000000272C1E0 /* MealReviewView.swift */; };
+		B0A758E4B7F81EE914957B5B /* NumericEntryPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EC7D24F85007817AAC07FAA /* NumericEntryPad.swift */; };
 		9725A51A4EA55B4493569C74 /* GlucoseEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89E6905874D78918F38DF774 /* GlucoseEntrySheet.swift */; };
 		37F1E95D0F6D15316DFAC635 /* GlucoseEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C8733A3E091C41AEC4294C1 /* GlucoseEntryModel.swift */; };
 		463E764396C67E95B5F56E05 /* DoseWorkingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */; };
@@ -141,6 +142,7 @@
 		115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MaskOverlayLoader.swift; path = ../App/MaskOverlayLoader.swift; sourceTree = SOURCE_ROOT; };
 		11AA0002300000000272C1E0 /* MealReviewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewModel.swift; path = ../App/MealReviewModel.swift; sourceTree = SOURCE_ROOT; };
 		11AA0004300000000272C1E0 /* MealReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewView.swift; path = ../App/MealReviewView.swift; sourceTree = SOURCE_ROOT; };
+		7EC7D24F85007817AAC07FAA /* NumericEntryPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NumericEntryPad.swift; path = ../App/NumericEntryPad.swift; sourceTree = SOURCE_ROOT; };
 		89E6905874D78918F38DF774 /* GlucoseEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseEntrySheet.swift; path = ../App/GlucoseEntrySheet.swift; sourceTree = SOURCE_ROOT; };
 		3C8733A3E091C41AEC4294C1 /* GlucoseEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseEntryModel.swift; path = ../App/GlucoseEntryModel.swift; sourceTree = SOURCE_ROOT; };
 		3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseWorkingSheet.swift; path = ../App/DoseWorkingSheet.swift; sourceTree = SOURCE_ROOT; };
@@ -292,6 +294,7 @@
 				115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */,
 				11AA0002300000000272C1E0 /* MealReviewModel.swift */,
 				11AA0004300000000272C1E0 /* MealReviewView.swift */,
+				7EC7D24F85007817AAC07FAA /* NumericEntryPad.swift */,
 				89E6905874D78918F38DF774 /* GlucoseEntrySheet.swift */,
 				3C8733A3E091C41AEC4294C1 /* GlucoseEntryModel.swift */,
 				3C4069452DBBBF225DD22779 /* DoseWorkingSheet.swift */,
@@ -523,6 +526,7 @@
 				115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */,
 				11AA0001300000000272C1E0 /* MealReviewModel.swift in Sources */,
 				11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */,
+				B0A758E4B7F81EE914957B5B /* NumericEntryPad.swift in Sources */,
 				9725A51A4EA55B4493569C74 /* GlucoseEntrySheet.swift in Sources */,
 				37F1E95D0F6D15316DFAC635 /* GlucoseEntryModel.swift in Sources */,
 				463E764396C67E95B5F56E05 /* DoseWorkingSheet.swift in Sources */,

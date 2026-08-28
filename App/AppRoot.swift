@@ -324,10 +324,10 @@ struct AppRoot: View {
             LogSheet(store: store, mode: .activity)
         }
         // The glucose-entry sheet resumes a pending target exactly as the other
-        // two do (fingerprick-glucose Req 2.1: "from any app state"). It is a
-        // separate sheet rather than a fourth `LogSheet` mode because it opens
-        // with the keypad up and therefore at a different detent — see
-        // `GlucoseEntrySheet`.
+        // two do (fingerprick-glucose Req 2.1: "from any app state"). It is now
+        // the fourth `LogSheet` mode, opened directly by name so the menu never
+        // sits on the way in — Req 2.3 allows four interactions and three
+        // digits plus Save spends all four (unified-entry-sheet Decision 3).
         .sheet(isPresented: $showGlucoseSheet, onDismiss: {
             switch pendingDeepLink {
             case .captureCover:
@@ -346,7 +346,7 @@ struct AppRoot: View {
                 break
             }
         }) {
-            GlucoseEntrySheet(store: store)
+            LogSheet(store: store, mode: .glucose)
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
