@@ -197,7 +197,7 @@ struct HomeView: View {
                     Text(String(format: "%.1f", mmolL))
                         .font(.system(size: 44, weight: .semibold, design: .rounded))
                         .foregroundStyle(isFresh ? tint(glucose.snapshot.status) : Color.textSecondary)
-                        .contentTransition(.numericText())
+                        .animatedNumeral(value: glucose.snapshot.mmolL)
                     if isFresh, let trend = glucose.snapshot.trend {
                         Text(trend.arrow)
                             .font(.title2.weight(.semibold))

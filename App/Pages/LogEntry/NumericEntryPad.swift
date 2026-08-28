@@ -100,8 +100,7 @@ struct NumericEntryPad: View {
                 Text(displayValue)
                     .font(.system(size: 72, weight: .bold).monospacedDigit())
                     .foregroundStyle(isComplete ? Color.textPrimary : Color.textSecondary)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.1), value: displayValue)
+                    .animatedNumeral(value: displayValue)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
