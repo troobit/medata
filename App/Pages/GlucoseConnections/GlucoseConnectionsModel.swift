@@ -422,15 +422,20 @@ final class GlucoseConnectionsModel {
 // Lets the BGTask expiration handler be assigned before the work Task exists
 // (the handler must be armed first — expiry can fire the moment work starts).
 // NSLock because the expiration handler can arrive off the main queue.
+// `nonisolated` throughout, deliberately: this box exists to be touched from
+// the BGTask expiration handler, which the system calls on its own thread. Its
+// own `NSLock` is what makes that safe — the default MainActor isolation this
+// file otherwise gets would contradict the `@unchecked Sendable` it declares,
+// and would mean the expiration handler could not cancel anything.
 private final class CancellableWorkBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var _task: Task<Void, Never>?
+    nonisolated(unsafe) private var _task: Task<Void, Never>?
 
-    var task: Task<Void, Never>? {
+    nonisolated var task: Task<Void, Never>? {
         get { lock.lock(); defer { lock.unlock() }; return _task }
         set { lock.lock(); defer { lock.unlock() }; _task = newValue }
     }
 
-    func cancel() { task?.cancel() }
+    nonisolated func cancel() { task?.cancel() }
 }
 #endif

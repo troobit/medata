@@ -20,7 +20,10 @@ import os
 // GlucoseTimeline.renderPoints. `readingDate` rides along for the one thing the
 // pure ladder cannot express: a live-ticking age for a FRESH reading, whose
 // single entry spans up to 15 minutes of wall time (Decision 14).
-struct GlucoseEntry: TimelineEntry {
+// `nonisolated`: WidgetKit resolves `TimelineEntry` from its own nonisolated
+// machinery, so a MainActor-isolated conformance is unusable there — a warning
+// today and a hard error in the Swift 6 language mode.
+nonisolated struct GlucoseEntry: TimelineEntry {
     let date: Date
     let render: GlucoseRender
     let readingDate: Date?
@@ -35,7 +38,7 @@ struct GlucoseProvider: TimelineProvider {
     // interleaves the app's publishes with the extension's wakes in one stream.
     // Every interpolation is `.public` — os_log redacts non-literals otherwise,
     // and these numbers are the whole point of the lines.
-    private static let log = Logger(subsystem: "ie.medata.app", category: "GlucoseWidget")
+    nonisolated private static let log = Logger(subsystem: "ie.medata.app", category: "GlucoseWidget")
 
     // Which branch of `refreshedSnapshot` a wake took. Only `refreshed` sent a
     // request that came back; the rest render the stored snapshot, and telling
@@ -183,7 +186,7 @@ struct GlucoseProvider: TimelineProvider {
         return LibreLinkUpClient(urlSession: URLSession(configuration: configuration))
     }
 
-    private static func entries(for snapshot: GlucoseSnapshot, now: Date) -> [GlucoseEntry] {
+    nonisolated private static func entries(for snapshot: GlucoseSnapshot, now: Date) -> [GlucoseEntry] {
         GlucoseTimeline.renderPoints(snapshot, from: now).map {
             GlucoseEntry(date: $0.date, render: $0.render, readingDate: snapshot.readingDate)
         }
@@ -193,12 +196,12 @@ struct GlucoseProvider: TimelineProvider {
 
     // -1 stands for "no reading" / "never", so every field stays an integer and
     // the lines parse with one grep.
-    private static func age(of snapshot: GlucoseSnapshot, at now: Date) -> Int {
+    nonisolated private static func age(of snapshot: GlucoseSnapshot, at now: Date) -> Int {
         guard let readingDate = snapshot.readingDate else { return -1 }
         return Int(now.timeIntervalSince(readingDate))
     }
 
-    private static func wakeDelay(_ wake: Date?, from now: Date) -> Int {
+    nonisolated private static func wakeDelay(_ wake: Date?, from now: Date) -> Int {
         wake.map { Int($0.timeIntervalSince(now)) } ?? -1
     }
 
@@ -214,7 +217,7 @@ struct GlucoseProvider: TimelineProvider {
     // reopens (Decision 16).
     // nil is `.never`. Split out from the policy so the wake instant can be
     // logged as a number of seconds.
-    private static func nextWake(for snapshot: GlucoseSnapshot, now: Date) -> Date? {
+    nonisolated private static func nextWake(for snapshot: GlucoseSnapshot, now: Date) -> Date? {
         let boundary = GlucoseTimeline.nextBoundary(snapshot, after: now)
         guard LibreLinkUpSharedState.isConnected() else { return boundary }
         let gateReopens = (LibreLinkUpRateGate.lastFetchAt() ?? now)

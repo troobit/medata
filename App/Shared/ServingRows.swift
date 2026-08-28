@@ -88,7 +88,6 @@ struct ServingAmountButton: View {
     let idPrefix: String
     let action: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -101,17 +100,17 @@ struct ServingAmountButton: View {
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .numeralTransition()
                     Text("\(Int(grams.rounded())) g")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .numeralTransition()
                 } else {
                     Text("\(Int(grams.rounded())) g")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .numeralTransition()
                 }
             }
             .multilineTextAlignment(.leading)
@@ -135,7 +134,6 @@ struct ServingGramEditor: View {
     /// Called with each clamped whole-gram value as it is typed.
     let onGrams: (Double) -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -167,7 +165,7 @@ struct ServingGramEditor: View {
                 Text("≈ \(ServingMath.halfUnitText(count)) \(ServingStepLogic.unitLabel(serving, count: count))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .numeralTransition()
             }
         }
     }

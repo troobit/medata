@@ -79,15 +79,22 @@ struct EntrySaveButton: View {
 // It renders NOTHING when there is no error — deliberately a view that takes
 // the optional rather than an `if let` at each call site, so a sheet cannot
 // forget the treatment and invent its own.
+// One treatment for a failed save, so six sheets cannot each invent their own.
+//
+// Takes a NON-optional message and the call site keeps its `if let`. The
+// tempting shape — an optional message and a body that renders nothing when
+// nil — makes each call site one line shorter but puts an always-present view
+// into a `VStack` that has spacing, and whether a spacing gap appears around a
+// view that renders nothing is a question about SwiftUI's layout rather than
+// about this code. Two lines at the call site is the price of not having to
+// answer it.
 struct EntrySaveError: View {
-    let message: String?
+    let message: String
 
     var body: some View {
-        if let message {
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.red)
-        }
+        Text(message)
+            .font(.footnote)
+            .foregroundStyle(.red)
     }
 }
 

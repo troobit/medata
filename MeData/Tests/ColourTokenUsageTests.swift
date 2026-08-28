@@ -22,19 +22,38 @@ import Testing
 @Suite("Design-system token discipline (Req §20.1)")
 struct ColourTokenUsageTests {
 
+    // Paths updated 2026-08-28 for the page restructure, which moved every
+    // file out of a flat `App/`. Five entries were dropped in the same pass —
+    // CaptureTopBar, CaptureModeToggle, RefusalSheet, MealRow and MealsTabView
+    // were deleted by the handoff-00 chrome rebuild and the home-router
+    // consolidation, and this list had gone on naming them, so the reader
+    // saw ten files scanned where six were.
+    //
+    // HomeView, IntakeView and CaptureErrorOverlay are ADDED: they are where
+    // the surviving colour leaks actually are (see the note on denyPatterns).
+    //
+    // MealReviewView is deliberately NOT scanned. It builds a colour from the
+    // segmentation class palette — `Color(red:green:blue:)` at
+    // MealReviewView.swift:342 — which is data, not a design choice, and would
+    // trip `denyPatterns` for the wrong reason.
     private static let scannedFiles: [String] = [
-        "App/CaptureFlowView.swift",
-        "App/CaptureTopBar.swift",
-        "App/CaptureModeToggle.swift",
-        "App/LiveIndicatorBadge.swift",
-        "App/ShutterButton.swift",
-        "App/ConfidencePill.swift",
-        "App/RefusalSheet.swift",
-        "App/ResultView.swift",
-        "App/MealRow.swift",
-        "App/MealsTabView.swift"
+        "App/Pages/Capture/CaptureFlowView.swift",
+        "App/Pages/Capture/CaptureErrorOverlay.swift",
+        "App/Pages/Capture/LiveIndicatorBadge.swift",
+        "App/Pages/Capture/ShutterButton.swift",
+        "App/Pages/Home/HomeView.swift",
+        "App/Pages/Intake/IntakeView.swift",
+        "App/Pages/MealDetail/ResultView.swift",
+        "App/Shared/ConfidencePill.swift"
     ]
 
+    // KNOWN GAP, stated rather than hidden: `Color(uiColor: .systemRed)` and
+    // `.systemOrange` are off-palette but match none of these patterns, so the
+    // three surviving leaks — HomeView's glucose band, CaptureErrorOverlay's
+    // file-local `amber`, MedataBubbleLevel's out-of-target bubble — are
+    // scanned past. Adding `Color(uiColor: .system` here would catch them and
+    // fail immediately; the honest fix is tokens in Colors.swift first, then
+    // the pattern. Whoever adds those tokens should add the pattern with them.
     private static let denyPatterns: [String] = [
         "Color(red:",
         "Color(.sRGB",
@@ -61,7 +80,7 @@ struct ColourTokenUsageTests {
 
     @Test("Colors.swift exports the new tokens (Req §20.1)")
     func colorsSwiftExportsTokens() throws {
-        let url = workspaceRoot().appendingPathComponent("App/Colors.swift")
+        let url = workspaceRoot().appendingPathComponent("App/Shared/Colors.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         for token in [
             "captureBackground", "captureChromeText", "captureChromeBG", "captureScrim",
