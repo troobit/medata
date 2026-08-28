@@ -72,18 +72,15 @@ references:
   - Needs a decision entry either way, in segmenter-foundation/decision_log.md where the corpus and recipe verdicts live
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Spike — settle the MetaFood3D mask route, then judge whether the corpus is worth building agent-executable, no GPU)
 
-- [-] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
-  - PREMISE SUPPLIED 2026-08-28 by R1's verdict (segmenter-foundation Decision 35). R1 regressed the anchor by 0.0139 with one weak staple up (bread_white +0.0507) and three strong ones down (pasta -0.1372
-  - chips_fries -0.0953
-  - white_rice -0.0895). Three levers moved at once
-  - so the cause is not attributable as it stands
-  - R3 is the ablation that separates them. Isolate the class weighting FIRST: re-run at identical parity with --class-weighting none and the other two levers held (--loss combined --photometric-augment). If that recovers the staples
-  - the weighting is the cause and Decision 25's attribution extends to the milder sqrt_inverse scheme
-  - Judge on heldout_leakfree against ab812dc3aa9d at 0.3927 with the 0.45 staple floors
-  - and read the per-staple table in Decision 35 rather than the mean alone — the mean hid a redistribution
-  - Serial queue: one run at a time on the one machine. Either outcome earns its own decision entry
-  - LAUNCHED 2026-08-28 at code commit 6ad2bbe on a clean tree. Command: train.py --data data/merged_foodseg_foodrec2022 --num-classes 36 --target-size 513 --epochs 12 --batch-size 16 --lr 1e-3 --loss combined --class-weighting none --photometric-augment --out tools/segmenter/build/checkpoint_r3_combined_noweight.pt
-  - Run log: tools/segmenter/build/train_r3_combined_noweight_20260828.log. Confirmed at start: device mps; train 45515 / val 1711 (incumbent parity); loss {combined, dice_weight 0.5, weighting none}, photometric ON. R1 took about 6h25m for the same 12 epochs
+- [x] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
+  - PREMISE SUPPLIED 2026-08-28 by R1's verdict (segmenter-foundation Decision 35). R1 regressed the anchor by 0.0139 with one weak staple up and three strong ones down; three levers moved at once, so the cause was not attributable
+  - R3 held --loss combined and --photometric-augment fixed and dropped --class-weighting to none, at incumbent parity on data/merged_foodseg_foodrec2022
+  - RUN COMPLETE 2026-08-28 18:19 — 12/12 epochs, checkpoint_r3_combined_noweight.pt, model_version 0a019c00e943. VERDICT: ADOPTED as recipe and reference checkpoint (segmenter-foundation Decision 36)
+  - Measured on heldout_leakfree (182 images): mean food-class IoU 0.4192 against the incumbent ab812dc3aa9d at 0.3927 — an improvement of 0.0265
+  - Every staple R1 lost is recovered: white_rice 0.6818 (R1 0.5426), pasta 0.6324 (R1 0.5125), chips_fries 0.5718 (R1 0.4646). Against the INCUMBENT: bread_white +0.0665 (and crossing its 0.45 floor for the first time), potato_boiled +0.0652, white_rice +0.0498, chips_fries +0.0119, pasta -0.0172
+  - ATTRIBUTION SETTLED: the class weighting was the cause. Decision 25's finding on inverse-frequency weighting extends to the milder sqrt_inverse scheme. The combined loss and photometric augmentation are jointly beneficial once the weighting is out of the way
+  - NOT swapped: the bundled segmenter.mlpackage stays ab812dc3aa9d. Export, the gates and an on-device capture pass are the separate gated step, unscheduled
+  - Caveats recorded rather than rounded away: pasta is the one measurable staple down against the incumbent; export_eligible is false at the 0.48 bar (the incumbent also fails it and ships under the Decision 11 override); bread_wholemeal is 0.0000 for every model measured and brown_rice/potato_mashed are absent from the anchor
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
 
 - [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question <!-- id:8l5zdrf -->
