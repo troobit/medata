@@ -487,3 +487,138 @@ Deferred to the on-device pass or a spec amendment, deliberately:
 - **"Log & save quick-add" relabel, preset-name comma trimming, records.md
   grammar drift, empty-name cue** — copy/spec-amendment candidates for the
   manual-carb-intake device checklist (task 18).
+
+---
+
+# Review 2026-08-28 — unifying the glucose and dose numeric-entry surfaces
+
+Heuristic review (Nielsen, iOS HIG, Fitts) of a proposal to make `GlucoseEntrySheet` and
+`InsulinDoseContent` share one numeric-entry component: give doses a keypad, replace the dose's
+`+`/`−` circles with up/down arrows stepping 0.1 (glucose) or 1 (dose), and default the dose to the
+last value entered. Conducted by reading the two surfaces against
+`specs/data/fingerprick-glucose` Req 2.3–2.4 and the insulin sheet's App 1–5 notes.
+
+## Summary
+
+**Verdict: keypad only. Drop the arrows.** Not primarily on clutter — on a state-model conflict
+that would make the two controls produce wrong numbers when used together. The unification itself
+is right and should proceed; it also dissolves the original reason glucose was kept out of
+`LogSheet`.
+
+**The last-dose default is the one genuinely dangerous item in the proposal** and must not ship as
+stated. Scoped per kind, it is safe and useful; unscoped, it silently arms a two-tap surface with a
+number the user never chose.
+
+## Critical Issues
+
+### Issue: A relative stepper and an implicit-tenths digit buffer cannot share one value
+
+**Current State**: `GlucoseEntrySheet`'s pad takes digits from the right with an implicit tenths
+place — `1`, `2`, `1` is 12.1. The displayed value is a *render of a digit buffer*, not an
+independent number.
+
+**Problem**: An arrow that adds 0.1 mutates the value but not the buffer. Type `1`,`2` (1.2), tap
+up (1.3), then type `5`: does the buffer hold `12` and yield 12.5, or has it been reset to yield
+0.5? Every answer is defensible and every answer surprises someone. This is a correctness hazard on
+a medical input, not a matter of taste — the two controls hold incompatible models of what the
+number *is* (absolute set versus relative adjust). Defining reset semantics does not remove the
+hazard; it documents it.
+
+**Recommendation**: One input model per value. The keypad sets absolutely; nothing else mutates the
+number. Drop the arrows from both surfaces.
+
+**Impact**: Removes an entire class of wrong-value bug before it exists, and removes ~136pt of
+control chrome from the upper half of a sheet whose bottom two-fifths is already keypad.
+
+### Issue: Defaulting an insulin dose to the last value entered
+
+**Current State**: The dose opens at a fixed 10 U (or a meal-armed suggestion) and the happy path
+is two taps — open, Save.
+
+**Problem**: A *fixed* default is learnable: it is 10 U every time, so a user who taps straight
+through knows what they recorded. A *last-value* default is variable and invisible — the same two
+taps record a different number depending on history the user may not remember, on a surface where
+over-delivery causes acute hypoglycaemia. The failure is silent by construction: nothing on screen
+distinguishes "10 U because that is the default" from "14 U because that is what you took
+yesterday". Unscoped, it is worse still — a 14 U basal becomes the default for the next *bolus*.
+
+**Recommendation**: Three conditions, all required.
+1. **Scope the memory per `InsulinKind`.** Basal genuinely repeats and should remember. Bolus
+   tracks carbohydrate and changes every meal — it should NOT remember; it takes the meal
+   suggestion where one is armed, and the fixed default otherwise.
+2. **The provenance caption becomes mandatory, not optional.** It already exists and already does
+   this job for seeded values. A variable default with no label naming where it came from is the
+   unsafe version of this feature.
+3. **The bolus/basal picker must stay**, because it now selects which remembered value applies.
+
+**Impact**: Keeps the genuine win (repeating basal is two taps) and removes the case where the
+surface records a number the user never chose.
+
+**Implementation Notes**: `InsulinDoseModel.units` currently initialises to `10`. The remembered
+value belongs per kind, and the seeded-suggestion path must keep precedence over it.
+
+## High Priority Improvements
+
+### Issue: A 0.1 stepper has no job on glucose
+
+**Current State**: Proposed as the glucose granularity for the shared control.
+
+**Problem**: Glucose entry is *transcription* — a number is read off a meter and copied. There is no
+starting value to nudge, and no user nudges a meter reading. Three keypad taps reach any value in
+1.0–30.0; the same traverse by 0.1 steps is up to 290 taps or an accelerating hold.
+
+**Recommendation**: No stepper on glucose in any form.
+
+### Issue: The dose's nudge affordance has a real job — but chips, not arrows, are its shape
+
+**Current State**: `+`/`−` are how a seeded suggestion gets adjusted ("it says 6 U, I will take 5").
+
+**Problem**: Dropping the arrows removes the only fast path from a seeded value to a neighbouring
+one. Unlike glucose, the dose surface *does* open on a meaningful number, so relative adjustment is
+a real task — it just must not be a relative *control* over a digit buffer.
+
+**Recommendation**: Use the existing `EntryChip` + `ChipFlow` from `App/EntryChrome.swift` for
+absolute anchors — the armed suggestion, the last basal — beside the keypad. Chips set absolutely,
+so they share the keypad's state model and raise none of the conflict above, and the components
+already exist and already wrap.
+
+**Impact**: Preserves one-tap access to the values that matter without a second input model.
+
+## Medium Priority Enhancements
+
+### Glucose can now fold into `LogSheet`, and the original objection is gone
+
+`GlucoseEntrySheet`'s header records why it is a separate file: `LogSheet` is a fixed-height
+composition at `.medium`, glucose is keyboard-first at `.large`, and folding it in would have made
+`LogSheet` present at two heights depending on mode. **Making the dose keypad-first removes that
+mismatch** — both become keyboard-first at `.large`, and the shared component the developer wants
+becomes reachable rather than merely desirable.
+
+**Blocking constraint if this is done**: `medata://glucose/add` and the glucose widget must open
+`LogSheet` *directly in glucose mode*. Req 2.3 allows four interactions from the surface appearing,
+and three digits plus Save already spends all four. A mode selector in front of glucose breaks the
+requirement outright.
+
+## Positive Observations
+
+- Both surfaces already share `EntryTimeRow` and `EntrySaveButton`, so the chrome half of the
+  unification is done and the remaining work is genuinely the quantity control alone.
+- The glucose pad's "the numeral IS the field" construction is the right answer and should be what
+  the dose adopts, rather than the reverse.
+- The dose caption's one-slot two-state design — naming the seed until a human overrides it, then
+  never again — is exactly the provenance mechanism the last-value default needs. It does not need
+  designing, only making mandatory.
+- The insulin hold-to-repeat acceleration is careful work. It is worth stating plainly that this
+  review recommends deleting it: it is the best possible implementation of a control that should
+  not exist once a keypad is present.
+
+## Interaction budget check
+
+| Surface | Path | Interactions |
+|---|---|---|
+| Glucose, any value | up to 3 digits + Save | 4 — meets Req 2.3 exactly, no headroom |
+| Dose, accept default | Save | 1 |
+| Dose, typed value | 1–2 digits + Save | 2–3 |
+| Dose, chip anchor | chip + Save | 2 |
+
+Nothing recommended here spends an interaction glucose does not have.

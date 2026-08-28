@@ -129,7 +129,7 @@ The literal values identifying a Contour sample are not specified here and must 
 |---|---|---|
 | Home header | `App/HomeView.swift`, `HomeGlucoseModel.swift` | the reading becomes a route to Graph (Req 2.7, Decision 5 — the extension home-router Decision 15 anticipated) and renders `snapshot.provenance` (Req 3.5) |
 | Home BSL control | `App/HomeView.swift` | a BSL `Button` joins the Dose row, the pair echoing the Capture/Intake row with the prominent and plain treatments inverted — Dose plain in the leading slot, BSL accent-prominent in the trailing slot; raises the entry sheet (Req 2.1). With dose-schedule's attempt-2 `OutstandingDoseControl` active, that control occupies the Dose slot beside BSL |
-| Entry sheet | `App/GlucoseEntrySheet.swift`, `GlucoseEntryModel.swift` (new) | below |
+| Entry sheet | `App/LogSheet.swift` (`.glucose` mode), `App/GlucoseEntrySheet.swift` (`GlucoseEntryContent`), `GlucoseEntryModel.swift` | below. *(Was a standalone sheet until 2026-08-28; folded into `LogSheet` as its fourth mode by `specs/ui/unified-entry-sheet` Decision 3, once the insulin mode gained the same keypad and the detent mismatch that had kept them apart went away. Req 2.3's budget is preserved: every entry point opens `LogSheet` directly in its own mode, so the mode menu is never on the way in.)* |
 | Deep link | `App/AppRoot.swift` | `medata://glucose/add` joins the `DeepLink` enum and `handleDeepLink`, reusing the existing `pendingDeepLink` sequencing |
 | Launcher widget | `MeData/MeDataWidgets/MeDataWidgets.swift` | a fourth `Widget` matching `InsulinDoseWidget` exactly — `LauncherView`, `LauncherProvider`, same supported families, `kind: "ie.medata.widget.glucose.add"` |
 | Lock-screen widget | `MedataCore/Sources/GlucoseWidgetShared/GlucoseTimeline.swift`, `MeData/MeDataWidgets/GlucoseWidget.swift` | the render names the displayed reading's provenance (Req 3.5); the extension's own fetch labels readings `.sensor` and passes a zero hold window |
@@ -144,6 +144,8 @@ New `App/` files need the four-place `project.pbxproj` registration (`docs/agent
 Req 2.3's four-interaction budget for any value in 1.0–30.0 is what selects the control, and it excludes both obvious candidates. The insulin sheet's 0.1-step accelerating stepper needs 51 taps for 7.0 → 12.1. A `decimalPad` text field with an explicit point costs 5 interactions for 12.1 (`1`,`2`,`.`,`1`, Save).
 
 An autofocused numeric pad with **implicit tenths** — digits shift in from the right, `1`,`2`,`1` reading as 12.1 — costs at most 4 for every value in range, because no value needs more than three digits:
+
+*(The rule and the pad are now shared with the insulin mode as `DigitEntry` and `NumericEntryPad` in `App/NumericEntryPad.swift` — `specs/ui/unified-entry-sheet` Req 1. The stepper this section rejected has since been deleted from the insulin sheet for the same reason it was rejected here, plus one this section did not need to make: a relative control and a digit buffer disagree about the value after any mixed sequence.)*
 
 | Value | Keystrokes | + Save | Total |
 |---|---|---|---|

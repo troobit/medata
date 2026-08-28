@@ -17,9 +17,16 @@ import SwiftUI
 //
 //   Home "Dose"           → .insulin  → Save            2 taps, unchanged
 //   Home "Activity"       → .activity → Save            2 taps
+//   Home "BSL"            → .glucose  → 3 digits → Save 4 taps
 //   medata://insulin/add  → .insulin  → Save            2 taps, unchanged
 //   medata://activity/add → .activity → Save            2 taps (Req 3.1, 3.5)
+//   medata://glucose/add  → .glucose  → 3 digits → Save 4 taps
 //   Intake "Enter amount" → .carbs                      unchanged
+//
+// That contract is what lets glucose live here at all: `fingerprick-glucose`
+// Req 2.3 allows four interactions from the surface appearing, and three
+// digits plus Save spends all four. A mode selector on the way IN would break
+// the requirement outright — the menu is only ever a way back out.
 //
 // What the consolidation buys: one back-dating control, one commit button,
 // one detent, one dismissal contract, one place a fourth event type lands.
@@ -30,6 +37,7 @@ struct LogSheet: View {
     // the menu lists them in.
     enum Mode: String, Identifiable, CaseIterable {
         case insulin
+        case glucose
         case activity
         case carbs
 
@@ -38,6 +46,7 @@ struct LogSheet: View {
         var title: String {
             switch self {
             case .insulin: "Insulin"
+            case .glucose: "Blood glucose"
             case .activity: "Activity"
             case .carbs: "Carbs"
             }
@@ -46,10 +55,17 @@ struct LogSheet: View {
         var symbol: String {
             switch self {
             case .insulin: "syringe"
+            case .glucose: "drop.fill"
             case .activity: "figure.run"
             case .carbs: "carrot"
             }
         }
+
+        /// Whether the mode raises a keypad on appearing. Those modes take
+        /// focus one run loop after presentation — a request made in the
+        /// sheet's own loop is dropped, and the keypad then needs a tap the
+        /// glucose budget cannot spare.
+        var isKeypadFirst: Bool { self == .glucose || self == .insulin }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -57,6 +73,8 @@ struct LogSheet: View {
     @State private var insulin: InsulinDoseModel
     @State private var activity: ActivityModel
     @State private var carbs: CarbEntryModel
+    @State private var glucose: GlucoseEntryModel
+    @FocusState private var padFocused: Bool
 
     private let nextSortOrder: Int
     // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1) reaches
@@ -86,6 +104,7 @@ struct LogSheet: View {
         _insulin = State(initialValue: insulinModel)
         _activity = State(initialValue: ActivityModel(store: store))
         _carbs = State(initialValue: CarbEntryModel(store: store))
+        _glucose = State(initialValue: GlucoseEntryModel(store: store))
         self.nextSortOrder = nextSortOrder
         self.onInsulinSaved = onInsulinSaved
     }
@@ -99,8 +118,23 @@ struct LogSheet: View {
                     ToolbarItem(placement: .principal) { modeMenu }
                 }
         }
-        .presentationDetents([.medium])
+        // One detent for every mode, as before — but `.large` now, not
+        // `.medium`. Two modes are keypad-first and the keypad claims roughly
+        // the bottom two-fifths of the screen, so at the medium detent the
+        // numeral, the time row and Save would share what is left of half a
+        // screen. The activity mode gains empty space below its controls;
+        // that is the same trade this sheet already made when it chose one
+        // height for three modes (specs/ui/unified-entry-sheet Req 2.3).
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task {
+            guard mode.isKeypadFirst else { return }
+            try? await Task.sleep(for: .milliseconds(60))
+            padFocused = true
+        }
+        .onChange(of: mode) { _, next in
+            padFocused = next.isKeypadFirst
+        }
     }
 
     // The insulin and activity modes are fixed-height compositions and sit
@@ -119,8 +153,11 @@ struct LogSheet: View {
                         onInsulinSaved?(eventID, insulin.units)
                     }
                     dismiss()
-                }
+                },
+                padFocused: $padFocused
             )
+        case .glucose:
+            GlucoseEntryContent(model: glucose, onSaved: { dismiss() }, padFocused: $padFocused)
         case .activity:
             ActivityContent(model: activity, onSaved: { dismiss() })
         case .carbs:
