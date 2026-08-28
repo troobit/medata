@@ -375,7 +375,21 @@ struct ResultView: View {
                     if isCorrected {
                         CorrectedMarker(palette: .capture, identifier: "result.correctedMarker")
                     }
-                    ConfidencePill(sigmaMeal: sigma)
+                    // Same swap as the review surface: the dose holds the
+                    // slot, confidence is its colour, and the tier is named
+                    // in the working. Falls back to the confidence pill only
+                    // where a meal has no dose to show.
+                    if let doseReadout {
+                        DosePill(
+                            unitsLabel: doseReadout.unitsLabel,
+                            sigmaMeal: sigma,
+                            animates: Double(doseReadout.units)
+                        )
+                        .onTapGesture { showingWorking = true }
+                        .accessibilityAction(named: "Show working") { showingWorking = true }
+                    } else {
+                        ConfidencePill(sigmaMeal: sigma)
+                    }
                     if showsPlaceholderChip { placeholderChip }
                     switch calibrationBanner {
                     case .full:      calibrationBannerCard(ResultFormat.uncalibratedBannerCopy)
@@ -477,14 +491,14 @@ struct ResultView: View {
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .animation(reduceMotion ? nil : .smooth, value: pendingTotalMassG)
                 .accessibilityIdentifier("result.massLine")
-            // History readout (insulin-dosing Req 6.10/6.11): the suggestion
-            // RECOMPUTED for this meal's own instant, in the same derived
-            // register and middle-dot grammar as the review surface. A later
-            // ratio change re-renders past meals at the new ratio — accepted:
-            // the line is a present-tense statement of the rule applied to
-            // that meal, not a record of what was once shown. A tap opens the
-            // same working the live surfaces open (Req 6.12).
-            if let doseReadout {
+            // What was actually injected, which the pill above cannot say:
+            // the pill holds the SUGGESTION, recomputed for this meal's own
+            // instant (Req 6.10/6.11), and this line holds the given figure
+            // paired to it by the ±45-minute window. A later ratio change
+            // re-renders the suggestion at the new ratio — accepted: it is a
+            // present-tense statement of the rule applied to that meal, not a
+            // record of what was once shown. Absent when nothing was given.
+            if let doseReadout, givenUnits != nil {
                 MiddleDotLine(
                     runs: DoseHistoryLine.runs(doseReadout, givenUnits: givenUnits),
                     textColour: Color.captureChromeText.opacity(0.75),
@@ -513,7 +527,7 @@ struct ResultView: View {
         .accessibilityIdentifier("result.carbsTotal")
         .sheet(isPresented: $showingWorking) {
             if let doseReadout {
-                DoseWorkingSheet(readout: doseReadout)
+                DoseWorkingSheet(readout: doseReadout, sigmaMeal: sigma)
             }
         }
     }

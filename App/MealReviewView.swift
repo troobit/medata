@@ -432,7 +432,19 @@ struct MealReviewView: View {
                     CorrectedMarker(palette: .capture, identifier: "review.correctedMarker")
                 }
                 Spacer()
-                ConfidencePill(sigmaMeal: sigma)
+                // The dose takes the pill; confidence is its colour, and is
+                // named in words in the working (Req 6.12). Tapping opens the
+                // same sheet the line used to open — the pill IS the
+                // affordance, which is why the dotted underline went.
+                if let doseReadout {
+                    DosePill(
+                        unitsLabel: doseReadout.unitsLabel,
+                        sigmaMeal: sigma,
+                        animates: Double(doseReadout.units)
+                    )
+                    .onTapGesture { showingWorking = true }
+                    .accessibilityAction(named: "Show working") { showingWorking = true }
+                }
             }
             // Field validation reads a kitchen scale, and a scale reads mass
             // not carbs — the total must be visible at the moment of capture
@@ -441,29 +453,19 @@ struct MealReviewView: View {
             // row of its own, so nothing above the scroll boundary moves
             // (specs/ui/meal-review Req 6.6) and the plate control stays
             // visible without scrolling.
-            MealTotalSecondLine(
-                massG: model.pendingTotalMassG,
-                readout: doseReadout
-            )
-            // Req 6.12: the tap reveals the working. It does not act — nothing
-            // is written and no control chrome is added, so the segment's
-            // derived register is unchanged (design-direction §2.2).
-            .contentShape(Rectangle())
-            .onTapGesture { if doseReadout != nil { showingWorking = true } }
+            // Mass only. The dose left this line for the pill above, so the
+            // measured quantity and the quantity derived from it are no
+            // longer rendered as two peers on one line.
+            MealTotalSecondLine(massG: model.pendingTotalMassG)
         }
         .accessibilityElement(children: .combine)
-        // The working is reachable without focusing the segment, which the
-        // combined element makes unfocusable (design-direction §2.6).
-        .accessibilityAction(named: "Show working") {
-            if doseReadout != nil { showingWorking = true }
-        }
         .accessibilityIdentifier("review.total")
         // Presented from the row rather than from `body`, so the surface's
         // two sheets (this and the quick-add draft) never share one modifier
         // site.
         .sheet(isPresented: $showingWorking) {
             if let doseReadout {
-                DoseWorkingSheet(readout: doseReadout)
+                DoseWorkingSheet(readout: doseReadout, sigmaMeal: sigma)
             }
         }
     }
