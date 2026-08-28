@@ -55,7 +55,9 @@ struct CarbEntryContent: View {
                 if model.editing == nil {
                     saveAsQuickAddButton
                 }
-                EntrySaveError(message: model.saveError)
+                if let saveError = model.saveError {
+                    EntrySaveError(message: saveError)
+                }
             }
             .padding(20)
         }

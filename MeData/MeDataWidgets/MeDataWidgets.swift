@@ -23,7 +23,9 @@ struct MeDataWidgetBundle: WidgetBundle {
 // MARK: - Static timeline
 
 // A launcher never updates: one entry, policy .never.
-struct LauncherEntry: TimelineEntry {
+// `nonisolated` for the same reason as `GlucoseEntry` — WidgetKit reads the
+// conformance from a nonisolated context.
+nonisolated struct LauncherEntry: TimelineEntry {
     let date: Date
 }
 

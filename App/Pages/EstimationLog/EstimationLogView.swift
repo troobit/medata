@@ -398,6 +398,11 @@ final class EstimationLogModel {
 // because the stored `measurements`/`failure` columns are already JSON
 // strings — embedding them as parsed objects keeps the export a single
 // well-formed document instead of doubly-encoded strings.
+// `nonisolated` throughout. The export is pure translation — records in,
+// JSON out — and every builder here is called from a `map` closure, which is
+// nonisolated. Under this target's default-MainActor isolation they would
+// otherwise each be MainActor-bound, which is both untrue of what they do and
+// a hard error in the Swift 6 language mode rather than a warning.
 enum LogExport {
     static func json(
         outcomes: [EstimationOutcome], meals: [BenchmarkMeal], lineage: String
@@ -415,7 +420,7 @@ enum LogExport {
         )
     }
 
-    private static func dict(for outcome: EstimationOutcome) -> [String: Any] {
+    nonisolated private static func dict(for outcome: EstimationOutcome) -> [String: Any] {
         var dict: [String: Any] = [
             "id": outcome.id.uuidString,
             "timestamp_ms": outcome.timestampMs,
@@ -431,7 +436,7 @@ enum LogExport {
         return dict
     }
 
-    private static func dict(for meal: BenchmarkMeal) -> [String: Any] {
+    nonisolated private static func dict(for meal: BenchmarkMeal) -> [String: Any] {
         [
             "id": meal.id.uuidString,
             "name": meal.name,
@@ -443,7 +448,7 @@ enum LogExport {
         ]
     }
 
-    private static func dict(for report: Report) -> [String: Any] {
+    nonisolated private static func dict(for report: Report) -> [String: Any] {
         var dict: [String: Any] = [
             "lineage": report.lineage,
             "meal_count": report.mealCount,
@@ -470,7 +475,7 @@ enum LogExport {
         return dict
     }
 
-    private static func dict(for row: Report.MealRow) -> [String: Any] {
+    nonisolated private static func dict(for row: Report.MealRow) -> [String: Any] {
         var dict: [String: Any] = [
             "meal_id": row.mealID.uuidString,
             "name": row.name,
@@ -485,7 +490,7 @@ enum LogExport {
 
     // Embeds a stored JSON string as a structured value; a row whose JSON
     // does not parse exports as the raw string rather than being dropped.
-    private static func embedded(_ raw: String) -> Any {
+    nonisolated private static func embedded(_ raw: String) -> Any {
         (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) ?? raw
     }
 }

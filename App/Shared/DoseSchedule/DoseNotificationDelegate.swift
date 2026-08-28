@@ -116,7 +116,10 @@ final class DoseNotificationDelegate: NSObject, UNUserNotificationCenterDelegate
 
     // MARK: - Payload
 
-    private struct Payload {
+    // `nonisolated`: decoded inside the delegate's own `nonisolated`
+    // callbacks, straight off the notification's userInfo. Pure translation
+    // with nothing to isolate.
+    nonisolated private struct Payload {
         let scheduleID: UUID
         let dueAt: Date
         let units: Double

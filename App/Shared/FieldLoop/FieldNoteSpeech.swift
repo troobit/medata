@@ -1,4 +1,10 @@
 #if FIELD_LOOP
+// `@preconcurrency`: `AVAudioConverter.convert(to:error:)` takes a
+// `@Sendable` input block, but the `AVAudioPCMBuffer` it must hand back is
+// not `Sendable`. The block is invoked synchronously by `convert` on this
+// same thread, so the capture is safe; the annotation says the API predates
+// Sendable rather than that the buffer crosses a boundary.
+@preconcurrency import AVFAudio
 import AVFoundation
 import Foundation
 import OSLog

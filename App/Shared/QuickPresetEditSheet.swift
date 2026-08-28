@@ -64,7 +64,9 @@ struct QuickPresetEditSheet: View {
                     carbField
                     macroDisclosure
                     saveButton
-                    EntrySaveError(message: saveError)
+                    if let saveError = saveError {
+                        EntrySaveError(message: saveError)
+                    }
                 }
                 .padding(20)
             }

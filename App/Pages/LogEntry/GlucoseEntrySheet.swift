@@ -42,7 +42,9 @@ struct GlucoseEntryContent: View {
             ) {
                 Task { if await model.save() { onSaved() } }
             }
-            EntrySaveError(message: model.saveError)
+            if let saveError = model.saveError {
+                EntrySaveError(message: saveError)
+            }
             Spacer(minLength: 0)
         }
         .padding(20)

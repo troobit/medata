@@ -34,11 +34,32 @@ private struct AnimatedNumeral<V: Equatable>: ViewModifier {
     }
 }
 
+private struct NumeralTransition: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.contentTransition(reduceMotion ? .identity : .numericText())
+    }
+}
+
 extension View {
     /// Rolls a numeral when `value` changes, and does not when the phone has
     /// asked for less motion. Use this for every figure that changes; do not
     /// write the `contentTransition`/`animation` pair by hand.
     func animatedNumeral(value: some Equatable) -> some View {
         modifier(AnimatedNumeral(value: value))
+    }
+
+    /// The same Reduce Motion gate, for a numeral whose animation is driven by
+    /// an ANCESTOR rather than by itself — a row inside a container that is
+    /// already animating the change.
+    ///
+    /// It exists so that case stops looking like a mistake. Written out by
+    /// hand, a `contentTransition` with no `animation` beside it is
+    /// indistinguishable from a forgotten one; named, it says the driving
+    /// animation is deliberately somewhere else. Reach for `animatedNumeral`
+    /// unless you can point at the ancestor.
+    func numeralTransition() -> some View {
+        modifier(NumeralTransition())
     }
 }
