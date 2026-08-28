@@ -34,6 +34,29 @@ enum MedataFormat {
         clock.string(from: date)
     }
 
+    /// A quantity and its unit: whole number when the value lands on one at
+    /// a single decimal place, otherwise exactly one decimal — "5 U",
+    /// "4.5 g/U", "87 g", "12 units".
+    ///
+    /// The half-away-from-zero rule is applied ONCE, to tenths, before the
+    /// integer test: without it a value of 4.999 would fail `== rounded()`
+    /// and print "5.0" beside a sibling figure printing "5". Five call sites
+    /// carried this five-line shape verbatim, differing only in the suffix.
+    ///
+    /// This is the DEFAULT shape, not the only one. A surface that must show
+    /// a decimal place even on a whole value — because the figure is a term
+    /// in an equation the reader is checking — formats it itself and says
+    /// why (see `DoseWorkingSheet.ratio`).
+    /// `nonisolated` because `DoseReadout`'s labels are: the readout is a
+    /// `nonisolated struct` so the dosing maths can be read off any actor, and
+    /// a MainActor-only formatter would drag it back onto the main actor.
+    /// Pure arithmetic over its arguments, so there is nothing to isolate.
+    nonisolated static func quantity(_ value: Double, unit: String) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded == rounded.rounded() { return "\(Int(rounded)) \(unit)" }
+        return String(format: "%.1f", rounded) + " " + unit
+    }
+
     /// Food-class display name: underscores to spaces, leading capital.
     /// One home for the three copies meal surfaces carried.
     static func prettify(_ raw: String) -> String {

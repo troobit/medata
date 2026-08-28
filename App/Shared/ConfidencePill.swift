@@ -21,17 +21,7 @@ struct ConfidencePill: View {
         } icon: {
             Image(systemName: level.iconName)
         }
-        .labelStyle(.titleAndIcon)
-        // Dark-on-fill for the bright tiers (white on the accent green is
-        // ~1.9:1 and on orange ~2.8:1 — both under MASTER.md's ≥4.5:1
-        // budget; the accent-filled controls already pair captureBackground
-        // text with bright fills). Very Low's desaturated grey is the one
-        // fill dark enough to need white.
-        .foregroundStyle(level == .veryLow ? Color.captureChromeText : Color.captureBackground)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .frame(minHeight: 28)
-        .background(level.colour.opacity(0.85), in: Capsule())
+        .pillChrome(level: level)
         .accessibilityLabel("Confidence \(level.label)")
         .accessibilityIdentifier("confidencePill.\(level.accessibilityToken)")
     }
@@ -53,13 +43,13 @@ struct ConfidencePill: View {
 // Metrics are ConfidencePill's exactly — same padding, same `minHeight: 28`,
 // same capsule — because this view replaces that one in place. Nothing above
 // the scroll boundary moves, so `specs/ui/meal-review` Req 6.6 (the plate
-// control visible without scrolling) is untouched by construction.
+// control visible without scrolling) is untouched by construction. Since the
+// two views must not drift apart, "exactly" is now enforced rather than
+// asserted: both wear `pillChrome(level:)` below.
 struct DosePill: View {
     let unitsLabel: String
     let sigmaMeal: Float
     let animates: Double
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var level: ConfidenceLevel { .forSigma(sigmaMeal) }
 
@@ -67,26 +57,47 @@ struct DosePill: View {
         Label {
             Text(unitsLabel)
                 .font(.body.monospacedDigit().weight(.semibold))
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: animates)
+                .animatedNumeral(value: animates)
         } icon: {
             Image(systemName: "syringe")
         }
-        .labelStyle(.titleAndIcon)
-        // Dark-on-fill for the bright tiers, white on Very Low's desaturated
-        // grey — the same contrast split ConfidencePill makes, for the same
-        // MASTER.md >= 4.5:1 reason.
-        .foregroundStyle(level == .veryLow ? Color.captureChromeText : Color.captureBackground)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .frame(minHeight: 28)
-        .background(level.colour.opacity(0.85), in: Capsule())
+        .pillChrome(level: level)
         // One spoken element: the quantity, then what the colour says, because
         // the fill carries the tier and VoiceOver cannot see a fill.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(unitsLabel), estimate confidence \(level.label)")
         .accessibilityHint("Shows the working")
         .accessibilityIdentifier("dosePill.\(level.accessibilityToken)")
+    }
+}
+
+// The capsule both pills wear. Not a style choice per view: `DosePill`
+// replaced `ConfidencePill` in the same slot, so any divergence in padding or
+// minimum height would move the chrome around it. One modifier makes that
+// structural instead of a comment asking the next editor to remember.
+//
+// Foreground is dark-on-fill for the bright tiers (white on the accent green
+// is ~1.9:1 and on orange ~2.8:1 — both under MASTER.md's >= 4.5:1 budget;
+// the accent-filled controls already pair captureBackground text with bright
+// fills). Very Low's desaturated grey is the one fill dark enough to need
+// white.
+private struct PillChrome: ViewModifier {
+    let level: ConfidenceLevel
+
+    func body(content: Content) -> some View {
+        content
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(level == .veryLow ? Color.captureChromeText : Color.captureBackground)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .frame(minHeight: 28)
+            .background(level.colour.opacity(Metrics.fillAlpha), in: Capsule())
+    }
+}
+
+private extension View {
+    func pillChrome(level: ConfidenceLevel) -> some View {
+        modifier(PillChrome(level: level))
     }
 }
 

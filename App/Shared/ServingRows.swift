@@ -147,7 +147,7 @@ struct ServingGramEditor: View {
                 .frame(width: 52)
                 .padding(.vertical, 4)
                 .padding(.horizontal, 8)
-                .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: Metrics.cornerChip))
                 .onChange(of: text) { _, newValue in
                     let clamped = ServingStepLogic.clampedRowGrams(newValue)
                     if clamped != newValue { text = clamped }

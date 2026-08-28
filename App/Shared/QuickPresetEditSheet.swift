@@ -38,9 +38,9 @@ struct QuickPresetEditSheet: View {
         self.isNew = isNew
         _name = State(initialValue: preset.name)
         _carbsText = State(initialValue: preset.carbsG >= 1 ? String(Int(preset.carbsG.rounded())) : "")
-        _proteinText = State(initialValue: Self.macroText(preset.macros.proteinG))
-        _fatText = State(initialValue: Self.macroText(preset.macros.fatG))
-        _fibreText = State(initialValue: Self.macroText(preset.macros.fibreG))
+        _proteinText = State(initialValue: CarbEntryModel.macroText(preset.macros.proteinG))
+        _fatText = State(initialValue: CarbEntryModel.macroText(preset.macros.fatG))
+        _fibreText = State(initialValue: CarbEntryModel.macroText(preset.macros.fibreG))
         _macrosExpanded = State(initialValue: preset.macros != IntakeMacros())
     }
 
@@ -64,11 +64,7 @@ struct QuickPresetEditSheet: View {
                     carbField
                     macroDisclosure
                     saveButton
-                    if let saveError {
-                        Text(saveError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
+                    EntrySaveError(message: saveError)
                 }
                 .padding(20)
             }
@@ -85,7 +81,7 @@ struct QuickPresetEditSheet: View {
             .font(.headline)
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
-            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: Metrics.cornerChip))
             .accessibilityIdentifier("preset.name")
     }
 
@@ -131,9 +127,9 @@ struct QuickPresetEditSheet: View {
             name: trimmedName,
             carbsG: Double(carbs),
             macros: IntakeMacros(
-                proteinG: Self.macroValue(proteinText),
-                fatG: Self.macroValue(fatText),
-                fibreG: Self.macroValue(fibreText)
+                proteinG: CarbEntryModel.macroValue(proteinText),
+                fatG: CarbEntryModel.macroValue(fatText),
+                fibreG: CarbEntryModel.macroValue(fibreText)
             ),
             sortOrder: sortOrder,
             sourceMealID: sourceMealID
@@ -144,16 +140,5 @@ struct QuickPresetEditSheet: View {
         } catch {
             saveError = "Save failed: \(error.localizedDescription)"
         }
-    }
-
-    private static func macroValue(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        return Double(trimmed)
-    }
-
-    private static func macroText(_ value: Double?) -> String {
-        guard let value else { return "" }
-        return String(Int(value.rounded()))
     }
 }

@@ -70,6 +70,27 @@ struct EntrySaveButton: View {
     }
 }
 
+// The one place a failed write says so (manual-carb-intake Req 2.5, and the
+// same shape on glucose, insulin, activity and preset saves). Six sheets
+// carried a byte-identical `Text(...).font(.footnote).foregroundStyle(.red)`
+// under their save button; the copy is the model's `saveError` string, which
+// already names the underlying failure.
+//
+// It renders NOTHING when there is no error — deliberately a view that takes
+// the optional rather than an `if let` at each call site, so a sheet cannot
+// forget the treatment and invent its own.
+struct EntrySaveError: View {
+    let message: String?
+
+    var body: some View {
+        if let message {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+    }
+}
+
 // A selectable chip among peers. Deliberately NOT accent-coloured: on every
 // surface in this app the accent means "this writes a row", and picking a
 // kind writes nothing. The treatment is the plate-fraction control's, moved

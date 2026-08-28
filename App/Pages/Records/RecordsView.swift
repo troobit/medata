@@ -296,14 +296,10 @@ private struct InsulinRecordRow: View {
             glyphTint: entry.kind == .basal ? Color.seriesInsulinBasal : Color.seriesInsulinBolus,
             timestamp: entry.timestamp
         ) {
-            HStack(spacing: 8) {
-                Text("\(Int(entry.units.rounded())) U")
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                Text(entry.kind == .bolus ? "Bolus" : "Basal")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.textSecondary)
-            }
+            recordRowBody(
+                headline: "\(Int(entry.units.rounded())) U",
+                subheadline: entry.kind == .bolus ? "Bolus" : "Basal"
+            )
         }
         .accessibilityIdentifier("records.row.insulin")
     }
@@ -328,14 +324,10 @@ private struct GlucoseRecordRow: View {
                 ? Color.seriesGlucoseBlood : Color.seriesGlucose,
             timestamp: reading.timestamp
         ) {
-            HStack(spacing: 8) {
-                Text(String(format: "%.1f mmol/L", reading.mmolL))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                Text(reading.provenanceLabel)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.textSecondary)
-            }
+            recordRowBody(
+                headline: String(format: "%.1f mmol/L", reading.mmolL),
+                subheadline: reading.provenanceLabel
+            )
         }
         .accessibilityIdentifier("records.row.glucose")
     }
@@ -348,14 +340,7 @@ private struct IntakeRecordRow: View {
 
     var body: some View {
         TimelineRow(glyph: "carrot", glyphTint: Color.textSecondary, timestamp: record.timestamp) {
-            HStack(spacing: 8) {
-                Text(record.displayValue)
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                Text(record.typeLabel)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.textSecondary)
-            }
+            recordRowBody(headline: record.displayValue, subheadline: record.typeLabel)
         }
         .accessibilityIdentifier("records.row.intake")
     }
@@ -370,18 +355,38 @@ private struct ActivityRecordRow: View {
 
     var body: some View {
         TimelineRow(glyph: entry.kind.symbolName, glyphTint: Color.seriesActivity, timestamp: entry.timestamp) {
-            HStack(spacing: 8) {
-                Text(entry.kind.displayLabel)
-                    .font(.headline)
-                    .foregroundStyle(Color.textPrimary)
-                if let minutes = entry.durationMinutes {
-                    Text("\(Int(minutes.rounded())) min")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(Color.textSecondary)
-                }
-            }
+            recordRowBody(
+                // The kind is a word, not a number: the headline drops the
+                // monospaced digits and the duration beside it takes them.
+                headline: entry.kind.displayLabel,
+                headlineFont: .headline,
+                subheadline: entry.durationMinutes.map { "\(Int($0.rounded())) min" },
+                subheadlineFont: .subheadline.monospacedDigit()
+            )
         }
         .accessibilityIdentifier("records.row.activity")
+    }
+}
+
+// The value+label body every non-meal Records row puts inside its
+// `TimelineRow`: a prominent headline with a secondary label beside it. A nil
+// `subheadline` renders nothing at all — an activity with no recorded duration
+// shows the kind alone rather than "0 min" (activity-events Req 1.5).
+private func recordRowBody(
+    headline: String,
+    headlineFont: Font = .headline.monospacedDigit(),
+    subheadline: String?,
+    subheadlineFont: Font = .subheadline
+) -> some View {
+    HStack(spacing: 8) {
+        Text(headline)
+            .font(headlineFont)
+            .foregroundStyle(Color.textPrimary)
+        if let subheadline {
+            Text(subheadline)
+                .font(subheadlineFont)
+                .foregroundStyle(Color.textSecondary)
+        }
     }
 }
 

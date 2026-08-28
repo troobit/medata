@@ -36,11 +36,7 @@ struct ActivityContent: View {
             ) {
                 Task { if await model.save() { onSaved() } }
             }
-            if let saveError = model.saveError {
-                Text(saveError)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
+            EntrySaveError(message: model.saveError)
             Spacer(minLength: 0)
         }
         .padding(20)

@@ -128,13 +128,18 @@ final class CarbEntryModel {
         }
     }
 
-    private static func macroValue(_ text: String) -> Double? {
+    // The macro text <-> value pair for every surface that edits macros, not
+    // just this one: `QuickPresetEditSheet` writes the same three optional
+    // grams through the same empty-is-absent rule (Req 2.3 — an empty field
+    // stays absent, never 0), and carried a byte-identical copy until it
+    // started calling these. Internal, therefore, rather than private.
+    static func macroValue(_ text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         return Double(trimmed)
     }
 
-    private static func macroText(_ value: Double?) -> String {
+    static func macroText(_ value: Double?) -> String {
         guard let value else { return "" }
         return String(Int(value.rounded()))
     }

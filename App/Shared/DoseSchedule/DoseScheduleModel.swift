@@ -467,8 +467,6 @@ final class DoseScheduleModel {
     }
 
     static func unitsLabel(_ units: Double) -> String {
-        units == units.rounded()
-            ? "\(Int(units)) U"
-            : String(format: "%.1f U", units)
+        MedataFormat.quantity(units, unit: "U")
     }
 }
