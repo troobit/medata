@@ -93,8 +93,14 @@ struct CarbAmountText: View {
 // statement of the rule applied to that meal.
 //
 // Same middle-dot grammar and derived register as the review surface, so the
-// segments carry no verb: `12 U · 5 g/U · given 11 U`. The given figure is
-// paired by the ±45-minute window over insulin events, never by a stored link.
+// segments carry no verb: `12 U · given 11 U`. The given figure is paired by
+// the ±45-minute window over insulin events, never by a stored link.
+//
+// The ratio segment went with design-direction §10's device verdict
+// (2026-08-28): it is one tap away in the working on every surface that
+// renders a dose (Req 6.12), so carrying it on the line too was duplication.
+// The syringe glyph and the dotted underline match the review line — the same
+// quantity has to look like the same quantity wherever it appears.
 enum DoseHistoryLine {
     static func runs(
         _ readout: DoseReadout?, givenUnits: Double?
@@ -105,12 +111,9 @@ enum DoseHistoryLine {
                 id: "result.doseSuggestion",
                 text: readout.unitsLabel,
                 emphasised: true,
-                animates: Double(readout.units)
-            ),
-            MiddleDotLine.Run(
-                id: "result.doseRatio",
-                text: readout.ratioLabel,
-                animates: readout.gramsPerUnit
+                animates: Double(readout.units),
+                symbol: "syringe",
+                inspectable: true
             )
         ]
         if let givenUnits {
@@ -125,11 +128,12 @@ enum DoseHistoryLine {
         return runs
     }
 
-    // VoiceOver form: "12 U" spoken verbatim reads as "twelve you" and
-    // "5 g/U" as "g slash u" (ui-ux review 2026-08-25).
+    // VoiceOver form: "12 U" spoken verbatim reads as "twelve you"
+    // (ui-ux review 2026-08-25). The ratio clause went with the ratio run —
+    // parity with the line, and the working states it on tap.
     static func spokenLine(_ readout: DoseReadout?, givenUnits: Double?) -> String? {
         guard let readout else { return nil }
-        var line = "\(readout.spokenUnits) at \(readout.spokenRatio)"
+        var line = readout.spokenUnits
         if let givenUnits {
             line += ", given \(spokenUnits(givenUnits))"
         }

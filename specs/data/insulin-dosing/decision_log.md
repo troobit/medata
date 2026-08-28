@@ -1214,7 +1214,7 @@ names `-on-research-2`.
 
 ## Decision 17: Food-offset insulin-on-board, whole units, no suppressed outcomes, and the working on tap
 
-**Date**: 2026-08-26
+**Date**: 2026-08-28
 **Status**: accepted (its ledger-extension drafting — reduction column, seeder row write, version-aware rendering, stored-link membership — superseded by Decision 18; the rule changes stand)
 
 ### Context
@@ -1223,11 +1223,13 @@ The shipped rule was "carbs ÷ ratio − insulin-on-board, floored at zero" (Req
 
 ### Decision
 
-The suggested meal bolus is carbohydrate grams ÷ band ratio, less only the **unoffset** insulin-on-board — boluses with no meal or intake behind them (correction or freestanding doses); a bolus associated with a recorded meal or intake (the Req 7.5 association or its 45-minute window) never reduces a later meal's coverage (new Req 4.8). Results are whole units only (the 0.5 U increment is removed), and there are no suppressed outcomes: a meal with a carbohydrate total always shows its number, `0 U` included. Tapping the readout opens the working — `carbs ÷ ratio = y U`, each reduction as `− x U, for <reason>`, result — on every surface, reconstructed verbatim from the recorded row on history surfaces (Req 6.12). In the ledger, the insulin-on-board field keeps recording the physiological total (the field means what its name says); the subtraction the estimate applied is recorded as its own reduction field, capped at the base value so the recorded working sums exactly — a derived term is never recorded under its source's name (Req 7.2). The history surface is the single meal-detail screen of `specs/ui/home-router` Decision 16 (overview page and DEBUG `⋯ → Review` push deleted), and the demo-meal seeder writes its `dose_suggestions` row at seed time so a seeded meal shows its figure with zero navigation.
+The suggested meal bolus is carbohydrate grams ÷ band ratio, less only the **unoffset** insulin-on-board — boluses with no meal or intake behind them (correction or freestanding doses); a bolus associated with a recorded meal or intake (the Req 7.5 association or its 45-minute window) never reduces a later meal's coverage (new Req 4.8). Results are whole units only (the 0.5 U increment is removed), and there are no suppressed outcomes: a meal with a carbohydrate total always shows its number, `0 U` included. Tapping the readout opens the working — `carbs ÷ ratio = y U`, each reduction as `− x U, for <reason>`, result — on every surface, reconstructed verbatim from the recorded row on history surfaces (Req 6.12), and the readout **says so**: the dose numeral carries a dotted underline, and the segment carries the `syringe` SF Symbol naming what kind of quantity it holds. The dose stays out of the accent, unfilled, no larger than the carbohydrate figure, and writes nothing — those are the invariants that keep it from reading as an instruction. Carrying no mark at all was not one of them. In the ledger, the insulin-on-board field keeps recording the physiological total (the field means what its name says); the subtraction the estimate applied is recorded as its own reduction field, capped at the base value so the recorded working sums exactly — a derived term is never recorded under its source's name (Req 7.2). The history surface is the single meal-detail screen of `specs/ui/home-router` Decision 16 (overview page and DEBUG `⋯ → Review` push deleted), and the demo-meal seeder writes its `dose_suggestions` row at seed time so a seeded meal shows its figure with zero navigation.
 
 ### Rationale
 
-Full insulin-on-board subtraction conflates meal coverage with correction dosing; excluding food-offset boluses keeps the one case where active insulin genuinely reduces a needed dose (insulin given with no food behind it) while letting every eaten meal claim its own coverage. Making the reduction a visible line item and the working one tap away turns the old invisible-erasure failure into an inspectable arithmetic fact. Whole units match what the pen in use can deliver. `rule_version` bumps so rows computed under the superseded rule stay separable (Req 7.9).
+Full insulin-on-board subtraction conflates meal coverage with correction dosing; excluding food-offset boluses keeps the one case where active insulin genuinely reduces a needed dose (insulin given with no food behind it) while letting every eaten meal claim its own coverage. Making the reduction a visible line item and the working one tap away turns the old invisible-erasure failure into an inspectable arithmetic fact. Whole units match what the pen in use can deliver.
+
+The readout's own presentation is settled 2026-08-28 on device (the arithmetic above was settled 2026-08-26 and is unchanged). Two predictions made on paper failed when a seeded meal was on screen. The first was that a glyph beside the dose would read as a call to action; it reads as a type label, and its absence was the real defect — `≈ 380 g on plate · 6 U` rendered a measured mass and the dose derived from it in identical treatment, so they read as two measurements of one meal rather than a measurement and its consequence. The second was that any tap affordance was control chrome; with none, the working was simply undiscoverable, and a provenance route nobody can find is not a provenance route. Both were judgements about how a screen would be read, made before there was a screen to read. `rule_version` bumps so rows computed under the superseded rule stay separable (Req 7.9).
 
 ### Alternatives Considered
 
@@ -1246,13 +1248,13 @@ Full insulin-on-board subtraction conflates meal coverage with correction dosing
 
 **Negative:**
 - Determining "offset by food" needs the dose↔meal association at insulin-on-board time: the Req 7.5 link plus the 45-minute window against logged meals/intakes — more query surface than the old sum-all-boluses rule, and an unlogged meal's bolus still counts as unoffset (the model is only as good as what is logged).
-- The readout becomes tappable, softening design-direction §2.2's "never a control" (annotated in Req 6.12: it reveals, it does not act).
+- The readout becomes tappable and now shows it, softening design-direction §2.2's original "never a control" to "never writes" (Req 6.12: it reveals, it does not act). A dotted underline is a mark where there was none, and a reader who reads any mark as a control will read this one that way.
 - Recorded rows from the superseded rule mix with new rows in `dose_suggestions`; `rule_version` separates the populations.
 - The demo seeder writes into `dose_suggestions`; seeded rows are separable via the `demo_seed` provenance.
 
 ### Impact
 
-`MedataCore/Sources/Dosing/DoseSuggester.swift` (unoffset insulin-on-board input, no suppression outcomes, `ruleVersion` bump), `App/DoseSuggestionModel.swift` (offset-aware insulin-on-board query; increment fixed at 1 U), `App/DoseReadoutLine.swift` + the review/history/manual surfaces (always-render, tap-through working), the Settings increment row (removed), `App/SettingsView.swift`'s demo-meal seeder (writes the suggestion row), and the routing deletions of `specs/ui/home-router` Decision 16. Requirements 3.1, 3.4, 4.7, 5.1, 5.6, 5.7, 6.6, 6.10 amended and 4.8, 6.12 added above.
+`MedataCore/Sources/Dosing/DoseSuggester.swift` (unoffset insulin-on-board input, no suppression outcomes, `ruleVersion` bump), `App/DoseSuggestionModel.swift` (offset-aware insulin-on-board query; increment fixed at 1 U), `App/DoseReadoutLine.swift` + the review/history/manual surfaces (always-render, tap-through working, `syringe` glyph and dotted underline on the dose run, ratio run removed per design-direction §10), the Settings increment row (removed), `App/SettingsView.swift`'s demo-meal seeder (writes the suggestion row), and the routing deletions of `specs/ui/home-router` Decision 16. Requirements 3.1, 3.4, 4.7, 5.1, 5.6, 5.7, 6.6, 6.10 amended and 4.8, 6.12 added above.
 
 ---
 
