@@ -629,8 +629,14 @@ monospacedDigit` at `captureChromeText.opacity(0.75)`:
 ```
 60
 g carbs                       [confidence pill]
-≈ 214 g on plate · 12 U
+≈ 214 g on plate · ⚕ 12 U
+                     ‥‥‥‥
 ```
+
+The dose segment carries the `syringe` symbol and a dotted underline on its numeral
+(design-direction §2.2, settled on device 2026-08-28): the symbol says what kind of quantity it is
+so the mass beside it does not read as the same fact, and the underline says the working opens on
+tap. Neither changes the line's height.
 
 The worked figure throughout this spec is a 60 g-carbohydrate meal on a 214 g plate at breakfast:
 `60 g ÷ 5.0 g/U = 12.0 U`. The large numeral is `pendingTotalCarbsG` and the second line's mass is

@@ -23,11 +23,20 @@ carried by size, weight and colour — never by a label explaining what kind of 
 | **Committed** | Tapping this writes a row | `medataAccent` fill, `.body.weight(.semibold)`, height 48, radius 12 | `Record 60 g`, `Save 12 U bolus` |
 
 A dose suggestion is **permanently in the derived register**. It is never accent-coloured, never
-filled, never a control, and never larger than the carbohydrate figure it came from. This is the
+filled, never larger than the carbohydrate figure it came from, and it writes nothing. This is the
 whole answer to "how does it read without looking like a command": on this screen the accent colour
 already means *this button writes a row*, so a number that is not accent-coloured visibly cannot be
 an instruction. The distinction is structural, not editorial — no copy is needed to make it, which
 is what keeps the developer-phase no-disclaimer rule intact.
+
+**Within** that register the dose is marked apart from the mass beside it, by a syringe glyph and a
+dotted underline (§2.2). Both figures are derived, but they are not the same kind of fact: the mass
+is what the app measured off the plate, and the dose is what it computed *from* that mass and a
+ratio a human typed. Rendering them identically said they were peers — and the 2026-08-28 device
+session found that actively misleading, with `≈ 380 g on plate · 6 U` reading as two measurements
+of one meal rather than a measurement and its consequence. The glyph names the quantity, so a
+reader need not decode `U` to know what kind of number it is; the underline says a working exists
+behind it. Neither is accent, neither adds height, and neither lets the segment change anything.
 
 **Signature element — the middle-dot line, ordered by time.** The suggestion appends to the existing
 second line of `totalRow` as a `·`-separated segment. The line's axis is **time**: what is on the
@@ -96,8 +105,9 @@ Everything below `60 g carbs` is unchanged from what ships today except for the 
 ### 2.2 Line grammar
 
 ```
-  ≈ 214 g on plate  ·  12 U
-  └──── segment 1 ──┘  └ 2 ┘
+  ≈ 214 g on plate  ·  ⚕ 12 U
+  └──── segment 1 ──┘  └─ 2 ─┘
+                          ‥‥‥‥  dotted underline: the working is behind this
 ```
 
 - Segments are joined by ` · ` (U+00B7, space either side) rendered at `opacity(0.45)` of the line's
@@ -105,18 +115,32 @@ Everything below `60 g carbs` is unchanged from what ships today except for the 
 - Every segment is the same font and colour. The dose figure earns emphasis through
   `.weight(.semibold)` on the numeral run only — weight, not colour, because the screen's one-accent
   budget is spent on `Record` (MASTER.md pre-delivery checklist).
+- **The dose segment, and only the dose segment, carries the `syringe` SF Symbol before its
+  numeral**, at `.imageScale(.small)` in the line's own colour. It is a type label: it says what
+  kind of quantity follows, so `U` does not have to be decoded, and it is what stops a derived dose
+  reading as a second measurement beside the measured mass. No other segment takes a glyph.
+- **The dose numeral carries a dotted underline** (`.underline(pattern: .dot)`), which is the only
+  thing on the line stating that the tap of §2.2's amendment leads anywhere. It adds no glyph, no
+  colour and no height, so §2.3's shed order and `meal-review` Req 6.6 are both untouched.
+- The glyph and the underline are hidden from VoiceOver: the line composes one spoken label, and a
+  second announcement for the symbol would read as a stutter.
 - No verbs. Never *take*, *give*, *dose*, *inject*, *recommended*, *suggested*, *should*. The
   segment is a quantity and a unit symbol. `12 U`, and nothing else.
 - No range, no plus-or-minus, no confidence qualifier on the dose. The confidence pill already
   reports what the app knows about the estimate; qualifying the dose separately would be counsel.
 
-*(Amended by Decision 17, [Req 6.12](requirements.md#6.12): the readout is now tappable — the tap
+*(Amended by Decision 17, [Req 6.12](requirements.md#6.12): the readout is tappable — the tap
 opens the working (`60 g ÷ 5.0 g/U = 12.0 U`, one `− x U, for <reason>` line per reduction, the
 unrounded result, then the rounding step to the whole-unit dose: `12.0 − 1.4 = 10.6 → 11 U`,
 lines summing exactly at every step — rounding step added by Decision 18, which also has every
 surface recompute the same working live, history included). It reveals provenance; it does not
-act: nothing is written, no control chrome is added, and the visual register above is unchanged
-— "never a control" still governs how the segment looks and what it can change.)*
+act, and nothing is written.*
+
+*Decision 17 originally added that tap with no mark of any kind, on the reasoning that any
+affordance was control chrome. The 2026-08-28 device session found the affordance simply
+undiscoverable — the working existed and nothing on screen said so — so the dotted underline above
+replaces that position. "Writes nothing" is the invariant that was actually doing the safety work;
+"carries no mark" was not, and cost the feature its one route to its own provenance.)*
 
 ### 2.3 Degradation order — shed words before numbers
 
@@ -451,14 +475,24 @@ brought level.
   M*, *based on your settings*, *always confirm*, *this is an estimate*. The carve-out in CLAUDE.md
   for functional accuracy signals covers estimate accuracy; it does not extend to a dose.
 - **A new screen or sheet on the capture path.** Nothing is presented from inside the Capture cover.
-- **Emoji, icons or symbols beside the dose figure.** Not even a syringe glyph — an icon beside a
-  number reads as a call to action.
+- **Emoji anywhere, and any glyph on a segment that is not the dose.** The mass, the ratio and the
+  `given` figure carry no symbol; only the dose does, and only the one in §2.2. A glyph that
+  appears on every segment marks nothing.
+- **Accent, fill, or added height on the dose segment.** These are what would make it read as a
+  command; a type glyph is not, which is why §2.2 now requires one. *(Replaces the previous rule
+  "Emoji, icons or symbols beside the dose figure — not even a syringe glyph, an icon beside a
+  number reads as a call to action." Reversed on the 2026-08-28 device verdict: the glyph was
+  predicted to read as a call to action and does not. It reads as a type label, and the real defect
+  on device was the opposite one — with no glyph the dose was indistinguishable from the mass
+  estimate beside it. What makes a number look like a command is accent, fill and size, all of
+  which remain forbidden.)*
 
 ---
 
 ## 9. Checklist against `design-system/MASTER.md`
 
-- [x] No emojis as icons — no glyph is added anywhere
+- [x] No emojis as icons — the dose glyph is an SF Symbol (`syringe`), the same one the Dose
+      button and the Records row already use for this quantity; no emoji is used anywhere
 - [x] Touch targets ≥48pt — no new targets; existing controls unchanged
 - [x] Press feedback within 100ms — no new pressable surfaces on the capture path
 - [x] Contrast ≥4.5:1 — white at 0.75 opacity on pure black is ~11:1; `textSecondary` is a system
@@ -472,11 +506,16 @@ brought level.
 
 ---
 
-## 10. Open question for the build
+## 10. Settled on device — bare `12 U`
 
 §2.2 keeps the review-screen segment to bare `12 U`, matching [design.md](design.md), and puts the
-divisor in the dose sheet's provenance caption instead. The alternative is
-`· 12 U at 5 g/U` on the review line: it makes the ratio convention visible at the moment of
-capture and would survive the shed order at position 3, at the cost of eleven characters on the
-tightest line in the app and one more thing to read on a screen whose job is to be dismissed in
-seconds. Decide once, on device, with a real meal on screen — not on a mockup.
+divisor in the working instead. The alternative was `· 12 U at 5 g/U` on the review line: visible
+ratio convention at the moment of capture, at the cost of eleven characters on the tightest line in
+the app and one more thing to read on a screen whose job is to be dismissed in seconds.
+
+**Decided 2026-08-28, on device, against the seeded demo meal** — the terms this section asked for.
+The build had shipped the data-forward branch (`≈ 380 g on plate · 6 U · 10 g/U`); with it on
+screen the verdict was that the ratio is not needed on the line, because tapping the figure already
+states it in the working. The ratio run is removed from every surface that renders a dose — the
+review total line, the history line, and their spoken labels — leaving `design.md`'s form at every
+width. The divisor is now stated in exactly one place per surface: the working.

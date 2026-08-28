@@ -68,15 +68,13 @@ nonisolated struct DoseReadout: Sendable, Equatable {
         "from \(Int(carbsG.rounded())) g at \(ratioLabel)"
     }
 
-    // Spoken forms for VoiceOver labels: "12 U" reads as "twelve you" and
-    // "5 g/U" as "g slash u" if the display strings are spoken verbatim
-    // (ui-ux review 2026-08-25).
+    // Spoken form for VoiceOver labels: "12 U" reads as "twelve you" if the
+    // display string is spoken verbatim (ui-ux review 2026-08-25).
+    //
+    // There is no spoken ratio here. The ratio left every readout line with
+    // design-direction §10's device verdict (2026-08-28) and is now stated
+    // only in the working, which carries its own spoken form.
     var spokenUnits: String { "\(units) units" }
-    var spokenRatio: String {
-        let text = gramsPerUnit == gramsPerUnit.rounded()
-            ? String(Int(gramsPerUnit)) : String(format: "%.1f", gramsPerUnit)
-        return "\(text) grams per unit"
-    }
 
     /// What the dose sheet opens at, or nil where the dose rounds to `0 U`:
     /// a zero renders its readout and its working but seeds no control

@@ -91,15 +91,23 @@ struct CarbEntryContent: View {
         CarbAmountField(text: $model.carbsText, identifier: "carb.amount") {
             if let readout = doseReadout {
                 // `Text + Text` is deprecated from iOS 26. Interpolating the
-                // two runs into one `Text` is the replacement and preserves
-                // both the separator's own opacity and the label's own weight.
+                // runs into one `Text` is the replacement and preserves both
+                // the separator's own opacity and the label's own weight.
                 // Deliberately still ONE `Text`: the tap target and the
                 // `accessibilityLabel` below rely on this being a single
-                // element, which an HStack of runs would split in two.
+                // element, which an HStack of runs would split in two — which
+                // is also why the glyph is interpolated rather than placed in
+                // an HStack the way `MiddleDotLine` can afford to.
+                //
+                // Glyph and dotted underline match the review and history
+                // lines: the same quantity looks the same wherever it renders,
+                // and the underline is the only mark saying the working exists.
                 let separator = Text(" · ")
                     .foregroundStyle(Color.textSecondary.opacity(0.45))
-                let units = Text(readout.unitsLabel).fontWeight(.semibold)
-                Text("\(separator)\(units)")
+                let units = Text(readout.unitsLabel)
+                    .fontWeight(.semibold)
+                    .underline(pattern: .dot)
+                Text("\(separator)\(Image(systemName: "syringe")) \(units)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
                     // Gated on Reduce Motion like every other animated numeral

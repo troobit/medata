@@ -25,6 +25,14 @@ struct MiddleDotLine: View {
         /// The value whose change drives the numeric roll, when the run holds
         /// a number.
         var animates: Double?
+        /// SF Symbol naming what kind of quantity the run holds, drawn before
+        /// the numeral. On the dose run this is what separates a derived dose
+        /// from the estimate it was derived from (design-direction §2.2).
+        var symbol: String?
+        /// Marks the run as opening its working on tap (Req 6.12). Rendered as
+        /// a dotted underline: the affordance has to be visible, and a dotted
+        /// rule is the one mark that adds no glyph, no colour and no height.
+        var inspectable = false
     }
 
     let runs: [Run]
@@ -40,12 +48,23 @@ struct MiddleDotLine: View {
                     Text(" · ")
                         .foregroundStyle(separatorColour)
                 }
-                Text(run.text)
-                    .fontWeight(run.emphasised ? .semibold : .regular)
-                    .foregroundStyle(textColour)
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .smooth, value: run.animates ?? 0)
-                    .accessibilityIdentifier(run.id)
+                HStack(spacing: 3) {
+                    if let symbol = run.symbol {
+                        Image(systemName: symbol)
+                            .imageScale(.small)
+                            .foregroundStyle(textColour)
+                            // The spoken label is composed on the whole line,
+                            // so the glyph must not add a second announcement.
+                            .accessibilityHidden(true)
+                    }
+                    Text(run.text)
+                        .fontWeight(run.emphasised ? .semibold : .regular)
+                        .foregroundStyle(textColour)
+                        .underline(run.inspectable, pattern: .dot)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .animation(reduceMotion ? nil : .smooth, value: run.animates ?? 0)
+                        .accessibilityIdentifier(run.id)
+                }
             }
         }
         .font(.subheadline.monospacedDigit())
@@ -61,15 +80,18 @@ struct MiddleDotLine: View {
 // why a later second-spike suggestion needs no redesign — it is the next
 // segment on a line that was always a timeline.
 //
-// The divisor rides along. design-direction §10 leaves the choice between bare
-// `12 U` and `12 U · 5 g/U` open for a device pass; this build takes the
-// data-forward branch, because the ratio is the parameter the whole feature
-// exists to measure and putting it on screen at every meal is how it stops
-// being invisible. The shed order below makes that additive rather than
-// costly: the ratio is the FIRST thing dropped when the line tightens, so at
-// any width where it does not fit the line is byte-identical to design.md's
-// `≈ 214 g on plate · 12 U`. Reverting to the bare form permanently is
-// deleting one candidate from `ViewThatFits`.
+// The divisor does NOT ride along. design-direction §10 left the choice
+// between bare `12 U` and `12 U · 5 g/U` open for a device pass and asked for
+// it to be decided on device with a real meal on screen; the 2026-08-28
+// session decided bare, so the line is design.md's
+// `≈ 214 g on plate · 12 U` at every width. The ratio is one tap away in the
+// working, which is where a reader who wants it is already going.
+//
+// The dose segment carries the syringe glyph and a dotted underline. The
+// glyph says what kind of quantity it is without the reader decoding `U`, and
+// it is what stops the dose reading as a third peer measurement beside the
+// mass — the mass is measured, the dose is derived FROM it. The underline is
+// the only thing on the line that says the working exists.
 struct MealTotalSecondLine: View {
     let massG: Double
     let readout: DoseReadout?
@@ -84,16 +106,9 @@ struct MealTotalSecondLine: View {
             id: "review.doseSuggestion",
             text: readout.unitsLabel,
             emphasised: true,
-            animates: Double(readout.units)
-        )
-    }
-
-    private var ratioRun: MiddleDotLine.Run? {
-        guard let readout else { return nil }
-        return MiddleDotLine.Run(
-            id: "review.doseRatio",
-            text: readout.ratioLabel,
-            animates: readout.gramsPerUnit
+            animates: Double(readout.units),
+            symbol: "syringe",
+            inspectable: true
         )
     }
 
@@ -101,9 +116,12 @@ struct MealTotalSecondLine: View {
         MiddleDotLine.Run(id: "review.massLine", text: text, animates: massG)
     }
 
+    // Parity with the line: the ratio left the screen, so it leaves the
+    // spoken label too. A VoiceOver reader who wants it takes the same route
+    // a sighted one does — the "Show working" action on this row.
     private var spokenLabel: String {
         guard let readout else { return "\(mass) grams on plate" }
-        return "\(mass) grams on plate. \(readout.spokenUnits) at \(readout.spokenRatio)."
+        return "\(mass) grams on plate. \(readout.spokenUnits)."
     }
 
     private func line(_ runs: [MiddleDotLine.Run?]) -> some View {
@@ -116,12 +134,9 @@ struct MealTotalSecondLine: View {
 
     var body: some View {
         if let doseRun {
-            // The ratio is the FIRST thing shed: at any width where it does
-            // not fit, the line is byte-identical to design.md's
-            // `≈ 214 g on plate · 12 U` and then follows design-direction
-            // §2.3's shed order (words before numbers, the dose never).
+            // design-direction §2.3's shed order: words before numbers, the
+            // dose never.
             ViewThatFits(in: .horizontal) {
-                line([massRun("≈ \(mass) g on plate"), doseRun, ratioRun])
                 line([massRun("≈ \(mass) g on plate"), doseRun])
                 line([massRun("≈ \(mass) g"), doseRun])
                 line([massRun("\(mass) g"), doseRun])
