@@ -193,6 +193,19 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 
 ## Gotchas
 
+- **`run_validation.py --lineage <path>` requires that file to ALREADY EXIST.**
+  `validation.update_lineage_file` is read-modify-write, so a fresh path raises
+  `FileNotFoundError` — *after* the whole validation pass has run, so the
+  measurement is computed and then thrown away. Seed it first
+  (`cp build/lineage.json build/lineage-<run>.json`) and pass the copy. Naming a
+  fresh file is the natural thing to do precisely when you are trying not to
+  clobber a promoted checkpoint's record, which is when it costs the most.
+- **`train.py` writes `build/lineage.json`, the shared path, unconditionally.**
+  It is not namespaced per run, so each training run overwrites the previous
+  run's record there. Promoted checkpoints survive only because their record was
+  separately copied to `build/lineage-<model_version>.json` — do that for any
+  run whose lineage matters before starting the next one.
+
 - **Core ML output `MLMultiArray`s are strided, not dense.** The 513-wide
   segmenter output comes back with a 544-element row stride (measured on both
   `.cpuOnly` and `.all`); any Swift code reading the raw buffer must index via
