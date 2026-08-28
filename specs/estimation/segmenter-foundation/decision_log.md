@@ -1437,3 +1437,66 @@ The run also lands below the strict export gate (0.48 mean, 0.45 per staple) on 
 `tools/segmenter/build/checkpoint_r1_combined_sqrtinv_merged.pt` and `build/lineage-r1.json` (retained, not promoted); `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 6 (closed) and task 10 (premise supplied). No change to the bundled model, the palette, or any shipped artifact.
 
 ---
+
+## Decision 36: R3 attributes R1's regression to the class weighting, and is adopted as the reference checkpoint
+
+**Date**: 2026-08-28
+**Status**: accepted
+
+### Context
+
+Decision 35 recorded R1 (`eb18a668c6ce`) as not adopted: it regressed the leak-free anchor by 0.0139 against the promoted incumbent `ab812dc3aa9d`, with one weak staple up and three strong ones down. Three levers had moved together — `--loss combined`, `--class-weighting sqrt_inverse`, `--photometric-augment` — so the cause was not attributable, and Decision 34 had already stated that an unattributable outcome owes an ablation rather than a conclusion.
+
+R3 is that ablation. It holds the loss and the augmentation fixed and drops the weighting to `none`, at the same parity as R1 and the incumbent (merged corpus, 36 classes, 513x513, 12 epochs, batch 16, lr 1e-3, poly-0.9 per epoch). If the staples recover, the weighting is the cause; if they do not, the loss or the augmentation is, and the next ablation follows.
+
+### Decision
+
+The class weighting is the cause. R3 (`0a019c00e943`, `checkpoint_r3_combined_noweight.pt`) is **adopted as the reference checkpoint and the recipe of record**: `--loss combined --class-weighting none --photometric-augment`.
+
+Adoption is of the RECIPE and the CHECKPOINT. The bundled `segmenter.mlpackage` is **not** swapped by this decision — export and the on-device pass remain the separate gated step they have always been, taken when a device session is available. Until then the shipped artifact stays `ab812dc3aa9d`, and any capture recorded before the swap still stamps the incumbent.
+
+### Rationale
+
+Every staple R1 lost, R3 recovered, and the recovery is large enough not to be noise:
+
+| | incumbent | R1 | R3 | R3 − incumbent |
+|---|---|---|---|---|
+| **mean food-class IoU** | 0.3927 | 0.3787 | **0.4192** | **+0.0265** |
+| white_rice | 0.6320 | 0.5426 | 0.6818 | +0.0498 |
+| pasta | 0.6497 | 0.5125 | 0.6324 | −0.0172 |
+| bread_white | 0.3927 | 0.4434 | 0.4591 | +0.0665 |
+| potato_boiled | 0.4748 | 0.4512 | 0.5400 | +0.0652 |
+| chips_fries | 0.5599 | 0.4646 | 0.5718 | +0.0119 |
+| bread_wholemeal | 0.0000 | 0.0000 | 0.0000 | +0.0000 |
+| brown_rice | absent | 0.0000 | absent | — |
+| potato_mashed | 0.0000 | 0.0000 | absent | — |
+
+Changing one lever moved white_rice by +0.1392, pasta by +0.1199 and chips_fries by +0.1072 against R1. That is a single-variable result on a fixed anchor, so the attribution is measured rather than argued: **inverse-frequency weighting is the staple-killer, and the milder `sqrt_inverse` scheme is not mild enough**. Decision 25 reached that conclusion for the plain inverse scheme; it now extends to sqrt.
+
+The second finding is separable and is why R3 is adopted rather than merely explanatory. R3 beats the INCUMBENT, not just R1, by +0.0265 — so the two levers R1 had confounded, the combined Dice+CE loss and the photometric augmentation, are jointly beneficial once the weighting is out of the way. `bread_white` crossing 0.4591 is the sharpest single gain: it is the one staple the incumbent itself failed the 0.45 floor on, and it now passes.
+
+### Alternatives Considered
+
+- **Adopt and swap the bundled model in the same step**: The measurement supports the recipe, but the artifact swap is a `cp -R` that leaves no trace other than the model id on subsequent captures, and it wants an on-device pass behind it (model-production Req 6.3). Splitting the two keeps the shipped artifact attributable at every moment.
+- **Hold R3 unadopted pending a further ablation of loss versus augmentation**: R1's confounding is resolved for the question that was asked, and the pair is measurably better than the incumbent together. Separating the last two levers is a real question but not one blocking this verdict; it is a candidate for the queue, not a precondition.
+- **Reject on the strict export gate**: `export_eligible` is false (mean 0.4192 against the 0.48 bar), but the promoted incumbent fails the same bar at 0.3927 and ships under the Decision 11 developer-phase override. Rejecting R3 on a gate the incumbent also fails would keep a worse model for a reason that does not distinguish them.
+
+### Consequences
+
+**Positive:**
+- The recipe of record improves on the shipped model by +0.0265 mean and on four of five measurable staples.
+- `bread_white` passes its floor for the first time.
+- R1's unattributable regression is closed with a measured cause, so the queue is no longer carrying an open question about which of three levers was harmful.
+- `sqrt_inverse` can be retired from the candidate set rather than re-tried at another strength.
+
+**Negative:**
+- `pasta` is down 0.0172 against the incumbent — the one measurable staple that did not improve. Inside the ±0.10 cross-set noise Decision 27 worked to, but it is a regression and is recorded as one rather than rounded away.
+- R3 still fails the 0.48 strict gate, so promoting it to the device needs an explicit Decision 11 override recorded in lineage, exactly as the incumbent did.
+- Three floors remain unproven rather than passed: `bread_wholemeal` is 0.0000 for every model measured including the incumbent, and `brown_rice` and `potato_mashed` are absent from the 182-image anchor, which therefore cannot prove them either way.
+- Adopting the recipe without swapping the artifact leaves a window where the recipe of record and the shipped model differ. The `segmenterSource` stamp on each capture is what keeps that legible.
+
+### Impact
+
+`tools/segmenter/build/checkpoint_r3_combined_noweight.pt` and `lineage-r3.json` become the reference pair. `docs/ml-training.md` §4 records the adopted recipe. `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 10 closes. The remaining swap — export to Core ML, the gates, the `.mlpackage` replacement and an on-device capture pass — is unscheduled work, not an open question.
+
+---

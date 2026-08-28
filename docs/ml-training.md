@@ -352,6 +352,43 @@ nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
     >> tools/segmenter/build/train_merged_v2.log 2>&1 &
 ```
 
+### The adopted recipe (estimation-quality R3, 2026-08-28): `combined`, no weighting
+
+**This is the recipe of record** (segmenter-foundation Decision 36). It beats the shipped
+`ab812dc3aa9d` by +0.0265 mean food-class IoU on the 182-image leak-free anchor (0.4192 vs 0.3927)
+and improves four of the five measurable staples, `bread_white` crossing its 0.45 floor for the
+first time. Start any new run from this, not from the R1 line below.
+
+```sh
+nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
+    --data /Users/r/repos/medata/data/merged_foodseg_foodrec2022 \
+    --num-classes 36 --target-size 513 \
+    --epochs 12 --batch-size 16 --lr 1e-3 \
+    --loss combined --class-weighting none --photometric-augment \
+    --out tools/segmenter/build/checkpoint_r3_combined_noweight.pt \
+    >> tools/segmenter/build/train_r3_combined_noweight_20260828.log 2>&1 &
+```
+
+Judged with (note the **v2** corpus — the v1 tree is a 35-channel label space and
+`run_validation.py` refuses it rather than returning a plausible wrong number):
+
+```sh
+tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
+    --checkpoint /Users/r/repos/medata/tools/segmenter/build/checkpoint_r3_combined_noweight.pt \
+    --data /Users/r/repos/medata/data/foodseg103_remapped_v2 \
+    --split heldout_leakfree \
+    --lineage /Users/r/repos/medata/tools/segmenter/build/lineage-r3.json
+```
+
+Pass `--lineage` an ABSOLUTE path or the metrics land in a stray nested tree. Twelve epochs took
+about 6 h 20 m on MPS, and the run was still climbing at epoch 12 (0.4335 → 0.4510 on merged val),
+so a longer schedule is an open question rather than a settled one.
+
+**`--class-weighting sqrt_inverse` is retired.** R1 ran the same recipe with it and lost three
+strong staples — white_rice, pasta and chips_fries each down 0.09 to 0.14 — which R3 recovered by
+changing only that flag. Decision 25 established inverse-frequency weighting as the staple-killer;
+sqrt is not mild enough either.
+
 ### Current run (estimation-quality R1, 2026-08-14): `combined` + `sqrt_inverse`
 
 R1 is the settled class-imbalance recipe from estimation-quality task 6: the
