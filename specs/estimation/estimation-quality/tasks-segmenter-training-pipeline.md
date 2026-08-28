@@ -72,7 +72,7 @@ references:
   - Needs a decision entry either way, in segmenter-foundation/decision_log.md where the corpus and recipe verdicts live
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Spike — settle the MetaFood3D mask route, then judge whether the corpus is worth building agent-executable, no GPU)
 
-- [ ] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
+- [-] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
   - PREMISE SUPPLIED 2026-08-28 by R1's verdict (segmenter-foundation Decision 35). R1 regressed the anchor by 0.0139 with one weak staple up (bread_white +0.0507) and three strong ones down (pasta -0.1372
   - chips_fries -0.0953
   - white_rice -0.0895). Three levers moved at once
@@ -82,6 +82,8 @@ references:
   - Judge on heldout_leakfree against ab812dc3aa9d at 0.3927 with the 0.45 staple floors
   - and read the per-staple table in Decision 35 rather than the mean alone — the mean hid a redistribution
   - Serial queue: one run at a time on the one machine. Either outcome earns its own decision entry
+  - LAUNCHED 2026-08-28 at code commit 6ad2bbe on a clean tree. Command: train.py --data data/merged_foodseg_foodrec2022 --num-classes 36 --target-size 513 --epochs 12 --batch-size 16 --lr 1e-3 --loss combined --class-weighting none --photometric-augment --out tools/segmenter/build/checkpoint_r3_combined_noweight.pt
+  - Run log: tools/segmenter/build/train_r3_combined_noweight_20260828.log. Confirmed at start: device mps; train 45515 / val 1711 (incumbent parity); loss {combined, dice_weight 0.5, weighting none}, photometric ON. R1 took about 6h25m for the same 12 epochs
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
 
 - [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question <!-- id:8l5zdrf -->
