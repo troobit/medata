@@ -311,9 +311,10 @@ split) — another reason the gate targets ProductRelease.
 
 ## On-device note layer (`App/Field*.swift`)
 
-Every file is `#if FIELD_LOOP` at line 1 and needs the four-place
-`project.pbxproj` registration — `tools/pbx_add_app_file.py` does it and is
-idempotent (ids are derived from the file name, so a re-run produces no diff).
+Every file is `#if FIELD_LOOP` at line 1. They live in
+`App/Shared/FieldLoop/` and need no project registration — `App/` is a
+synchronised group (docs/agent-notes/ui-capture-flow.md). The former
+`tools/pbx_add_app_file.py` is deleted.
 
 | File | Holds |
 |---|---|

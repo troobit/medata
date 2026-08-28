@@ -39,6 +39,13 @@ struct EntrySaveButton: View {
     let identifier: String
     let action: () -> Void
 
+    // Every entry sheet commits through this button, so putting the haptic
+    // HERE gives insulin, glucose, activity and carbohydrate entry the same
+    // confirmation in the hand for one line of code. `isSaving` falling back
+    // to false is the moment the write landed, so the counter it drives is
+    // the honest trigger — it cannot fire on a save that failed to start.
+    @State private var commits = 0
+
     var body: some View {
         Button(action: action) {
             if isSaving {
@@ -55,6 +62,10 @@ struct EntrySaveButton: View {
         .tint(.medataAccent)
         .foregroundStyle(Color.captureBackground)
         .disabled(!isEnabled || isSaving)
+        .commitFeedback(trigger: commits)
+        .onChange(of: isSaving) { wasSaving, nowSaving in
+            if wasSaving, !nowSaving { commits += 1 }
+        }
         .accessibilityIdentifier(identifier)
     }
 }

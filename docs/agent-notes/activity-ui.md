@@ -57,8 +57,8 @@ and the deep link only.
   pinned height** (`rowCount × doseRowHeight`), copied from the Insulin
   section — without the pin it collapses to zero. That list is read-only;
   deletion lives on Records, by the same swipe the insulin rows use.
-- Both new files are registered in `project.pbxproj` in the four places the
-  checklist in `ui-capture-flow.md` lists.
+- Both files need no `project.pbxproj` entry: `App/` became a synchronised
+  group on 2026-08-28 (docs/agent-notes/ui-capture-flow.md).
 
 ## Design attempts on the device
 
