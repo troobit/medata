@@ -236,20 +236,43 @@ the historical recipe is a temporary unit-test target with
 `TEST_HOST = $(BUILT_PRODUCTS_DIR)/MeData.app/MeData` (validated once: all 40
 passed on the iPhone 17 Pro simulator).
 
-## Adding a new file under `App/` — pbxproj checklist
+## Adding a new file under `App/` — nothing to do
 
-`App/*.swift` files are NOT auto-discovered (unlike `MeData/MeData/`, which is
-a file-system-synchronised group). Each file must be registered in
-`MeData/MeData.xcodeproj/project.pbxproj` in **four places** (copy the
-`RefusalSheet.swift` entries as a template, generating fresh 24-hex IDs):
+**`App/` is a `PBXFileSystemSynchronizedRootGroup` as of 2026-08-28.** Drop a
+`.swift` file anywhere under `App/` and it is in the MeData target. Create a
+folder and it appears in Xcode's navigator. There is no registration step.
 
-1. `PBXBuildFile` section — `<buildID> /* X.swift in Sources */ = {isa = PBXBuildFile; fileRef = <fileID> …};`
-2. `PBXFileReference` section — with `path = ../App/X.swift; sourceTree = SOURCE_ROOT;`
-3. The `PBXGroup` children list that holds the other App files
-4. The `PBXSourcesBuildPhase` files list
+This replaced a four-place `project.pbxproj` checklist (`PBXBuildFile`,
+`PBXFileReference`, the `PBXGroup` children list, the `PBXSourcesBuildPhase`
+files list) that had to be repeated per file, where missing one made the build
+either fail or — worse — silently omit the file. `tools/pbx_add_app_file.py`
+existed to automate it and is deleted; 324 lines left `project.pbxproj` with it.
 
-Miss one and the build either fails or silently omits the file. Conversely,
-files dropped INSIDE `MeData/MeData/` are auto-added to the target including
+The group is declared with `path = ../App; sourceTree = SOURCE_ROOT`, which
+resolves from the project directory (`MeData/`) up to the repo root. A relative
+path in a synchronised root group is unusual but works — it was verified by
+putting a deliberate type error in a file under a new folder and confirming the
+compiler reported it.
+
+Two consequences worth knowing:
+
+- **Every file under `App/` is now compiled**, including any that were
+  previously on disk but unregistered. `App/Pages/Capture/CapturePathDecider.swift`
+  was exactly that — it survives only because its whole body sits behind
+  `#if AUTO_CAPTURE_MODE`, a flag defined nowhere.
+- **Non-Swift files join Copy Bundle Resources automatically**, and that bites
+  immediately: `App/README.md` and `App/Design/README.md` both tried to copy to
+  `MeData.app/README.md` and the build failed with *"Multiple commands produce
+  … /MeData.app/README.md"*. Two files with the same basename anywhere under
+  `App/` will collide, however deep their folders.
+- **To exclude a file** you need a `PBXFileSystemSynchronizedBuildFileExceptionSet`
+  with a `membershipExceptions` entry, listed on the root group's `exceptions`
+  array, the way `MeDataWidgets` excludes its `Info.plist`. Paths in
+  `membershipExceptions` are relative to the synchronised folder — `README.md`
+  and `Design/README.md`, not `App/README.md`. Deleting a reference no longer
+  works, because there are none.
+
+Files dropped INSIDE `MeData/MeData/` are likewise auto-added, including to
 Copy Bundle Resources — which is why `MeData/Info.plist` (build stamp) lives
 outside that folder ("Multiple commands produce Info.plist" otherwise).
 

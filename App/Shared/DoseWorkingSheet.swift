@@ -1,0 +1,172 @@
+import Dosing
+import SwiftUI
+
+// The working, one tap away (specs/data/insulin-dosing Req 6.12, Decisions
+// 17/18).
+//
+// Tapping the dose readout on any surface — the review line, the manual-entry
+// line, the history detail — opens the calculation behind the number:
+//
+//     60 g ÷ 5 g/U = 12.0 U
+//     − 1.4 U, for insulin on board
+//     = 10.6 U
+//     → 11 U
+//
+// The base line, one line per reduction, the unrounded result, the rounding
+// step. Because `reductionUnits` is capped at `baseUnits` in the suggester,
+// the lines sum exactly at every step — never a hidden jump.
+//
+// Reveal-not-act: nothing is written, dismissal returns the untouched surface.
+// Arithmetic labelling only — no advice, no range.
+//
+// Since 2026-08-28 the sheet also states the estimate's confidence tier, under
+// the calculation. That is not a hedge on the dose: the dose pill's FILL now
+// carries the tier as colour, and a colour with no legend anywhere is not a
+// signal. This is the legend. It names what the colour on the pill means and
+// stops there — no advice about what to do differently at any tier.
+
+/// The lines, as text. Pure, so live surfaces and the history recompute render
+/// the same working from the same `SuggestedDose` (Req 6.11).
+enum DoseWorking {
+
+    struct Line: Identifiable {
+        let id: String
+        let text: String
+        let spoken: String
+    }
+
+    static func lines(_ readout: DoseReadout) -> [Line] {
+        let dose = readout.dose
+        var lines: [Line] = [
+            Line(
+                id: "working.base",
+                text: "\(grams(readout.carbsG)) ÷ \(ratio(readout.gramsPerUnit)) "
+                    + "= \(decimalUnits(dose.baseUnits))",
+                spoken: "\(grams(readout.carbsG)) divided by "
+                    + "\(spokenRatio(readout.gramsPerUnit)) "
+                    + "is \(spokenDecimalUnits(dose.baseUnits))"
+            )
+        ]
+        // A zero reduction renders no line: there is nothing to subtract, and
+        // an explicit "− 0 U" would state a term that did not apply.
+        if dose.reductionUnits > 0 {
+            lines.append(
+                Line(
+                    id: "working.reduction.iob",
+                    text: "− \(decimalUnits(dose.reductionUnits)), for insulin on board",
+                    spoken: "minus \(spokenDecimalUnits(dose.reductionUnits)), "
+                        + "for insulin on board"
+                )
+            )
+            lines.append(
+                Line(
+                    id: "working.exact",
+                    text: "= \(decimalUnits(dose.exactUnits))",
+                    spoken: "is \(spokenDecimalUnits(dose.exactUnits))"
+                )
+            )
+        }
+        lines.append(
+            Line(
+                id: "working.rounded",
+                text: "→ \(DoseReadout.wholeUnitsLabel(dose.roundedUnits))",
+                spoken: "rounds to \(readout.spokenUnits)"
+            )
+        )
+        return lines
+    }
+
+    /// Grams, faithful to one decimal when the value carries a fraction.
+    ///
+    /// NOT rounded to whole grams: this is the numerator of a division the
+    /// reader is invited to check, so 4.9 g shown as "5 g" makes the next line
+    /// read as 0.5 rounding DOWN to 0 — the opposite of the half-away-from-zero
+    /// rule (Req 5.2), on the one surface whose whole job is showing the rule.
+    private static func grams(_ value: Double) -> String {
+        MedataFormat.quantity(value, unit: "g")
+    }
+
+    /// The base line states the divisor to one decimal too — `5.0 g/U`, not
+    /// the readout line's shorter `5 g/U`: here it is a term in an equation
+    /// that must be checkable against the figures either side of it.
+    private static func ratio(_ value: Double) -> String {
+        String(format: "%.1f g/U", value)
+    }
+
+    private static func spokenRatio(_ value: Double) -> String {
+        String(format: "%.1f grams per unit", value)
+    }
+
+    /// The base, reduction and unrounded-result terms state at least one
+    /// decimal place, so the rounding error stays inspectable (Req 5.3). They
+    /// are arithmetic facts, not dose figures, so the whole-unit rule of
+    /// Req 5.1 does not govern them.
+    /// At least one decimal, and a second one when the first would round the
+    /// figure across the half-unit boundary the next line turns on: 0.49 U
+    /// shown as "0.5 U" makes "→ 0 U" read as a contradiction of Req 5.2.
+    private static func decimalUnits(_ value: Double) -> String {
+        String(format: "%@ U", decimals(value))
+    }
+
+    private static func spokenDecimalUnits(_ value: Double) -> String {
+        String(format: "%@ units", decimals(value))
+    }
+
+    private static func decimals(_ value: Double) -> String {
+        let oneDecimal = String(format: "%.1f", value)
+        return Double(oneDecimal) == (value * 100).rounded() / 100
+            ? oneDecimal
+            : String(format: "%.2f", value)
+    }
+}
+
+struct DoseWorkingSheet: View {
+    let readout: DoseReadout
+    /// The meal's confidence, where the dose came from a capture. Manual
+    /// carbohydrate entry has no model estimate behind it and so has no tier
+    /// to name — the absence is the honest rendering, not a missing value.
+    var sigmaMeal: Float?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(DoseWorking.lines(readout)) { line in
+                    Text(line.text)
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(Color.textPrimary)
+                        .accessibilityLabel(line.spoken)
+                        .accessibilityIdentifier(line.id)
+                }
+                if let sigmaMeal {
+                    let level = ConfidenceLevel.forSigma(sigmaMeal)
+                    Divider().overlay(Color.textSecondary.opacity(0.3))
+                    Label {
+                        Text("Estimate confidence \(level.label)")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: level.iconName)
+                            .foregroundStyle(level.colour)
+                    }
+                    .foregroundStyle(Color.textSecondary)
+                    .accessibilityIdentifier("working.confidence")
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+            .background(Color.surfacePrimary)
+            .navigationTitle("Working")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("working.done")
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+}
