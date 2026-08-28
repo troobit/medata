@@ -92,52 +92,28 @@ struct CarbAmountText: View {
 // at the new ratio; that is accepted, the readout being a present-tense
 // statement of the rule applied to that meal.
 //
-// Same middle-dot grammar and derived register as the review surface, so the
-// segments carry no verb: `12 U · given 11 U`. The given figure is paired by
-// the ±45-minute window over insulin events, never by a stored link.
+// What was actually injected against a meal, paired by the ±45-minute window
+// over insulin events and never by a stored link.
 //
-// The ratio segment went with design-direction §10's device verdict
-// (2026-08-28): it is one tap away in the working on every surface that
-// renders a dose (Req 6.12), so carrying it on the line too was duplication.
-// The syringe glyph and the dotted underline match the review line — the same
-// quantity has to look like the same quantity wherever it appears.
+// Since 2026-08-28 this line no longer carries the SUGGESTION: that moved into
+// the dose pill at the top of the surface, where its colour carries the
+// estimate's confidence. Rendering it here as well would have shown the same
+// number twice on one screen, in two registers, saying two different things.
 enum DoseHistoryLine {
-    static func runs(
-        _ readout: DoseReadout?, givenUnits: Double?
-    ) -> [MiddleDotLine.Run] {
-        guard let readout else { return [] }
-        var runs = [
+    static func runs(_ readout: DoseReadout?, givenUnits: Double?) -> [MiddleDotLine.Run] {
+        guard readout != nil, let givenUnits else { return [] }
+        return [
             MiddleDotLine.Run(
-                id: "result.doseSuggestion",
-                text: readout.unitsLabel,
-                emphasised: true,
-                animates: Double(readout.units),
-                symbol: "syringe",
-                inspectable: true
+                id: "result.doseGiven",
+                text: "given \(DoseReadout.wholeUnitsLabel(givenUnits))",
+                animates: givenUnits
             )
         ]
-        if let givenUnits {
-            runs.append(
-                MiddleDotLine.Run(
-                    id: "result.doseGiven",
-                    text: "given \(DoseReadout.wholeUnitsLabel(givenUnits))",
-                    animates: givenUnits
-                )
-            )
-        }
-        return runs
     }
 
-    // VoiceOver form: "12 U" spoken verbatim reads as "twelve you"
-    // (ui-ux review 2026-08-25). The ratio clause went with the ratio run —
-    // parity with the line, and the working states it on tap.
     static func spokenLine(_ readout: DoseReadout?, givenUnits: Double?) -> String? {
-        guard let readout else { return nil }
-        var line = readout.spokenUnits
-        if let givenUnits {
-            line += ", given \(spokenUnits(givenUnits))"
-        }
-        return line
+        guard readout != nil, let givenUnits else { return nil }
+        return "given \(spokenUnits(givenUnits))"
     }
 
     private static func spokenUnits(_ units: Double) -> String {

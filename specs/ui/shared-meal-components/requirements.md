@@ -86,10 +86,14 @@ identically everywhere they appear.
 **Acceptance Criteria:**
 
 1. <a name="3.1"></a>The carb-total block (big numeral + `g carbs` + corrected marker +
-   confidence pill + secondary mass/dose line) SHALL be one shared implementation
+   quality pill + secondary mass line) SHALL be one shared implementation
    parameterised by palette and numeral size, consumed by `MealReviewView` and
    `ResultView`. *(Redefined in place by Decision 4: `MealOverviewView` is deleted by
-   `specs/ui/home-router` Decision 16 and leaves the consumer set.)*
+   `specs/ui/home-router` Decision 16 and leaves the consumer set. Redefined again
+   2026-08-28 by `specs/data/insulin-dosing` Decision 17: the trailing pill holds the
+   dose with confidence as its fill, and the dose consequently leaves the secondary
+   line, which now carries plate mass alone. Superseded wording: "confidence pill +
+   secondary mass/dose line".)*
 2. <a name="3.2"></a>The "corrected" capsule SHALL be one implementation consumed by all
    current sites (the two above plus the Records meal row). *(Redefined in place by
    Decision 4. Superseded wording: "all four current sites (the three above plus the

@@ -22,21 +22,30 @@ carried by size, weight and colour — never by a label explaining what kind of 
 | **Derived** | The app divided a measured number by a parameter a human typed | `subheadline`, `monospacedDigit`, `captureChromeText.opacity(0.75)` / `textSecondary` | `≈ 214 g on plate`, `12 U` |
 | **Committed** | Tapping this writes a row | `medataAccent` fill, `.body.weight(.semibold)`, height 48, radius 12 | `Record 60 g`, `Save 12 U bolus` |
 
-A dose suggestion is **permanently in the derived register**. It is never accent-coloured, never
-filled, never larger than the carbohydrate figure it came from, and it writes nothing. This is the
-whole answer to "how does it read without looking like a command": on this screen the accent colour
-already means *this button writes a row*, so a number that is not accent-coloured visibly cannot be
-an instruction. The distinction is structural, not editorial — no copy is needed to make it, which
-is what keeps the developer-phase no-disclaimer rule intact.
+A dose suggestion is **rendered as the meal's quality pill** — the capsule the confidence tier used
+to occupy, on the same surface, at the same metrics. It writes nothing, and that is now the whole
+of the "not an instruction" argument. The three earlier structural props — not filled, no glyph, no
+mark of any kind — were each tried and each failed on device, in the same direction every time:
+they made the dose recede until it was indistinguishable from the measurement beside it.
 
-**Within** that register the dose is marked apart from the mass beside it, by a syringe glyph and a
-dotted underline (§2.2). Both figures are derived, but they are not the same kind of fact: the mass
-is what the app measured off the plate, and the dose is what it computed *from* that mass and a
-ratio a human typed. Rendering them identically said they were peers — and the 2026-08-28 device
-session found that actively misleading, with `≈ 380 g on plate · 6 U` reading as two measurements
-of one meal rather than a measurement and its consequence. The glyph names the quantity, so a
-reader need not decode `U` to know what kind of number it is; the underline says a working exists
-behind it. Neither is accent, neither adds height, and neither lets the segment change anything.
+**Confidence became the pill's colour rather than its content.** The tier is something a person
+reads off their own plate faster than the model computes it, so the most prominent chrome on the
+surface was being spent on the model's self-assessment while the number actually acted on sat in
+`subheadline` grey. Inverting that puts the accuracy signal *on the thing it qualifies*: the fill
+says how much to trust this dose, and the tier is named in words in the working, one tap away
+(§2.2). The raw σ stays recorded per capture on the meal record — it did not stop being data, it
+stopped being chrome.
+
+What still holds: the dose is never larger than the carbohydrate figure it came from, never takes
+the screen's `Record` slot, and writes nothing on tap. What is explicitly given up is the claim
+that a filled shape cannot be a suggestion — a filled shape that changes nothing is a label, and
+three device sessions of an unfilled one proved the alternative costs more than it buys.
+
+**Known collision, accepted.** At High confidence the fill is `confidenceHigh`, which is the app
+accent (`iphone-experience` Req 15.1), so a high-confidence dose renders in the same green as
+`Record`. This is inherited, not introduced: the confidence pill has always rendered High in the
+accent on this same screen. It is the one place the one-accent-per-screen rule bends, and it bends
+for a pill that writes nothing.
 
 **Signature element — the middle-dot line, ordered by time.** The suggestion appends to the existing
 second line of `totalRow` as a `·`-separated segment. The line's axis is **time**: what is on the
@@ -105,25 +114,33 @@ Everything below `60 g carbs` is unchanged from what ships today except for the 
 ### 2.2 Line grammar
 
 ```
-  ≈ 214 g on plate  ·  ⚕ 12 U
-  └──── segment 1 ──┘  └─ 2 ─┘
-                          ‥‥‥‥  dotted underline: the working is behind this
+  60                                  ⎛ ⚕ 12 U ⎞   ← the pill: fill = confidence tier
+  g carbs                             ⎝________⎠
+  ≈ 214 g on plate
 ```
 
-- Segments are joined by ` · ` (U+00B7, space either side) rendered at `opacity(0.45)` of the line's
-  own colour. The separator is a `Text` run, not a divider view.
-- Every segment is the same font and colour. The dose figure earns emphasis through
-  `.weight(.semibold)` on the numeral run only — weight, not colour, because the screen's one-accent
-  budget is spent on `Record` (MASTER.md pre-delivery checklist).
-- **The dose segment, and only the dose segment, carries the `syringe` SF Symbol before its
-  numeral**, at `.imageScale(.small)` in the line's own colour. It is a type label: it says what
-  kind of quantity follows, so `U` does not have to be decoded, and it is what stops a derived dose
-  reading as a second measurement beside the measured mass. No other segment takes a glyph.
-- **The dose numeral carries a dotted underline** (`.underline(pattern: .dot)`), which is the only
-  thing on the line stating that the tap of §2.2's amendment leads anywhere. It adds no glyph, no
-  colour and no height, so §2.3's shed order and `meal-review` Req 6.6 are both untouched.
-- The glyph and the underline are hidden from VoiceOver: the line composes one spoken label, and a
-  second announcement for the symbol would read as a stutter.
+The dose is **not** a segment on the middle-dot line. It is the pill in the total row's trailing
+slot — the one the confidence tier held — and the middle-dot line beneath carries only the plate
+mass. A measured mass and a dose derived from it are no longer rendered as two peers on one line,
+which is the defect the 2026-08-28 session named: `≈ 380 g on plate · 6 U` read as two
+measurements of one meal rather than a measurement and its consequence.
+
+Pill metrics are `ConfidencePill`'s exactly — `.body.weight(.semibold)` monospaced digits,
+horizontal 12 / vertical 4, `minHeight: 28`, `Capsule()` filled at `level.colour.opacity(0.85)`,
+dark-on-fill except Very Low. Identical because it *replaces* that view in place: nothing above the
+scroll boundary moves, so `specs/ui/meal-review` Req 6.6 holds by construction rather than by
+measurement.
+
+The `syringe` glyph rides inside the pill as the `Label` icon. There is no underline anywhere — the
+pill is the affordance, which is the whole reason the underline could go.
+
+- The remaining line segments — plate mass, and `given N U` on the history surface — are joined by
+  ` · ` (U+00B7, space either side) at `opacity(0.45)` of the line's own colour. The separator is a
+  `Text` run, not a divider view.
+- Every remaining segment is the same font and colour, and carries no glyph. A glyph that appears
+  on every segment marks nothing; only the pill has one.
+- The pill speaks as one element: `"12 U, estimate confidence High"`, with a `Shows the working`
+  hint. VoiceOver cannot see a fill, so the tier that the colour carries has to be said.
 - No verbs. Never *take*, *give*, *dose*, *inject*, *recommended*, *suggested*, *should*. The
   segment is a quantity and a unit symbol. `12 U`, and nothing else.
 - No range, no plus-or-minus, no confidence qualifier on the dose. The confidence pill already
@@ -137,10 +154,11 @@ surface recompute the same working live, history included). It reveals provenanc
 act, and nothing is written.*
 
 *Decision 17 originally added that tap with no mark of any kind, on the reasoning that any
-affordance was control chrome. The 2026-08-28 device session found the affordance simply
-undiscoverable — the working existed and nothing on screen said so — so the dotted underline above
-replaces that position. "Writes nothing" is the invariant that was actually doing the safety work;
-"carries no mark" was not, and cost the feature its one route to its own provenance.)*
+affordance was control chrome; a dotted underline replaced that, and the pill has now replaced the
+underline. Each step in the same direction, and the last one settles it: the surface a person taps
+should look like a surface a person taps. "Writes nothing" is the invariant that was doing the
+safety work all along. "Carries no mark", "is not filled" and "has no glyph" were not, and each
+cost the feature either its provenance route or its distinguishability.)*
 
 ### 2.3 Degradation order — shed words before numbers
 
@@ -464,28 +482,38 @@ brought level.
 
 - **The orange card.** `confidenceModerate` rounded-12 banners are reserved for estimate-accuracy
   signals (uncalibrated, liquid over-estimate). It is also the idiom that invites disclaimer copy.
-  A dose suggestion never uses it.
+  A dose suggestion never uses it. *(The dose PILL is a capsule carrying that palette as a fill,
+  which is a different idiom and carries no copy — the banner is what invites a sentence.)*
 - **Accent on a suggestion.** One accent per screen, and it belongs to the control that writes a
   row.
-- **A second primary control on meal review.** No `Dose 12 U` button, filled or stroked. The
-  two-button row on that screen is the very-low retake pair and stays that way.
+- **A second primary control on meal review.** The two-button row on that screen is the very-low
+  retake pair and stays that way, and nothing new writes a row. *(Redefined 2026-08-28: the dose
+  pill is filled and is tapped, so this no longer reads as "nothing may be filled". It reads as
+  what it always meant — nothing but `Record` may WRITE. The pill reveals the working and returns
+  the surface untouched.)*
 - **Any added height above the divider.** `specs/ui/meal-review` Req 6.6 protects the plate
   control's position.
 - **Verbs, ranges, qualifiers, reasons, reassurance.** No *take*, *consider*, *approximately N to
   M*, *based on your settings*, *always confirm*, *this is an estimate*. The carve-out in CLAUDE.md
   for functional accuracy signals covers estimate accuracy; it does not extend to a dose.
 - **A new screen or sheet on the capture path.** Nothing is presented from inside the Capture cover.
-- **Emoji anywhere, and any glyph on a segment that is not the dose.** The mass, the ratio and the
-  `given` figure carry no symbol; only the dose does, and only the one in §2.2. A glyph that
-  appears on every segment marks nothing.
-- **Accent, fill, or added height on the dose segment.** These are what would make it read as a
-  command; a type glyph is not, which is why §2.2 now requires one. *(Replaces the previous rule
-  "Emoji, icons or symbols beside the dose figure — not even a syringe glyph, an icon beside a
-  number reads as a call to action." Reversed on the 2026-08-28 device verdict: the glyph was
-  predicted to read as a call to action and does not. It reads as a type label, and the real defect
-  on device was the opposite one — with no glyph the dose was indistinguishable from the mass
-  estimate beside it. What makes a number look like a command is accent, fill and size, all of
-  which remain forbidden.)*
+- **Emoji anywhere, and any glyph on a line segment.** The plate mass and the `given` figure carry
+  no symbol. The `syringe` lives inside the pill and nowhere else — a glyph on every segment marks
+  nothing.
+- **Added height above the divider, and any growth of the pill beyond `ConfidencePill`'s metrics.**
+  The pill replaces that view in place; the moment it is taller, `meal-review` Req 6.6 stops
+  holding by construction.
+- **A dose figure larger than the carbohydrate total it came from.** The 44pt carb numeral is the
+  measured fact and stays the largest thing in the row.
+
+  *(This list previously forbade first any glyph beside the dose figure — "not even a syringe
+  glyph, an icon beside a number reads as a call to action" — and then, after that was reversed,
+  "accent, fill, or added height on the dose segment". Both are withdrawn on device evidence. Each
+  predicted that visual weight would read as a command; what actually happened at each step was
+  that the dose receded into the measurement beside it, and the tap-through provenance went
+  unfound. Fill and colour now carry the confidence tier, which is estimate-accuracy information
+  and precisely what this palette is reserved for. The invariant that survived all three rounds,
+  and the only one that was ever load-bearing, is that the dose writes nothing.)*
 
 ---
 
@@ -493,16 +521,21 @@ brought level.
 
 - [x] No emojis as icons — the dose glyph is an SF Symbol (`syringe`), the same one the Dose
       button and the Records row already use for this quantity; no emoji is used anywhere
-- [x] Touch targets ≥48pt — no new targets; existing controls unchanged
+- [x] Touch targets ≥48pt — the dose pill is `minHeight: 28` plus padding, below the bar. Accepted
+      as inherited: it is the confidence pill's own geometry, and growing it would break
+      `meal-review` Req 6.6. Revisit if the pill ever becomes the primary way to open the working
 - [x] Press feedback within 100ms — no new pressable surfaces on the capture path
 - [x] Contrast ≥4.5:1 — white at 0.75 opacity on pure black is ~11:1; `textSecondary` is a system
       semantic
 - [x] Reduced motion respected — every numeral gated on `accessibilityReduceMotion`
 - [x] Dynamic Type — explicit shed order in §2.3; wrapping forbidden on the total row
 - [x] Safe areas — no change to the layout envelope
-- [x] Single primary CTA per screen — `Record` on review, `Save` on the sheet; the suggestion is not
-      a CTA
-- [x] One accent colour per screen — the suggestion is never accent
+- [x] Single primary CTA per screen — `Record` on review, `Save` on the sheet; the dose pill is
+      tappable but writes nothing, so it is a disclosure control, not a CTA
+- [x] One accent colour per screen — bent, knowingly: at High confidence the dose pill's fill is
+      `confidenceHigh`, which is the accent (`iphone-experience` Req 15.1). Inherited from the
+      confidence pill this view replaces, which rendered High in the accent on this same screen.
+      `Record` remains the only accent-coloured thing that writes anything
 
 ---
 

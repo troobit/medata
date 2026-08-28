@@ -628,15 +628,16 @@ monospacedDigit` at `captureChromeText.opacity(0.75)`:
 
 ```
 60
-g carbs                       [confidence pill]
-≈ 214 g on plate · ⚕ 12 U
-                     ‥‥‥‥
+g carbs                            [ ⚕ 12 U ]   ← fill = confidence tier
+≈ 214 g on plate
 ```
 
-The dose segment carries the `syringe` symbol and a dotted underline on its numeral
-(design-direction §2.2, settled on device 2026-08-28): the symbol says what kind of quantity it is
-so the mass beside it does not read as the same fact, and the underline says the working opens on
-tap. Neither changes the line's height.
+The trailing slot holds the dose, not the confidence tier (design-direction §1/§2.2, settled across
+three device passes on 2026-08-28). `DosePill` replaces `ConfidencePill` at that view's exact
+metrics, so the row's height is unchanged and `specs/ui/meal-review` Req 6.6 holds by construction.
+The fill carries the confidence tier, the working names that tier in words beneath the calculation,
+and the second line keeps only the plate mass — the measured quantity and the quantity derived
+from it are no longer two peers on one line.
 
 The worked figure throughout this spec is a 60 g-carbohydrate meal on a 214 g plate at breakfast:
 `60 g ÷ 5.0 g/U = 12.0 U`. The large numeral is `pendingTotalCarbsG` and the second line's mass is

@@ -16,9 +16,14 @@ import SwiftUI
 // step. Because `reductionUnits` is capped at `baseUnits` in the suggester,
 // the lines sum exactly at every step — never a hidden jump.
 //
-// Reveal-not-act: nothing is written, no control appears, dismissal returns
-// the untouched surface. Arithmetic labelling only — no advice, no range, no
-// confidence (Req 6.8).
+// Reveal-not-act: nothing is written, dismissal returns the untouched surface.
+// Arithmetic labelling only — no advice, no range.
+//
+// Since 2026-08-28 the sheet also states the estimate's confidence tier, under
+// the calculation. That is not a hedge on the dose: the dose pill's FILL now
+// carries the tier as colour, and a colour with no legend anywhere is not a
+// signal. This is the legend. It names what the colour on the pill means and
+// stops there — no advice about what to do differently at any tier.
 
 /// The lines, as text. Pure, so live surfaces and the history recompute render
 /// the same working from the same `SuggestedDose` (Req 6.11).
@@ -120,6 +125,10 @@ enum DoseWorking {
 
 struct DoseWorkingSheet: View {
     let readout: DoseReadout
+    /// The meal's confidence, where the dose came from a capture. Manual
+    /// carbohydrate entry has no model estimate behind it and so has no tier
+    /// to name — the absence is the honest rendering, not a missing value.
+    var sigmaMeal: Float?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -132,6 +141,19 @@ struct DoseWorkingSheet: View {
                         .foregroundStyle(Color.textPrimary)
                         .accessibilityLabel(line.spoken)
                         .accessibilityIdentifier(line.id)
+                }
+                if let sigmaMeal {
+                    let level = ConfidenceLevel.forSigma(sigmaMeal)
+                    Divider().overlay(Color.textSecondary.opacity(0.3))
+                    Label {
+                        Text("Estimate confidence \(level.label)")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: level.iconName)
+                            .foregroundStyle(level.colour)
+                    }
+                    .foregroundStyle(Color.textSecondary)
+                    .accessibilityIdentifier("working.confidence")
                 }
                 Spacer(minLength: 0)
             }
