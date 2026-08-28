@@ -87,15 +87,11 @@ nonisolated struct DoseReadout: Sendable, Equatable {
 
     // Shared formatting for the whole-unit dose figures on history surfaces.
     static func wholeUnitsLabel(_ units: Double) -> String {
-        let rounded = (units * 10).rounded() / 10
-        if rounded == rounded.rounded() { return "\(Int(rounded)) U" }
-        return String(format: "%.1f U", rounded)
+        MedataFormat.quantity(units, unit: "U")
     }
 
     static func gramsPerUnitLabel(_ value: Double) -> String {
-        let rounded = (value * 10).rounded() / 10
-        if rounded == rounded.rounded() { return "\(Int(rounded)) g/U" }
-        return String(format: "%.1f g/U", rounded)
+        MedataFormat.quantity(value, unit: "g/U")
     }
 }
 

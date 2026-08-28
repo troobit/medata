@@ -8,7 +8,9 @@ import SwiftUI
 //
 // Auto-hide rule: when the badge has been in-range for `autoHideDelaySeconds`
 // the chip fades to opacity 0; tap or any out-of-range write re-shows it.
-// Hidden chip remains hit-testable via 48pt `hitSlop` (touch-target rule).
+// The hidden chip's 48pt hit slop went with the view itself when it was
+// deleted (see the note under the state type); of the two, only
+// `autoHideDelaySeconds` still drives live code.
 
 // MARK: - Pure state surface (testable without a SwiftUI host)
 
@@ -20,7 +22,6 @@ enum LiveIndicatorBadgeElement: Equatable {
 
 enum LiveIndicatorBadgeState {
     static let autoHideDelaySeconds: Double = 5
-    static let hitSlopPoints: CGFloat = 48
     static let distanceMinCm: Float = 25
     static let distanceMaxCm: Float = 50
     // Decision 19: chip auto-hides only when σ_tilt = cos(Δθ) exceeds this

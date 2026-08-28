@@ -29,8 +29,6 @@ struct MiddleDotLine: View {
     let textColour: Color
     let separatorColour: Color
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(runs.enumerated()), id: \.offset) { index, run in
@@ -41,8 +39,7 @@ struct MiddleDotLine: View {
                 Text(run.text)
                     .fontWeight(run.emphasised ? .semibold : .regular)
                     .foregroundStyle(textColour)
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .smooth, value: run.animates ?? 0)
+                    .animatedNumeral(value: run.animates ?? 0)
                     .accessibilityIdentifier(run.id)
             }
         }

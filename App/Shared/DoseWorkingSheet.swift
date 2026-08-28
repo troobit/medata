@@ -83,10 +83,7 @@ enum DoseWorking {
     /// read as 0.5 rounding DOWN to 0 — the opposite of the half-away-from-zero
     /// rule (Req 5.2), on the one surface whose whole job is showing the rule.
     private static func grams(_ value: Double) -> String {
-        let rounded = (value * 10).rounded() / 10
-        return rounded == rounded.rounded()
-            ? "\(Int(rounded)) g"
-            : String(format: "%.1f g", rounded)
+        MedataFormat.quantity(value, unit: "g")
     }
 
     /// The base line states the divisor to one decimal too — `5.0 g/U`, not

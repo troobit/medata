@@ -25,6 +25,29 @@ struct InsulinEntry: Identifiable, Equatable {
     let timestamp: Date
     let units: Double
     let kind: InsulinKind
+
+    init(id: UUID, timestamp: Date, units: Double, kind: InsulinKind) {
+        self.id = id
+        self.timestamp = timestamp
+        self.units = units
+        self.kind = kind
+    }
+
+    // Decodes an `insulin` event row: `value` = units, metadata JSON carries
+    // `kind` (medreg convention). Unknown metadata keys are ignored. The
+    // decode lives on the type so Trends and Records read a dose row the same
+    // way by construction — the two models used to hold byte-identical private
+    // copies of it.
+    init?(event: Event) {
+        guard
+            let units = event.value,
+            let data = event.metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = InsulinKind(rawValue: kindRaw)
+        else { return nil }
+        self.init(id: event.id, timestamp: event.timestamp, units: units, kind: kind)
+    }
 }
 
 // One chart marker in the insulin band. Day range: one per dose, carrying its
@@ -47,6 +70,33 @@ struct ActivityEntry: Identifiable, Equatable {
     let timestamp: Date
     let kind: ActivityKind
     let durationMinutes: Double?
+
+    init(id: UUID, timestamp: Date, kind: ActivityKind, durationMinutes: Double?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.kind = kind
+        self.durationMinutes = durationMinutes
+    }
+
+    // Decodes an `activity` event row: `value` = duration in minutes and is
+    // ABSENT when unrecorded (Req 1.5 — nil, never 0), metadata JSON carries
+    // `kind` (specs/data/activity-events design §2). Same shape as
+    // `InsulinEntry.init(event:)`, and on the type for the same reason; rows
+    // that do not decode are dropped.
+    init?(event: Event) {
+        guard
+            let data = event.metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindRaw)
+        else { return nil }
+        self.init(
+            id: event.id,
+            timestamp: event.timestamp,
+            kind: kind,
+            durationMinutes: event.value
+        )
+    }
 
     // The activity's end, where a duration was recorded (Req 4.2).
     var endDate: Date? {
@@ -166,10 +216,10 @@ final class TrendsModel {
         // that an absent key is a sensor reading.
         glucose = events.compactMap(GlucoseSnapshotSource.reading(from:))
         let doses = (try? await store.events(in: iv.start...iv.end, type: EventType.insulin)) ?? []
-        insulin = doses.compactMap(Self.insulinEntry(from:))
+        insulin = doses.compactMap(InsulinEntry.init(event:))
         let activityEvents =
             (try? await store.events(in: iv.start...iv.end, type: EventType.activity)) ?? []
-        activities = activityEvents.compactMap(Self.activityEntry(from:))
+        activities = activityEvents.compactMap(ActivityEntry.init(event:))
         // `value` is already the validated carb figure written at save time
         // (manual-carb-intake design: Carb totals and graph series) — no
         // metadata decode needed for plotting.
@@ -244,38 +294,6 @@ final class TrendsModel {
         // be plotted off the top of an auto-scaled chart.
         let dataMax = (glucoseLine + bloodPoints).map(\.value).max() ?? 0
         autoGlucoseMax = max(TrendsMath.targetHighMmolL + 2, (dataMax + 1).rounded(.up))
-    }
-
-    // Decodes an `insulin` event row: `value` = units, metadata JSON carries
-    // `kind` (medreg convention). Unknown metadata keys are ignored.
-    private static func insulinEntry(from event: Event) -> InsulinEntry? {
-        guard
-            let units = event.value,
-            let data = event.metadata.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let kindRaw = object["kind"] as? String,
-            let kind = InsulinKind(rawValue: kindRaw)
-        else { return nil }
-        return InsulinEntry(id: event.id, timestamp: event.timestamp, units: units, kind: kind)
-    }
-
-    // Decodes an `activity` event row: `value` = duration in minutes and is
-    // ABSENT when unrecorded (Req 1.5 — nil, never 0), metadata JSON carries
-    // `kind` (specs/data/activity-events design §2). Same shape as
-    // `insulinEntry(from:)` above; rows that do not decode are dropped.
-    private static func activityEntry(from event: Event) -> ActivityEntry? {
-        guard
-            let data = event.metadata.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let kindRaw = object["kind"] as? String,
-            let kind = ActivityKind(rawValue: kindRaw)
-        else { return nil }
-        return ActivityEntry(
-            id: event.id,
-            timestamp: event.timestamp,
-            kind: kind,
-            durationMinutes: event.value
-        )
     }
 
     // Removes one dose; the chart marker and the day list refresh together

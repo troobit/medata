@@ -405,11 +405,6 @@ struct CaptureFlowView: View {
         return false
     }
 
-    private var isInitialising: Bool {
-        if case .initialising = model.state { return true }
-        return false
-    }
-
     private var isReady: Bool {
         if case .ready = model.state { return true }
         return false
@@ -461,7 +456,7 @@ private struct CapturedFramesView: View {
 
     @ViewBuilder
     private func frameImage(_ frame: RawFrame) -> some View {
-        if let cgImage = decodeCGImage(from: frame) {
+        if let cgImage = RawFrameImage.cgImage(frame) {
             Image(decorative: cgImage, scale: 1)
                 .resizable()
                 .scaledToFill()
@@ -472,48 +467,8 @@ private struct CapturedFramesView: View {
 
     private var obliqueImage: CGImage? {
         guard let oblique = result.obliqueFrame else { return nil }
-        return decodeCGImage(from: oblique)
+        return RawFrameImage.cgImage(oblique)
     }
-}
-
-// Inline `CGImage` decode from `RawFrame.imageBytes` + `.pixelFormat`. The
-// bytes are BGRA8 after the rawframe-rgb-conversion fix; the switch keeps the
-// other portable formats decodable too. No shared utility module per spec —
-// this stays file-local so both the frozen `CapturedFramesView` and the
-// oblique-aiming nadir thumbnail share one decode path.
-fileprivate func decodeCGImage(from frame: RawFrame) -> CGImage? {
-    let bytesPerPixel: Int
-    let bitmapInfo: CGBitmapInfo
-    switch frame.pixelFormat {
-    case .rgb8:
-        bytesPerPixel = 3
-        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
-    case .rgba8:
-        bytesPerPixel = 4
-        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-    case .bgra8:
-        bytesPerPixel = 4
-        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-            .union(.byteOrder32Little)
-    }
-    let width = frame.imageWidth
-    let height = frame.imageHeight
-    let bytesPerRow = width * bytesPerPixel
-    guard frame.imageBytes.count == bytesPerRow * height else { return nil }
-    guard let provider = CGDataProvider(data: frame.imageBytes as CFData) else { return nil }
-    return CGImage(
-        width: width,
-        height: height,
-        bitsPerComponent: 8,
-        bitsPerPixel: bytesPerPixel * 8,
-        bytesPerRow: bytesPerRow,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: bitmapInfo,
-        provider: provider,
-        decode: nil,
-        shouldInterpolate: false,
-        intent: .defaultIntent
-    )
 }
 
 // Small labelled thumbnail of the banked nadir frame, shown over the live
@@ -529,7 +484,7 @@ private struct NadirThumbnailView: View {
     private var height: CGFloat { width * 3 / 4 }
 
     var body: some View {
-        if let cgImage = decodeCGImage(from: frame) {
+        if let cgImage = RawFrameImage.cgImage(frame) {
             VStack(alignment: .leading, spacing: 4) {
                 Image(decorative: cgImage, scale: 1)
                     .resizable()

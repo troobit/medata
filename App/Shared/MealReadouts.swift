@@ -69,15 +69,12 @@ struct CarbAmountText: View {
     var suffixFont: Font = .subheadline.weight(.semibold)
     var spacing: CGFloat = 6
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: spacing) {
             Text("\(carbs)")
                 .font(.system(size: pointSize, weight: .heavy).monospacedDigit())
                 .foregroundStyle(palette.primary)
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: animates ?? 0)
+                .animatedNumeral(value: animates ?? 0)
             Text("g carbs")
                 .font(suffixFont)
                 .foregroundStyle(palette.secondary)
@@ -117,9 +114,7 @@ enum DoseHistoryLine {
     }
 
     private static func spokenUnits(_ units: Double) -> String {
-        let rounded = (units * 10).rounded() / 10
-        if rounded == rounded.rounded() { return "\(Int(rounded)) units" }
-        return String(format: "%.1f units", rounded)
+        MedataFormat.quantity(units, unit: "units")
     }
 }
 

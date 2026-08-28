@@ -25,7 +25,6 @@ struct CarbEntryContent: View {
     @State private var doseReadout: DoseReadout?
     @State private var showingWorking = false
     @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
     // this sub-sheet opens; cancelling it creates no preset and rolls back
@@ -56,11 +55,7 @@ struct CarbEntryContent: View {
                 if model.editing == nil {
                     saveAsQuickAddButton
                 }
-                if let saveError = model.saveError {
-                    Text(saveError)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
+                EntrySaveError(message: model.saveError)
             }
             .padding(20)
         }
@@ -111,9 +106,9 @@ struct CarbEntryContent: View {
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
                     // Gated on Reduce Motion like every other animated numeral
-                    // (design-direction §2.4; ui-ux review 2026-08-25).
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .smooth, value: readout)
+                    // (design-direction §2.4; ui-ux review 2026-08-25) — the
+                    // gate lives inside the modifier, not at this call site.
+                    .animatedNumeral(value: readout)
                     // Req 6.12: the tap reveals the working and writes nothing.
                     .contentShape(Rectangle())
                     .onTapGesture { showingWorking = true }
@@ -319,6 +314,6 @@ struct MacroDisclosure: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: Metrics.cornerChip))
     }
 }

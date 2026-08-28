@@ -159,21 +159,10 @@ final class RecordsModel {
 
     private func loadInsulin() async -> [RecordRow] {
         let events = (try? await store.events(in: Self.allTime, type: EventType.insulin)) ?? []
-        return events.compactMap { Self.insulinEntry(from: $0) }.map { .insulin($0) }
-    }
-
-    // Decodes an `insulin` event row the same way TrendsModel.insulinEntry(from:)
-    // does — reused convention, not the TrendsModel type itself (that decoder
-    // is private to TrendsModel).
-    private static func insulinEntry(from event: Event) -> InsulinEntry? {
-        guard
-            let units = event.value,
-            let data = event.metadata.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let kindRaw = object["kind"] as? String,
-            let kind = InsulinKind(rawValue: kindRaw)
-        else { return nil }
-        return InsulinEntry(id: event.id, timestamp: event.timestamp, units: units, kind: kind)
+        // `InsulinEntry.init(event:)` is the one decode of an `insulin` row —
+        // it lives on the type (TrendsModel.swift), which is already imported
+        // here for the type itself, so Trends and Records cannot drift apart.
+        return events.compactMap(InsulinEntry.init(event:)).map { RecordRow.insulin($0) }
     }
 
     private func loadIntake() async -> [RecordRow] {
@@ -183,10 +172,11 @@ final class RecordsModel {
 
     // Decodes an `intake` event row: `value` = carbs (g), metadata JSON
     // carries `subtype`/`source` plus optional macro keys and `preset_id`
-    // (manual-carb-intake design: Event type and storage). Deliberately
-    // duplicated per model, not shared (home-router Decision 13) — same
-    // convention as `insulinEntry(from:)` above. Rows whose metadata does not
-    // decode are dropped rather than crashing the list.
+    // (manual-carb-intake design: Event type and storage). Private here
+    // because `IntakeRecord` is a Records-only type — unlike InsulinEntry and
+    // ActivityEntry, whose decoders moved onto the types themselves. Rows
+    // whose metadata does not decode are dropped rather than crashing the
+    // list.
     private static func intakeEntry(from event: Event) -> IntakeEntry? {
         guard
             let carbsG = event.value,
@@ -218,26 +208,9 @@ final class RecordsModel {
 
     private func loadActivity() async -> [RecordRow] {
         let events = (try? await store.events(in: Self.allTime, type: EventType.activity)) ?? []
-        return events.compactMap { Self.activityEntry(from: $0) }.map { .activity($0) }
-    }
-
-    // Decodes an `activity` event row: `value` = duration in minutes, ABSENT
-    // when unrecorded (activity-events Req 1.5 — nil, never 0), metadata JSON
-    // carries `kind`. Deliberately duplicated per model rather than shared
-    // (home-router Decision 13), same as `insulinEntry(from:)` above.
-    private static func activityEntry(from event: Event) -> ActivityEntry? {
-        guard
-            let data = event.metadata.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let kindRaw = object["kind"] as? String,
-            let kind = ActivityKind(rawValue: kindRaw)
-        else { return nil }
-        return ActivityEntry(
-            id: event.id,
-            timestamp: event.timestamp,
-            kind: kind,
-            durationMinutes: event.value
-        )
+        // Decoded by `ActivityEntry.init(event:)`, the same shared decode the
+        // insulin rows use above.
+        return events.compactMap(ActivityEntry.init(event:)).map { RecordRow.activity($0) }
     }
 
     // Maps `.bsl` Events directly to GlucoseRow, keeping Event.id — does NOT

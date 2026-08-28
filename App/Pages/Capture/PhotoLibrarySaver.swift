@@ -75,45 +75,10 @@ struct PhotoKitSaver: PhotoLibrarySaver {
         }
     }
 
-    // Convert RawFrame.imageBytes to UIImage. The portable contract is RGB8 in
-    // sRGB at the platform-native orientation; iOS captures BGRA8 and converts
-    // upstream, but the renderer here accepts either by inspecting pixelFormat.
+    // Convert RawFrame.imageBytes to UIImage. The decode itself is shared with
+    // the capture surfaces via `RawFrameImage.cgImage(_:)` — same pixel-format
+    // switch, same byte-count guard; only the UIImage wrapper is local.
     private static func uiImage(from frame: RawFrame) -> UIImage? {
-        let bytesPerPixel: Int
-        let bitmapInfo: CGBitmapInfo
-        switch frame.pixelFormat {
-        case .rgb8:
-            bytesPerPixel = 3
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
-        case .rgba8:
-            bytesPerPixel = 4
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        case .bgra8:
-            bytesPerPixel = 4
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-                .union(.byteOrder32Little)
-        }
-        let width = frame.imageWidth
-        let height = frame.imageHeight
-        let bytesPerRow = width * bytesPerPixel
-        guard frame.imageBytes.count == bytesPerRow * height else { return nil }
-        let colourSpace = CGColorSpaceCreateDeviceRGB()
-        let data = frame.imageBytes as CFData
-        guard let provider = CGDataProvider(data: data),
-            let cgImage = CGImage(
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bitsPerPixel: bytesPerPixel * 8,
-                bytesPerRow: bytesPerRow,
-                space: colourSpace,
-                bitmapInfo: bitmapInfo,
-                provider: provider,
-                decode: nil,
-                shouldInterpolate: false,
-                intent: .defaultIntent
-            )
-        else { return nil }
-        return UIImage(cgImage: cgImage)
+        RawFrameImage.cgImage(frame).map(UIImage.init(cgImage:))
     }
 }
