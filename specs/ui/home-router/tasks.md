@@ -135,7 +135,7 @@ references:
   - Stream: 1
   - Requirements: [3.3](requirements.md#3.3), [2.2](requirements.md#2.2), [2.4](requirements.md#2.4)
 
-- [ ] 14. Gate + STOP — build, spell, and the on-device collapse check <!-- id:gnuq1ht -->
+- [x] 14. Gate + STOP — build, spell, and the on-device collapse check <!-- id:gnuq1ht -->
   - make build-app + make spell; then on device: one tap from a Records meal row and from a Graph day-list row lands on the full detail (photo with overlays, food rows with adjustment, metadata, delete, dose line); no intermediate screen exists anywhere; delete from the detail unwinds to the list
   - Blocked-by: gnuq1hs (Reroute Records and the Graph day list; delete the overview and the DEBUG review route)
   - Stream: 1
