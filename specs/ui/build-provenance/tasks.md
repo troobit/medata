@@ -26,7 +26,7 @@ references:
   - Same file: one short paragraph generalising the existing practice — tag a UI attempt's commit `<design>-attempt-N` when it is worth comparing against later (precedent: tilt-guide-attempt-1/2, docs/agent-notes/tilt-aim-guide.md:44). No numbering scheme, no version label, no tooling.
   - Blocked-by: bpv001a (Make BUILD_STAMP dirty-aware in the Makefile)
 
-- [ ] 5. Gate: build, spell, and one on-device stamp check <!-- id:bpv005e -->
+- [x] 5. Gate: build, spell, and one on-device stamp check <!-- id:bpv005e -->
   - make build-app green; make spell clean.
   - One `make deploy-device` from a deliberately modified tree; the `event=launch buildStamp=...` line in `make logs-device` must show the `-dirty` marker and match the deploy output.
   - Blocked-by: bpv003c (Verify deploy-release-stub does not self-report dirty), bpv004d (Document the stamp format and the UI-attempt tag convention)
