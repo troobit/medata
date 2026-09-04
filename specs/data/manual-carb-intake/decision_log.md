@@ -436,3 +436,93 @@ Reusing the existing menus keeps both action rows unchanged — the review row i
 - The action is one level down in a menu, so it is not discoverable without opening it.
 
 ---
+
+## Decision 13: A capture-born preset is created by naming it, not by filling a form
+
+**Date**: 2026-09-04
+**Status**: accepted
+
+### Context
+
+Req 8.2 as originally written required the save-as-preset action to open the same
+preset-creation surface a hand-authored preset uses (Req 4.1), pre-filled with the meal's
+carbohydrate value and a derived name, both editable. That surface —
+`App/Shared/QuickPresetEditSheet.swift` — is a medium-detent sheet holding a name field, a carb
+field, a macro disclosure and a save button.
+
+A device session on 2026-09-04 walked the post-capture surfaces and found the shape wrong for
+the act. Of the four controls the sheet presents, one has work to do. The carbohydrate value
+arrives already correct: Decision 8 freezes the displayed, correction-adjusted total at the
+moment of the tap, and editing it in the sheet would silently desynchronise the preset from the
+`sourceMealID` it claims as its origin. The macro fields arrive empty and must stay empty —
+Decision 9 requires exactly that. Only the name is genuinely unknown to the caller.
+
+The reviewer's instruction was direct: the action is called quick-add, so it should take the
+name and be done, on the grounds that a preset can be renamed or re-edited later.
+
+### Decision
+
+The save-as-preset action prompts for the name alone, in place, without leaving the result
+surface, and writes the preset on confirmation. It does not present the carbohydrate value, the
+macros, or a second screen. Every other field, the carbohydrate value included, is reached
+afterwards through Req 8.6's ordinary edit path, which opens the full Req 4.1 surface unchanged.
+
+### Rationale
+
+Naming is the only input the caller cannot supply, so it is the only input worth asking for. The
+values that would have been editable in the sheet are ones the spec either fixes (the frozen
+total, Decision 8) or requires to be absent (the macros, Decision 9), which means the form was
+offering edits that were at best inert and at worst corrupting.
+
+Nothing is lost by deferring the rest, because Req 8.6 already guarantees a capture-born preset
+behaves as any other wherever it appears — the same tile, the same edit and delete. The full
+surface is one long-press away on the Intake grid, and Req 8.9's origin stamp survives that edit.
+Deferring is therefore not a reduction in capability, only a relocation of it to the surface
+where a preset is actually consumed and reconsidered.
+
+The change also removes a modal push from a surface whose whole design is a single fixed head
+above a scroll (`specs/ui/meal-review` Req 6.6), and it makes the derived name load-bearing —
+which is why the name builder's comma-descriptor trim ships alongside it rather than staying a
+medium-priority nicety.
+
+### Alternatives Considered
+
+- **Keep the full sheet (the superseded Req 8.2)**: One creation surface for both origins, no
+  second construction to maintain — Rejected because three of its four controls are inert or
+  harmful for this origin, and the cost is paid on every use of an action named "quick".
+- **Write the preset immediately with the derived name and no prompt at all**: The absolute
+  minimum, one tap total — Rejected because the derived name is a join of up to two food names
+  and is the label the user later has to recognise on a grid tile; committing it unseen makes
+  the rename mandatory rather than optional, moving the work instead of removing it.
+- **Prompt for the name inline on the review surface rather than in an alert**: No modal at all —
+  Rejected because it adds height above the review fold, which Req 6.6 forbids, and it would need
+  its own dismissal grammar for a control used occasionally.
+- **Move preset creation entirely to Intake, seeded from a recently captured meal**: Keeps the
+  capture surfaces free of the feature — Rejected on Decision 8's ground, unchanged: the value to
+  freeze is the *displayed, corrected* total, which exists only while that surface is on screen.
+
+### Consequences
+
+**Positive:**
+- The action costs a name and a tap, matching what it is called.
+- A capture-born preset can no longer be created carrying a carbohydrate value that disagrees
+  with the meal recorded as its source.
+- The prompt focuses its field on presentation, which supplies the missing-name cue that the
+  silent disabled-save path never gave (UI review 2026-08-25, low priority).
+- No layout change on either result surface, so Decision 12's "no change to the action rows"
+  property survives.
+
+**Negative:**
+- Two constructions now exist for one entity: a name-only create and a full edit. They can drift,
+  and the full sheet is no longer exercised by the capture path at all.
+- Supplying macros for a capture-born preset now takes a second, separate trip through Intake.
+- The derived name carries more weight than before, so a bad default is felt sooner.
+
+### Impact
+
+`App/Pages/MealReview/MealReviewView.swift` and `App/Pages/MealDetail/ResultView.swift` (both
+call sites, Decision 12), and the shared name builder `quickPresetDraft` in
+`App/Shared/MealRouting.swift`. `App/Shared/QuickPresetEditSheet.swift` is unchanged and keeps
+serving Intake's create and edit paths.
+
+---

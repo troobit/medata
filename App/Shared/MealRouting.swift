@@ -155,8 +155,17 @@ func quickPresetDraft(
     if foodNames.isEmpty {
         name = ""
     } else {
-        let lead = foodNames.prefix(2).joined(separator: " + ")
-        let rest = foodNames.count - 2
+        // Trimmed at the first comma before joining: CoFID display names carry
+        // cooking-state descriptors ("Pasta, cooked"), and mixing
+        // comma-as-descriptor with plus-as-join makes a two-food name read as
+        // four items on a grid tile whose label width is already the scarce
+        // thing (UI review 2026-09-04).
+        let heads = foodNames.map { name in
+            String(name.prefix(while: { $0 != "," }))
+                .trimmingCharacters(in: .whitespaces)
+        }
+        let lead = heads.prefix(2).joined(separator: " + ")
+        let rest = heads.count - 2
         name = rest > 0 ? "\(lead) +\(rest)" : lead
     }
     let rounded = Int(displayedCarbsG.rounded())
@@ -167,6 +176,67 @@ func quickPresetDraft(
         sortOrder: QuickPreset.nextSortOrder(after: existingPresets),
         sourceMealID: sourceMealID
     )
+}
+
+// The whole create interaction for a capture-born preset
+// (manual-carb-intake Req 8.2 as amended, Decision 13): the name, and nothing
+// else. The carbohydrate value is already frozen by `quickPresetDraft`
+// (Decision 8) and the macros are required to be absent (Decision 9), so the
+// name is the only input the caller does not already hold. Every other field
+// is reached afterwards through the Intake grid's edit path (Req 8.6), which
+// still opens the full `QuickPresetEditSheet` unchanged.
+//
+// Shared because Decision 12 put the action on BOTH result surfaces, and this
+// spec's whole point is that one shape is written once
+// (specs/ui/shared-meal-components).
+struct QuickAddNamePrompt: ViewModifier {
+    @Binding var draft: QuickPreset?
+    @Binding var name: String
+    let store: any PersistenceStore
+    let identifier: String
+
+    // Dismissal — Cancel, Save, or a tap outside — clears the draft, so the
+    // presented state has exactly one source of truth.
+    private var presented: Binding<Bool> {
+        Binding(
+            get: { draft != nil },
+            set: { shown in if !shown { draft = nil } }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content.alert("Save as quick-add", isPresented: presented) {
+            TextField("Name", text: $name)
+                .accessibilityIdentifier(identifier)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { save() }
+        }
+    }
+
+    // An empty name writes nothing and says nothing: the focused field is the
+    // cue, and validation copy is off the table under the developer-phase copy
+    // rule. `saveQuickPreset` is insert-or-replace by id, so this is the same
+    // one save path the full sheet uses.
+    private func save() {
+        guard var preset = draft else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        preset.name = trimmed
+        Task { try? await store.saveQuickPreset(preset) }
+    }
+}
+
+extension View {
+    func quickAddNamePrompt(
+        draft: Binding<QuickPreset?>,
+        name: Binding<String>,
+        store: any PersistenceStore,
+        identifier: String
+    ) -> some View {
+        modifier(QuickAddNamePrompt(
+            draft: draft, name: name, store: store, identifier: identifier
+        ))
+    }
 }
 
 // One row's worth of display data for the Records timeline (design-handoff-00

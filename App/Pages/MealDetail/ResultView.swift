@@ -227,6 +227,7 @@ struct ResultView: View {
     // ellipsis-menu action, presented as the same edit sheet a hand-authored
     // preset uses (Req 8.2).
     @State private var presetDraft: QuickPreset?
+    @State private var presetName = ""
     // Predicted class id → corrected class id from the meal's corrections
     // (meal-review Req 8.7): every surface that names a relabelled food names
     // the corrected one, not the predicted one.
@@ -428,9 +429,12 @@ struct ResultView: View {
             loadServings()
             await observeCorrections()
         }
-        .sheet(item: $presetDraft) { draft in
-            QuickPresetEditSheet(store: store, preset: draft, isNew: true)
-        }
+        .quickAddNamePrompt(
+            draft: $presetDraft,
+            name: $presetName,
+            store: store,
+            identifier: "result.quickAdd.name"
+        )
         .confirmationDialog("Delete meal?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: onDelete)
             Button("Cancel", role: .cancel) {}
@@ -941,12 +945,16 @@ struct ResultView: View {
                 Button("Save as quick-add") {
                     Task {
                         let presets = (try? await store.quickPresets()) ?? []
-                        presetDraft = quickPresetDraft(
+                        let draft = quickPresetDraft(
                             displayedCarbsG: heroCarbsG,
                             foodNames: foodRows.map(\.displayName),
                             sourceMealID: record.id,
                             existingPresets: presets
                         )
+                        // Name seeded before the prompt is armed: setting the
+                        // draft is what presents it (Decision 13).
+                        presetName = draft.name
+                        presetDraft = draft
                     }
                 }
                 .accessibilityIdentifier("result.saveAsQuickAdd")

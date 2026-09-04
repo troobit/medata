@@ -108,9 +108,9 @@ A quick-add preset has two origins. It can be authored by hand (Req 4), or it ca
 **Acceptance Criteria:**
 
 1. <a name="8.1"></a>The system SHALL offer a save-as-preset action on a meal's result surface, both on the surface shown immediately after a successful capture and on the surface reached from records.  
-2. <a name="8.2"></a>WHEN the user invokes the save-as-preset action, the system SHALL open the same preset-creation surface used for a hand-authored preset (Req 4.1), pre-filled with the meal's carbohydrate value and with a preset name derived from the meal's detected foods, both editable before the preset is saved.  
+2. <a name="8.2"></a>WHEN the user invokes the save-as-preset action, the system SHALL prompt for the preset name alone — pre-filled with a name derived from the meal's detected foods and editable before the preset is saved — without leaving the result surface, and SHALL carry the meal's carbohydrate value into the preset without presenting it for edit.  
 3. <a name="8.3"></a>The carbohydrate value carried into the preset SHALL be the total the result surface is displaying at that moment, including any corrections the user has already made to that meal, rather than the pipeline's original estimate.  
-4. <a name="8.4"></a>The preset SHALL carry a carbohydrate value only; protein, fat, and fibre SHALL be left absent for the user to supply.  
+4. <a name="8.4"></a>The preset SHALL carry a carbohydrate value only; protein, fat, and fibre SHALL be left absent, to be supplied afterwards through the edit path of Req 8.6 if they are wanted.  
 5. <a name="8.5"></a>The save-as-preset action SHALL be available for any displayed meal result regardless of its confidence band or calibration state.  
 6. <a name="8.6"></a>A preset created from a meal SHALL behave as any other quick-add preset wherever it appears — the same tile, the same one-tap write (Req 3.2), and the same edit and delete (Req 4.2).  
 7. <a name="8.7"></a>WHEN a preset created from a meal is tapped, the system SHALL write one manual carb record exactly as any other quick-add does, and SHALL NOT create a meal record or any photo-derived data.  
@@ -118,3 +118,5 @@ A quick-add preset has two origins. It can be authored by hand (Req 4), or it ca
 9. <a name="8.9"></a>WHEN a preset created from a meal is subsequently edited (Req 4.2), the system SHALL preserve its originating-meal stamp.  
 
 *Note: a refused capture produces no result surface, so there is nothing to save from it; Req 8.5 constrains only results that are actually displayed.*
+
+*Note: Req 8.2's name-only prompt is deliberate and is the whole of the create interaction; every other field of a capture-born preset, the carbohydrate value included, is reached afterwards through Req 8.6's edit path, which opens the full hand-authored surface of Req 4.1. See Decision 13.*

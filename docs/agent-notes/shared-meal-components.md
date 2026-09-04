@@ -25,9 +25,33 @@ silently pin to one branch.
 | `App/MealReadouts.swift` | `MealPalette`, `CarbAmountText`, `CorrectedMarker`, `RecordedSuggestion.line`, `MealPhotoLoader` (relocated from the retired `MealHistoryModel.swift`) | The CONTAINER layouts stay per-surface (Decision 3) — do not try to unify the three total blocks into one view; the shared unit is the content. |
 | `App/SharedFormatting.swift` | `MedataFormat.dateTimeString` / `.clockString` (cached `en_IE` formatters), `MedataFormat.prettify`, `TimelineRow` (glyph 20 pt / headline / timestamp / footer / trailing) | The five Records rows and `IntakeView.entryRow` are slot-fillers over `TimelineRow`; a new record type should be too. `EstimationLogView`'s machine-format `fileStamp` is deliberately NOT here (en_US_POSIX filename format, not user copy). |
 | `App/CarbEntrySheet.swift` | Also hosts `CarbAmountField` + `MacroDisclosure`, shared with `QuickPresetEditSheet` | The preset sheet passes `sourceMealID` through an edit untouched (Req 8.9) — it reconstructs the `QuickPreset`, so a new field must be added to that pass-through or edits silently drop it. |
+| `App/Shared/MealRouting.swift` | Also hosts `quickPresetDraft` (the derived name + frozen total) and `QuickAddNamePrompt` (the `.quickAddNamePrompt` modifier) | Both capture surfaces create a preset through the prompt, not the sheet — see below. |
 
 `MealHistoryModel` is gone (was test-only dead code); `DisplayMeal` now lives
 in `App/MealRouting.swift` beside `quickPresetDraft` and the route plumbing.
+
+## Creating a capture-born preset: the prompt, not the sheet
+
+Changed 2026-09-04 (manual-carb-intake Req 8.2 amended, **Decision 13**). `Save as quick-add`
+on `MealReviewView` and `ResultView` no longer pushes `QuickPresetEditSheet`; it presents
+`QuickAddNamePrompt` — an alert with one `TextField` — and writes the preset with the frozen
+values on Save.
+
+- **Why**: of the sheet's four controls only the name had a job. The carbohydrate value is frozen
+  by Decision 8 and editing it there would desynchronise the preset from its `sourceMealID`; the
+  macros are required to be absent by Decision 9. See `specs/general/UI-IMPROVEMENTS.md`,
+  review 2026-09-04.
+- **`QuickPresetEditSheet` is NOT retired** — Intake still opens it for both create (the dashed
+  `+` tile) and edit (grid context menu → Edit), and the edit path is where a capture-born preset
+  gains macros or a better name. Do not delete it, and do not assume the capture path exercises
+  it: it no longer does.
+- **Seed the name before arming the draft.** Setting `presetDraft` is what presents the alert, so
+  `presetName = draft.name` must precede it or the field opens blank.
+- An empty name writes nothing and shows nothing (developer-phase copy rule). The alert's own
+  focused field is the cue.
+- `quickPresetDraft` trims each food name at its first comma before joining, so CoFID display
+  names give `Pasta + Potato +1` rather than `Pasta, cooked + Potato, boiled +1`. The derived name
+  is now the whole interaction, so this matters more than it did.
 
 ## What stays duplicated, on purpose
 

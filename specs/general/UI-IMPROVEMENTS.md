@@ -622,3 +622,176 @@ requirement outright.
 | Dose, chip anchor | chip + Save | 2 |
 
 Nothing recommended here spends an interaction glucose does not have.
+
+---
+
+# Review 2026-09-04 — the post-capture surface against Intake
+
+Scope set by a device session on `research` (`905fb6f`): the reviewer walked the meal surfaces
+through the new `Settings → Review demo meal` path, found the Intake flow clean and the
+post-capture flow not, and asked for two things — cut `Save as quick-add` down to a name-only
+confirm, and bring `MealReviewView` onto Intake's visual language. This review covers
+`App/Pages/MealReview/MealReviewView.swift`, `App/Pages/MealDetail/ResultView.swift`,
+`App/Shared/QuickPresetEditSheet.swift` and `App/Shared/MealRouting.swift`, read against
+`App/Pages/Intake/IntakeView.swift`, `design-system/MASTER.md`, `specs/ui/meal-review` Req 6.6 and
+Req 10, and `specs/data/manual-carb-intake` Req 8.
+
+## Summary
+
+The finding that reframes the visual half: **the two palettes have already converged, so nothing
+here is a colour problem.** Under the forced dark theme (`MeData/Info.plist`,
+`UIUserInterfaceStyle = Dark`) `captureBackground` and `surfacePrimary` both resolve `#000000`,
+`captureChromeText` and `textPrimary` both resolve `#FFFFFF`, and `captureChromeBG`
+(white at 10% over black, `#1A1A1A`) sits one step from `surfaceElevated` (`#1C1C1E`). Review's
+food rows already restate Intake's tile metrics exactly — 12 pt radius, 12 pt vertical padding,
+`.headline` over `.caption.monospacedDigit()`. `specs/ui/meal-review` Req 10.1 asks for Intake's
+grouping "while remaining on the capture palette", and that costs nothing: every recommendation
+below is layout and chrome, and not one swaps a token.
+
+What actually reads as a different product is three pieces of bespoke chrome that Intake does not
+have an equivalent of anywhere — a hand-drawn rule, an all-caps label, and a filled-colour card —
+plus one row variant that leaves the rhythm. Removing them is subtractive; the surface loses
+nothing it uses.
+
+The quick-add half is a clearer cut. Of the four controls the preset sheet presents, exactly one
+has a job.
+
+## Critical Issues
+
+### Issue: "Save as quick-add" spends a page on a form with one live field
+
+**Current State**: Both call sites (`App/Pages/MealReview/MealReviewView.swift:175-176`,
+`App/Pages/MealDetail/ResultView.swift`) present `QuickPresetEditSheet` — a medium-detent
+`NavigationStack` wrapping a `ScrollView` with a name field, a carb field, a macro disclosure and a
+`Save preset` button.
+
+**Problem**: The caller already knows everything the sheet asks for except the name.
+`quickPresetDraft` freezes the displayed, correction-adjusted total (Req 8.3), so the carb field
+arrives pre-filled and correct — and editing it there would silently desynchronise the preset from
+the `sourceMealID` it claims as its origin. The macro disclosure arrives empty and stays empty:
+`quickPresetDraft` never sets `IntakeMacros`, and Req 8.4 requires the macros be absent. So one of
+four controls does work, and reaching it costs a page push, a scroll view and a two-tap commit for
+an action whose name is "quick".
+
+**Recommendation**: Replace the sheet at both call sites with an `.alert` carrying a single
+`TextField` pre-filled with the generated name, plus Cancel and Save. Save writes the preset with
+the frozen carbs and returns to the surface underneath. Renaming and macros stay exactly where they
+already live — Intake's grid context menu → Edit, which opens the full `QuickPresetEditSheet`
+unchanged.
+
+**Impact**: The action costs a name and a tap. Two standing findings in this file close as a side
+effect: the alert focuses its field on presentation, which is the cue the empty-name path was
+missing (Low Priority, 2026-08-25), and the preset can no longer be created with a carb value that
+disagrees with the meal that sourced it.
+
+**Implementation Notes**: **This contradicts `specs/data/manual-carb-intake` Req 8.2**, which
+requires the action to "open the same preset-creation surface used for a hand-authored preset …
+both editable before the preset is saved". Req 8.2 must be amended and a decision entry written
+before the code changes; Req 8.4's "for the user to supply" needs to name the edit path now that
+creation no longer offers one. `QuickPresetEditSheet` itself is unchanged — Intake still uses it
+for both create and edit.
+
+### Issue: The generated preset name is now the entire interaction, and it reads badly
+
+**Current State**: `quickPresetDraft` (`App/Shared/MealRouting.swift:148-170`) joins the first two
+prettified class names with `" + "` and appends `" +N"`. With CoFID-style display names that
+yields `"Pasta, cooked + Potato, boiled +1"`.
+
+**Problem**: Raised at medium priority on 2026-08-25 on the grounds that the default is what most
+users keep. The cut above promotes it: with the name as the only field, the default *is* the
+interaction, and a name mixing comma-as-descriptor with plus-as-join reads as four items instead of
+three while spending the quick-add tile's label width on cooking-state descriptors that do not help
+re-recognition.
+
+**Recommendation**: Trim each name at its first comma before joining — `"Pasta + Potato +1"`. One
+change in the shared builder; both call sites inherit it.
+
+**Impact**: The pre-filled name is usually keepable, which is what makes a name-only confirm a
+single tap rather than a rename.
+
+## High Priority Improvements
+
+### Issue: A hand-drawn rule does work that Intake does with space
+
+**Current State**: `MealReviewView.swift` draws a 1 pt `Rectangle` filled
+`captureChromeText.opacity(0.08)` between the scale control and the scrolling rows.
+
+**Problem**: Intake draws no rules; its `List` sections separate by space alone, and so does every
+other content surface in the app. The rule is also the one element on the review surface with no
+semantic job — the register already changes there, from fixed head to scrolling rows, and the
+scroll itself announces the boundary as soon as anything moves.
+
+**Recommendation**: Delete it and let the existing `VStack(spacing: 12)` carry the break.
+
+**Impact**: One less non-Intake mark, and a pt of height returned above the fold that
+`specs/ui/meal-review` Req 6.6 is measured on.
+
+### Issue: `PLATE` is capture-chrome grammar on a content surface
+
+**Current State**: The scale control is prefixed `Text("PLATE")` in `.caption.weight(.semibold)` at
+60% white (`MealReviewView.swift`, `scaleControl`).
+
+**Problem**: All-caps is this app's *capture chrome* register — the mode capsule (`1-VIEW · LiDAR`)
+and the telemetry capsule. No content surface uses it: Intake labels a group `Section("Recent")` in
+sentence case or leaves it unlabelled. The label is also redundant against the control it names —
+the fraction stops sit directly under a photograph of a plate.
+
+**Recommendation**: Drop the label, and move its name onto the group as an
+`accessibilityLabel` — the visible mark is what diverges, not the naming.
+
+**Impact**: Removes the loudest single typographic divergence from Intake. Note the trap: the
+fraction buttons carry an identifier and a selected trait but no label of their own
+(`App/Shared/ServingRows.swift`), so deleting the visible text alone would strip the group's only
+spoken name.
+
+### Issue: The accessory line's filled-orange plate takes the prominence the primary action owns
+
+**Current State**: `accessoryLine` renders on a `Color.confidenceModerate.opacity(0.85)` fill with
+`captureBackground` text.
+
+**Problem**: Two failures at once. Req 10.1 asks for Intake's "single-prominent-primary-action"
+layout, and Intake honours that literally — one accent fill on the whole screen, everything else
+plain on `surfaceElevated`. A second saturated fill on review means the calibration signal and
+`Record N g` compete for the same role. Separately, this is the surviving half of a **critical
+contrast finding already recorded in this file** (2026-08-25): caption text on this fill measures
+~2.8:1 against `design-system/MASTER.md`'s ≥4.5:1 budget.
+
+**Recommendation**: Restate it in Intake's card grammar — `captureChromeBG` fill, 12 pt radius,
+`captureChromeText` label — and move `confidenceModerate` onto the SF Symbol as its tint. Colour
+then marks the signal instead of becoming the plate.
+
+**Impact**: The surface returns to one prominent fill, and the standing contrast failure closes:
+`captureChromeText` on `captureChromeBG` composites to white on `#1A1A1A`, ~18:1. The signal stays
+icon-plus-text, so Req 1.5 (never colour alone) is unaffected.
+
+## Medium Priority Enhancements
+
+### Issue: The rejected row leaves the row rhythm it belongs to
+
+**Current State**: `rejectedRow` uses `padding(.vertical, 4)` and `captureChromeBG.opacity(0.5)`
+against `foodRow`'s 12 pt and full fill; its height is then set by the 44 pt `Restore` button
+rather than by the row grammar.
+
+**Problem**: Intake's idiom for a de-emphasised tile is opacity on the whole tile at unchanged
+metrics (`presetButton`'s `.opacity(isSaving ? 0.4 : 1)`). Review instead changes the fill AND the
+padding, so a rejected food reads as a different kind of object rather than the same row, quieter.
+
+**Recommendation**: Give `rejectedRow` `foodRow`'s padding and full `captureChromeBG` fill, and
+express the de-emphasis as opacity on the row.
+
+**Impact**: Rejecting a food no longer reflows the list; the remnant keeps its place, which is what
+makes the restore affordance findable.
+
+## Positive Observations
+
+- The food rows already are Intake rows: the comment at `foodRow` claims Req 10.1 parity and the
+  metrics genuinely match, radius for radius and padding for padding. The visual gap is entirely in
+  the chrome around them, which is why every recommendation above is subtractive.
+- Keeping the capture palette rather than switching to the grouped tokens is correct and should
+  stay correct: the two resolve identically *today* because a plist key forces dark, and
+  `shared-meal-components.md` is explicit that a light theme is meant to remain a one-line revert.
+  A surface that lives over a photograph needs the capture family on its own merits.
+- `quickPresetDraft` being one shared builder is what makes the name fix a single edit for both
+  surfaces — the point Req 8 was designed around, still paying.
+- The `sourceMealID` pass-through survives an edit (Req 8.9), so nothing about moving the rename to
+  Intake's edit path threatens the origin stamp.
