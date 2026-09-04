@@ -189,11 +189,23 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
   - References: design.md#The action on the two result surfaces
 
-- [ ] 18. Build, test, spell, and run the Req 8 on-device checklist <!-- id:yh454uu -->
+- [x] 18. Reduce the capture-born preset create to a name-only prompt (Decision 13) <!-- id:yh454uv -->
+  - Req 8.2 amended and Decision 13 written before the code: the action prompts for the name alone and no longer opens QuickPresetEditSheet
+  - QuickAddNamePrompt (a ViewModifier plus the .quickAddNamePrompt sugar) lives in App/Shared/MealRouting.swift beside quickPresetDraft — one shape for Decision 12's two call sites
+  - QuickPresetEditSheet is NOT retired: Intake still opens it for create and edit, and that edit path is where a capture-born preset gains macros or a better name (Req 8.6)
+  - quickPresetDraft trims each food name at its first comma before joining, so the derived name reads Pasta + Potato +1 rather than Pasta, cooked + Potato, boiled +1 — the name is now the whole interaction
+  - Seed presetName from the draft BEFORE assigning presetDraft; assigning the draft is what presents the alert
+  - 2026-09-04: implemented on both surfaces; make build-app clean, make spell clean, make test green — XCTest 684 executed with 3 skipped and 0 failures, swift-testing 530 tests in 57 suites passed
+  - Stream: 1
+  - Requirements: [8.2](requirements.md#8.2), [8.4](requirements.md#8.4), [8.6](requirements.md#8.6)
+  - References: specs/general/UI-IMPROVEMENTS.md (review 2026-09-04), docs/agent-notes/shared-meal-components.md
+
+- [ ] 19. Build, test, spell, and run the Req 8 on-device checklist <!-- id:yh454uu -->
   - No new files, so no project.pbxproj registration - confirm that is still true before building
   - Run make build and make test; report both XCTest and swift-testing totals
   - Run make spell
   - Walk the Req 8 on-device checklist in design.md, including the schema-8 carry-over DB case and the sqlite3 check that source_meal_id survives an edit
+  - Superseded in part by task 18: the checklist's create leg is now the name-only prompt on both surfaces, not the preset sheet — judge that the alert opens focused, that Save writes the frozen total, and that Intake's edit path still reaches the full field set
   - Machine half done 2026-08-25: build-app clean, spell clean, XCTest 639/0 (the four schema-version pins moved to 10 with the version), swift-testing 466/467 (the one failure is the pre-existing python3<3.10 generate.py environment issue); the on-device checklist half remains human-gated
   - Blocked-by: yh454us (Add Save as quick-add to MealReviewView post-capture), yh454ut (Add Save as quick-add to ResultView from records), yh454uq (Carry sourceMealID through QuickPresetEditSheet edits)
   - Stream: 1

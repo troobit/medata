@@ -189,10 +189,23 @@ overview hop (home-router Decision 16). It is no longer needed for the dose
 surfaces: since insulin-dosing Decision 18 every surface recomputes the dose
 live from recorded events + settings, so opening the seeded meal from history
 (Records → meal → ResultView) proves the readout and its tap-through working
-with zero extra navigation. Judging the CAPTURE review line still needs a real
-capture — there is no debug path onto `MealReviewView`.
+with zero extra navigation.
 
-The seed button does not exist in Release and does not touch MedataCore. Replay
+- **Settings → Review demo meal** saves that same fixed record and then pushes
+  `MealReviewView` on it. Added 2026-09-04 for shared-meal-components task 8,
+  because a device session found the capture-review line unjudgeable: the
+  surface is constructed in exactly ONE place (`CaptureFlowView`'s `.result`
+  route), so a build whose estimation refuses or drifts cannot reach it at all.
+  This is the only non-capture path onto it. Two things it does not give you:
+  with `artefacts: []` there is no photo and no mask outlines, so the surface
+  shows the fallback it is specified to show without one (meal-review Req 1.6);
+  and `onRecord`/`onRetake`/`onDelete` pop the Settings stack rather than
+  driving `CaptureFlowModel`, so the post-capture *wiring* still needs a real
+  capture. Everything below the photo — rows, totals, corrected markers,
+  serving and scale controls, and correction persistence against a real meal id
+  — behaves as it does after a capture.
+
+Neither seed button exists in Release and does not touch MedataCore. Replay
 the commit onto an attempt branch the same way any other research change is
 replayed — without it, the attempt build has no seed button.
 

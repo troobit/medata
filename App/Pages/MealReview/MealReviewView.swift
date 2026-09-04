@@ -50,6 +50,7 @@ struct MealReviewView: View {
     // menu action, presented as the same edit sheet a hand-authored preset
     // uses (Req 8.2).
     @State private var presetDraft: QuickPreset?
+    @State private var presetName = ""
 
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
@@ -133,9 +134,9 @@ struct MealReviewView: View {
                 } else {
                     scaleControl
                 }
-                Rectangle()
-                    .fill(Color.captureChromeText.opacity(0.08))
-                    .frame(height: 1)
+                // No rule here: Intake separates its groups with space alone,
+                // and the register already changes at this line from fixed
+                // head to scrolling rows (Req 10.1, UI review 2026-09-04).
                 ScrollView {
                     VStack(spacing: 10) {
                         accessoryLine
@@ -172,9 +173,12 @@ struct MealReviewView: View {
         .onChange(of: model.pendingTotalCarbsG) {
             Task { await refreshDose() }
         }
-        .sheet(item: $presetDraft) { draft in
-            QuickPresetEditSheet(store: store, preset: draft, isNew: true)
-        }
+        .quickAddNamePrompt(
+            draft: $presetDraft,
+            name: $presetName,
+            store: store,
+            identifier: "review.quickAdd.name"
+        )
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Retake and delete (Req 1.3): both discard the recorded meal and
@@ -188,7 +192,7 @@ struct MealReviewView: View {
                     Button("Save as quick-add") {
                         Task {
                             let presets = (try? await store.quickPresets()) ?? []
-                            presetDraft = quickPresetDraft(
+                            let draft = quickPresetDraft(
                                 displayedCarbsG: Float(model.pendingTotalCarbsG),
                                 foodNames: model.activeFoods.map {
                                     MealReviewModel.prettify($0.currentClassId)
@@ -196,6 +200,10 @@ struct MealReviewView: View {
                                 sourceMealID: record.id,
                                 existingPresets: presets
                             )
+                            // Name seeded before the prompt is armed: setting
+                            // the draft is what presents it (Decision 13).
+                            presetName = draft.name
+                            presetDraft = draft
                         }
                     }
                     .accessibilityIdentifier("review.saveAsQuickAdd")
@@ -507,10 +515,12 @@ struct MealReviewView: View {
     // MARK: - Whole-meal scale (Req 6.3–6.6)
 
     private var scaleControl: some View {
+        // Unlabelled: all-caps is the capture CHROME register in this app
+        // (the mode and telemetry capsules), and no content surface uses it.
+        // The stops sit directly under a photograph of a plate, so the label
+        // was naming what the picture already says, at the cost of the row's
+        // leading width (Req 10.1/10.4, UI review 2026-09-04).
         HStack(spacing: 8) {
-            Text("PLATE")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.captureChromeText.opacity(0.6))
             Spacer()
             ForEach(PlateFraction.allCases, id: \.self) { fraction in
                 PlateFractionButton(
@@ -527,6 +537,7 @@ struct MealReviewView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("Plate")
         .accessibilityIdentifier("review.scaleControl")
     }
 
@@ -630,6 +641,7 @@ struct MealReviewView: View {
                     HStack(spacing: 8) {
                         Image(systemName: signals.count == 1
                             ? signals[0].symbol : "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.confidenceModerate)
                         Text(signals.map(\.shortLabel).joined(separator: " · "))
                             .font(.caption.weight(.semibold))
                             .multilineTextAlignment(.leading)
@@ -638,13 +650,19 @@ struct MealReviewView: View {
                         Image(systemName: accessoryExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption2.weight(.semibold))
                     }
-                    // Dark-on-orange: white caption text on this fill is
-                    // ~2.8:1, under MASTER.md's >=4.5:1 budget (ui-ux review
-                    // 2026-08-25).
-                    .foregroundStyle(Color.captureBackground)
+                    // Intake's card grammar, with the SYMBOL carrying the
+                    // colour instead of the plate. Two things this fixes at
+                    // once: a second saturated fill was competing with
+                    // `Record N g` for the one-prominent-action role Req 10.1
+                    // names, and white caption text on the orange fill
+                    // measured ~2.8:1 against MASTER.md's >=4.5:1 budget
+                    // (ui-ux review 2026-08-25, closed 2026-09-04). White on
+                    // captureChromeBG composites to ~18:1. Still icon AND
+                    // text, so Req 1.5 (never colour alone) is untouched.
+                    .foregroundStyle(Color.captureChromeText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 12))
                     .contentShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityIdentifier("review.accessoryLine")
@@ -748,7 +766,7 @@ struct MealReviewView: View {
             Text(MealReviewModel.prettify(food.predicted.classID))
                 .font(.headline)
                 .strikethrough()
-                .foregroundStyle(Color.captureChromeText.opacity(0.5))
+                .foregroundStyle(Color.captureChromeText)
             Spacer(minLength: 8)
             Button {
                 Task { await model.reverseReject(classId: food.classId) }
@@ -762,9 +780,14 @@ struct MealReviewView: View {
             .foregroundStyle(Color.captureChromeText)
             .accessibilityIdentifier("review.row.\(food.classId).restore")
         }
+        // foodRow's metrics exactly, de-emphasised the way Intake
+        // de-emphasises a tile — opacity on the whole row, not a different
+        // fill and a different padding (UI review 2026-09-04). Rejecting a
+        // food now leaves the list rhythm intact instead of reflowing it.
         .padding(.horizontal, 14)
-        .padding(.vertical, 4)
-        .background(Color.captureChromeBG.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, 12)
+        .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 12))
+        .opacity(0.55)
         .accessibilityIdentifier("review.rejectedRow.\(food.classId)")
     }
 

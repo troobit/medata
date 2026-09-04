@@ -31,6 +31,6 @@ references:
   - Blocked-by: 6yhak35 (ServingRows.swift — extract PlateFraction, amount button, gram editor, step logic; adopt in MealReviewView and ResultView), 6yhak36 (MealReadouts.swift — CarbTotalBlock, CorrectedMarker, MealPhotoCard; adopt across the four marker sites and three total sites), 6yhak37 (SharedFormatting.swift — cached en_IE formatters, prettify, TimelineRow; adopt across six row/formatter sites), 6yhak38 (Carb-amount form unification — CarbAmountFields shared by LogSheet.CarbEntryContent and QuickPresetEditSheet), 6yhak39 (Entry-chrome adoption — QuickPresetEditSheet and DoseScheduleSettingsSection consume EntryTimeRow/EntrySaveButton; no private sheet chrome remains for consolidated modes), 6yhak3a (Remove MealHistoryModel.swift, its tests file and pbxproj entries)
   - Requirements: [6.1](requirements.md#6.1), [6.3](requirements.md#6.3)
 
-- [ ] 8. STOP — device look: each surface renders as before, corrections persist identically <!-- id:6yhak3c -->
+- [x] 8. STOP — device look: each surface renders as before, corrections persist identically <!-- id:6yhak3c -->
   - Blocked-by: 6yhak3b (Gate: make build-app, make test both totals, make spell)
   - Requirements: [6.1](requirements.md#6.1), [6.3](requirements.md#6.3)

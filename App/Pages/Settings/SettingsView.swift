@@ -84,6 +84,8 @@ struct SettingsView: View {
     @State private var isClearing = false
     @State private var confirmsClear = false
     @State private var isSeedingMeal = false
+    @State private var isSeedingReview = false
+    @State private var demoReview: MealRecord?
     #endif
 
     var body: some View {
@@ -253,6 +255,18 @@ struct SettingsView: View {
                 .disabled(isSeedingMeal)
                 .accessibilityIdentifier("settings.seedMeal")
 
+                Button {
+                    reviewDemoMeal()
+                } label: {
+                    if isSeedingReview {
+                        MedataLoadingSymbol(mode: .loop, size: 22)
+                    } else {
+                        Text("Review demo meal")
+                    }
+                }
+                .disabled(isSeedingReview)
+                .accessibilityIdentifier("settings.reviewDemoMeal")
+
                 Button(role: .destructive) {
                     confirmsClear = true
                 } label: {
@@ -290,6 +304,15 @@ struct SettingsView: View {
             GlucoseConnectionsView(model: glucoseConnections)
         }
         #if DEBUG
+        .navigationDestination(item: $demoReview) { record in
+            MealReviewView(
+                record: record,
+                store: store,
+                onRecord: { demoReview = nil },
+                onRetake: { discardDemoReview(record) },
+                onDelete: { discardDemoReview(record) }
+            )
+        }
         .confirmationDialog(
             "Delete all meals, glucose and insulin data?",
             isPresented: $confirmsClear,
@@ -418,6 +441,38 @@ struct SettingsView: View {
             defer { isSeedingMeal = false }
             try? await store.save(SettingsView.demoMeal(), artefacts: [])
         }
+    }
+
+    // The only non-capture path onto `MealReviewView`, which is otherwise
+    // built in exactly one place (CaptureFlowView's `.result` route). It saves
+    // the same fixed record `seedDemoMeal` writes and then pushes the review
+    // surface on it, so the capture-review line can be judged on a build whose
+    // estimation is refusing or drifting.
+    //
+    // Saved first, and against the real store, because the surface persists
+    // every correction against the meal id the moment it is made (meal-review
+    // Req 9.9) — an unsaved record would strand those rows. `artefacts: []`
+    // means no photo and no outlines, so the surface shows the fallback it is
+    // specified to show without one (Req 1.6); everything below the photo —
+    // rows, totals, corrected markers, serving and scale controls — renders
+    // exactly as it does after a real capture.
+    private func reviewDemoMeal() {
+        isSeedingReview = true
+        Task {
+            defer { isSeedingReview = false }
+            let record = SettingsView.demoMeal()
+            try? await store.save(record, artefacts: [])
+            demoReview = record
+        }
+    }
+
+    // Retake and Delete discard the demo meal the same way they discard a
+    // just-captured one (`CaptureFlowModel.deleteAndDismiss`). The correction
+    // rows survive that delete (Req 9.10), which is what leaves the
+    // persistence half of the check readable afterwards.
+    private func discardDemoReview(_ record: MealRecord) {
+        demoReview = nil
+        Task { try? await store.deleteMeal(id: record.id) }
     }
 
     private static func demoMeal() -> MealRecord {

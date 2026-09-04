@@ -220,3 +220,16 @@ references:
   - Confirm the correction records survive a force-quit mid-review and a meal deletion before calling the store done
   - Blocked-by: fffbfgz (MedataCore tests: beta re-derivation, cascade, row identity), fffbfh5 (Capture-stack rewire and ResultView collapse), fffbfh6 (Corrected food names on every display surface), fffbfh7 (Corrections browse and JSONL export in EstimationLogView), fffbfha (New design-system/pages/meal-review.md; retire segmentation-review.md), fffbfhb (Agent notes, OVERVIEW and nextup)
   - Stream: 1
+
+- [x] 23. Req 10.1 visual adoption: bring MealReviewView onto Intake's language
+  - Raised by a device look on 2026-09-04: Req 10.1 shipped as row metrics only, and the surface still read as a different product from Intake
+  - The palettes have already converged under the forced dark theme — captureBackground and surfacePrimary both resolve #000000, captureChromeText and textPrimary both #FFFFFF — so every change is layout and chrome, and none swaps a token
+  - Delete the hand-drawn 1 pt rule above the scroll; Intake separates groups with space alone
+  - Drop the all-caps PLATE label (capture-chrome register, not a content one) and move its name onto the group as an accessibilityLabel — the fraction buttons carry no label of their own
+  - Restate the accessory line in Intake's card grammar with confidenceModerate on the symbol rather than the plate; this also closes the standing critical contrast finding of ~2.8:1 against MASTER.md's 4.5:1 budget
+  - Give the rejected row foodRow's metrics and express the de-emphasis as row opacity, Intake's own dimming idiom
+  - 2026-09-04: implemented; make build-app clean, make spell clean, make test green — XCTest 684 executed with 3 skipped and 0 failures, swift-testing 530 tests in 57 suites passed
+  - Device verification stays human-gated in prerequisites.md, outside this ledger
+  - Stream: 1
+  - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.4](requirements.md#10.4)
+  - References: specs/general/UI-IMPROVEMENTS.md (review 2026-09-04)
