@@ -1,0 +1,87 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "BetaCorrectionTable.proto";
+
+option swift_prefix = "Pb";
+
+// One correction record per detected food per capture (meal-review Req 9.1):
+// the values as predicted beside the values as finally corrected. The store
+// holding these rows is never pruned — the corpus is the deliverable.
+
+// Where the row's mass came from. "I ate three quarters of the plate"
+// (MEAL_SCALE) and "the segmenter over-traced this potato" (PER_FOOD) are
+// opposite signals that one ratio cannot carry. NONE is the proto3 default:
+// the mass is the derived estimate, untouched.
+enum MassSource {
+    MASS_SOURCE_NONE = 0;
+    MASS_SOURCE_PER_FOOD = 1;
+    MASS_SOURCE_MEAL_SCALE = 2;
+}
+
+// The same shape on both the predicted and corrected side, so the two are
+// diffable field-by-field and a future estimator change can be evaluated
+// against either. Density and carbohydrate coefficient are carried in the
+// record itself — never re-looked-up — so a row is interpretable as a
+// training example without the app, without the food database at the
+// edition that produced it, and without the mask (Req 9.11). Fields are
+// double to match the app's own arithmetic (Macros.compute,
+// pendingTotalCarbsG), so the corpus value equals the displayed one.
+message FoodDerivation {
+    string class_id = 1;
+    uint32 class_index = 2;             // locates the food in the stored mask (Req 9.12)
+    double volume_cm3 = 3;              // post-β, as stored
+    double volume_pre_beta_cm3 = 4;
+    double beta_used = 5;
+    BetaCalibrationStatus beta_status = 6;  // beta_used == 1.0 is ambiguous without this
+    double density_g_per_cm3 = 7;       // carried, not looked up (Req 9.11)
+    double carbs_per_100g = 8;          // per 100 g edible portion, as CoFID defines it
+    string density_source = 9;          // provenance: measured or assumed
+    string coefficient_source = 10;
+    double mass_g = 11;
+    double carbs_g = 12;
+}
+
+message CorrectionRecord {
+    string schema_version = 1;
+    string meal_id = 2;
+    // Joins the record to its estimation_outcomes row and through it to a
+    // capture bundle where one survives; where none does, the record stays
+    // valid for macro re-derivation on its own (Req 8.3).
+    string outcome_id = 3;
+    int64  created_at_ms = 4;
+    int64  updated_at_ms = 5;
+
+    string palette_version = 6;         // Req 9.12 — absent from PbMealRecord
+    string database_edition = 7;
+    string segmenter_source = 8;        // Req 9.8 — excludes dev_stub from exports
+    string build_stamp = 9;
+
+    FoodDerivation predicted = 10;      // never mutated (Req 9.2)
+    FoodDerivation corrected = 11;      // updated in place (Req 9.3); unset when unchanged
+
+    // Independent facts, not a single state enum — a food can be both
+    // relabelled and amount-corrected, and one enum cannot say so.
+    bool   class_corrected = 12;
+    bool   rejected = 13;
+    bool   absent = 14;
+    bool   amount_corrected = 15;
+
+    bool   picker_opened_unchanged = 16; // Req 9.5 — the shortlist-failing signal
+    bool   capture_abandoned = 17;      // Req 9.5 — retaken or deleted
+    MassSource mass_source = 18;
+    // 1-based; 0 = no relabel (Req 9.7). Proto3 scalars default to 0, so a
+    // -1 sentinel would make no-relabel indistinguishable from
+    // picked-the-first-entry.
+    int32  shortlist_rank = 19;
+    string absent_query_text = 20;      // Req 5.2
+    // Req 3.3 — "recency" now, "score" after the estimation-domain
+    // candidate matrix lands (Decision 18). Without it shortlist_rank
+    // would silently mean two different things.
+    string shortlist_source = 21;
+    // Set when a correction dimension was applied and then reversed within
+    // the review session, so a rejected-then-un-rejected food stays
+    // distinguishable from a confirmed correct prediction (design
+    // "Record lifecycle"; Decision 5's precision numerator).
+    bool   was_reverted = 22;
+}

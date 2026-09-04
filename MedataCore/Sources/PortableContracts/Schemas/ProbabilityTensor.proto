@@ -1,0 +1,17 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "ClassPalette.proto";
+
+option swift_prefix = "Pb";
+
+// PORTABLE CONTRACT: bytes is FP16 IEEE-754 binary16, little-endian, HWC row-major
+// (per §6.0). The iOS-private MTLBuffer adaptor lives in Segmentation/ and is NOT part
+// of the portable contract.
+message ProbabilityTensor {
+    bytes bytes = 1;                            // size = height * width * classes * 2
+    int32 height = 2;
+    int32 width = 3;
+    int32 classes = 4;
+    ClassPalette palette = 5;
+}

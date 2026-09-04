@@ -1,0 +1,504 @@
+import Benchmark
+import Persistence
+import PortableContracts
+import SwiftProtobuf
+import SwiftUI
+
+// Wraps the exported log-file URL so it can drive `.sheet(item:)` — the
+// ArchiveFile precedent in SettingsView.
+private struct LogExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+// Developer-facing browser over the persisted estimation outcome rows
+// (snaq-parity Req 2.2/2.3, design lane A "Browser + export"). Deliberately
+// OUTSIDE #if DEBUG: Req 2.3 requires outcome recording — and this window on
+// it — to operate in Release builds. Pushed inside Settings' NavigationStack,
+// so it owns no stack of its own (RecordsView owns one only because it is a
+// cover root). Reloads on appear via `.task`; no change-stream subscription —
+// reload on appear is enough for a developer log.
+struct EstimationLogView: View {
+    @State private var model: EstimationLogModel
+
+    init(store: any PersistenceStore, lineage: String) {
+        _model = State(initialValue: EstimationLogModel(store: store, lineage: lineage))
+    }
+
+    var body: some View {
+        List {
+            Section("Attempts") {
+                if model.rows.isEmpty {
+                    Text("No attempts recorded")
+                        .foregroundStyle(Color.textSecondary)
+                }
+                ForEach(model.rows) { row in
+                    NavigationLink {
+                        EstimationOutcomeDetailView(outcome: row)
+                    } label: {
+                        OutcomeRow(outcome: row)
+                    }
+                }
+            }
+            // Corrections browse (meal-review Req 9.13): the correction_records
+            // corpus, browsable on-device without network access.
+            Section("Corrections") {
+                if model.correctionRows.isEmpty {
+                    Text("No corrections recorded")
+                        .foregroundStyle(Color.textSecondary)
+                }
+                ForEach(model.correctionRows, id: \.rowIdentity) { row in
+                    NavigationLink {
+                        CorrectionRecordDetailView(record: row)
+                    } label: {
+                        CorrectionRow(record: row)
+                    }
+                }
+            }
+            if let exportError = model.exportError {
+                Text(exportError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        }
+        .navigationTitle("Estimation log")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Attempts (JSON)") {
+                        Task { await model.export() }
+                    }
+                    // JSONL beside the archive path (meal-review Req 9.11,
+                    // 9.13): one self-contained training example per line, no
+                    // capture imagery, segmenter_source on every row so
+                    // stub-derived corrections can be excluded downstream.
+                    Button("Corrections (JSONL)") {
+                        Task { await model.exportCorrections() }
+                    }
+                } label: {
+                    if model.isExporting {
+                        MedataLoadingSymbol(mode: .loop, size: 22)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+                .disabled(model.isExporting)
+                .accessibilityLabel("Export")
+                .accessibilityIdentifier("estimationLog.export")
+            }
+        }
+        .task { await model.load() }
+        .sheet(item: $model.exportFile) { file in
+            ShareSheet(activityItems: [file.url])
+        }
+    }
+}
+
+// Stable list identity for a correction record: the natural key.
+private extension PbCorrectionRecord {
+    var rowIdentity: String { "\(mealID)/\(predicted.classID)" }
+}
+
+// One correction record on the list: what it was predicted as, what became of
+// it, when, and under which segmenter.
+private struct CorrectionRow: View {
+    let record: PbCorrectionRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            Text("\(timeString(record.updatedAtMs)) · \(record.segmenterSource)")
+                .font(.caption)
+                .foregroundStyle(Color.textSecondary)
+        }
+        .accessibilityIdentifier("estimationLog.correctionRow")
+    }
+
+    private var title: String {
+        let predicted = prettyClass(record.predicted.classID)
+        if record.rejected { return "\(predicted) — rejected" }
+        if record.absent { return "\(predicted) — not in database" }
+        if record.classCorrected, record.hasCorrected, !record.corrected.classID.isEmpty {
+            let base = "\(predicted) → \(prettyClass(record.corrected.classID))"
+            return record.amountCorrected ? "\(base) — amount" : base
+        }
+        if record.amountCorrected { return "\(predicted) — amount" }
+        if record.pickerOpenedUnchanged { return "\(predicted) — picker dismissed" }
+        if record.captureAbandoned { return "\(predicted) — capture abandoned" }
+        return "\(predicted) — unchanged"
+    }
+
+    private func prettyClass(_ raw: String) -> String {
+        let spaced = raw.replacingOccurrences(of: "_", with: " ")
+        return spaced.prefix(1).uppercased() + spaced.dropFirst()
+    }
+}
+
+// Full record detail: the protobuf-JSON blob, pretty-printed and selectable —
+// the same window the JSONL export ships (Req 9.11).
+private struct CorrectionRecordDetailView: View {
+    let record: PbCorrectionRecord
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Meal", value: record.mealID)
+                LabeledContent("Predicted", value: record.predicted.classID)
+                LabeledContent("Updated", value: timeString(record.updatedAtMs))
+                LabeledContent("Segmenter", value: record.segmenterSource)
+                LabeledContent("Build", value: record.buildStamp)
+            }
+            .font(.footnote)
+            Section("Record") {
+                Text(prettyRecordJSON)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(Color.textPrimary)
+                    .textSelection(.enabled)
+            }
+        }
+        .navigationTitle("Correction")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var prettyRecordJSON: String {
+        guard
+            let raw = try? record.jsonString(),
+            let object = try? JSONSerialization.jsonObject(with: Data(raw.utf8)),
+            let data = try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
+            )
+        else { return (try? record.jsonString()) ?? "" }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+// One attempt on the list: outcome icon, failure case for refusals, when and
+// under which model lineage, plus a marker for benchmark-tagged rows.
+private struct OutcomeRow: View {
+    let outcome: EstimationOutcome
+
+    private var refused: Bool {
+        outcome.outcome == EstimationOutcomeKind.refused.rawValue
+    }
+
+    var body: some View {
+        HStack {
+            Image(systemName: refused ? "xmark.circle" : "checkmark.circle")
+                .foregroundStyle(refused ? Color.confidenceLow : Color.medataAccent)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Color.textPrimary)
+                Text("\(timeString(outcome.timestampMs)) · \(outcome.modelVersion)")
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            Spacer()
+            if outcome.benchmarkMealID != nil {
+                Text("benchmark")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.surfaceElevated, in: Capsule())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+        .accessibilityIdentifier("estimationLog.row")
+    }
+
+    private var title: String {
+        guard refused else { return "Success" }
+        return failureCaseName ?? "Refused"
+    }
+
+    // Minimal decode of the failure envelope ({domain, case, payload}) for
+    // the row title; a row whose JSON does not decode still renders.
+    private struct FailureEnvelope: Decodable {
+        let domain: String?
+        let caseName: String?
+
+        enum CodingKeys: String, CodingKey {
+            case domain
+            case caseName = "case"
+        }
+    }
+
+    private var failureCaseName: String? {
+        guard
+            let json = outcome.failureJSON,
+            let envelope = try? JSONDecoder().decode(
+                FailureEnvelope.self, from: Data(json.utf8)
+            ),
+            let caseName = envelope.caseName
+        else { return nil }
+        if let domain = envelope.domain { return "\(domain): \(caseName)" }
+        return caseName
+    }
+}
+
+// Full record detail: the row's fields plus the stored failure and
+// measurements JSON, pretty-printed and selectable so values can be copied
+// off-device without an export.
+private struct EstimationOutcomeDetailView: View {
+    let outcome: EstimationOutcome
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Outcome", value: outcome.outcome)
+                LabeledContent("Time", value: timeString(outcome.timestampMs))
+                LabeledContent("Model", value: outcome.modelVersion)
+                if let mealID = outcome.mealID {
+                    LabeledContent("Meal", value: mealID.uuidString)
+                }
+                if let benchmarkMealID = outcome.benchmarkMealID {
+                    LabeledContent("Benchmark meal", value: benchmarkMealID.uuidString)
+                }
+            }
+            .font(.footnote)
+            if let failureJSON = outcome.failureJSON {
+                Section("Failure") { jsonText(failureJSON) }
+            }
+            Section("Measurements") { jsonText(outcome.measurementsJSON) }
+        }
+        .navigationTitle("Attempt")
+        .navigationBarTitleDisplayMode(.inline)
+        #if FIELD_LOOP
+        // The one surface that can link a note to a refused attempt after the
+        // fact (ml-feedback-loop Req 2.1): every join key is on the row, and
+        // `timestampMs` is verbatim the capture bundle's filename stem.
+        .fieldScreen(
+            "estimation.outcome",
+            meal: FieldNoteMealLink(
+                mealID: outcome.mealID,
+                outcomeID: outcome.id,
+                timestampMs: outcome.timestampMs
+            )
+        )
+        #endif
+    }
+
+    private func jsonText(_ raw: String) -> some View {
+        Text(Self.prettyJSON(raw))
+            .font(.caption.monospaced())
+            .foregroundStyle(Color.textPrimary)
+            .textSelection(.enabled)
+    }
+
+    private static func prettyJSON(_ raw: String) -> String {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: Data(raw.utf8)),
+            let data = try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
+            )
+        else { return raw }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+// Data source for the log browser and its export. Fetch-on-demand only — no
+// `eventsDidChange` subscription exists for outcome rows by design
+// (quick_presets convention; the store never notifies for them).
+@Observable
+@MainActor
+final class EstimationLogModel {
+    // Effectively-unbounded fetch: both stored populations are bounded (500
+    // non-benchmark rows; 10 benchmark attempts per meal per lineage), so
+    // this limit returns everything in practice.
+    static let fetchLimit = 10_000
+
+    private(set) var rows: [EstimationOutcome] = []
+    // The correction corpus, newest-updated first (meal-review Req 9.13).
+    private(set) var correctionRows: [PbCorrectionRecord] = []
+    private(set) var isExporting = false
+    private(set) var exportError: String?
+    fileprivate var exportFile: LogExportFile?
+
+    private let store: any PersistenceStore
+    private let lineage: String
+
+    init(store: any PersistenceStore, lineage: String) {
+        self.store = store
+        self.lineage = lineage
+    }
+
+    func load() async {
+        rows = (try? await store.estimationOutcomes(limit: Self.fetchLimit)) ?? []
+        correctionRows = (try? await store.allCorrectionRecords()) ?? []
+    }
+
+    // JSONL export of the correction corpus (meal-review Req 9.11, 9.13):
+    // one protobuf-JSON record per line, each interpretable as a training
+    // example without the app, the food database or the mask — the densities
+    // and coefficients are carried in the record itself. No capture imagery
+    // exists anywhere in it; `segmenter_source` is present per row so
+    // stub-derived corrections can be excluded from a training export
+    // (Req 9.8). `exportArchive()` shipping raw SQLite does not satisfy this.
+    func exportCorrections() async {
+        isExporting = true
+        exportError = nil
+        defer { isExporting = false }
+        do {
+            let records = try await store.allCorrectionRecords()
+            var lines: [String] = []
+            lines.reserveCapacity(records.count)
+            for record in records {
+                lines.append(try record.jsonString())
+            }
+            let data = Data((lines.joined(separator: "\n") + "\n").utf8)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("correction-records-\(Self.fileStamp()).jsonl")
+            try data.write(to: url, options: .atomic)
+            correctionRows = records
+            exportFile = LogExportFile(url: url)
+        } catch {
+            exportError = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    // Serialises the outcome rows + benchmark meals (+ the computed report
+    // for the current lineage, per design lane B) to a JSON file and hands it
+    // to the share sheet — the same seam as Settings' archive export. Export
+    // contains record contents only: the stored measurements/failure JSON is
+    // embedded structurally, and no raw imagery exists anywhere in it
+    // (Req 2.6).
+    func export() async {
+        isExporting = true
+        exportError = nil
+        defer { isExporting = false }
+        do {
+            let outcomes = try await store.estimationOutcomes(limit: Self.fetchLimit)
+            let meals = try await store.benchmarkMeals()
+            let data = try LogExport.json(outcomes: outcomes, meals: meals, lineage: lineage)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("estimation-log-\(Self.fileStamp()).json")
+            try data.write(to: url, options: .atomic)
+            rows = outcomes
+            exportFile = LogExportFile(url: url)
+        } catch {
+            exportError = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private static func fileStamp() -> String {
+        let formatter = DateFormatter()
+        // en_US_POSIX is the only canonical fixed-format locale (stable HH);
+        // this is a machine-format filename, not user copy.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: Date())
+    }
+}
+
+// Pure JSON assembly for the export file. Built with JSONSerialization
+// because the stored `measurements`/`failure` columns are already JSON
+// strings — embedding them as parsed objects keeps the export a single
+// well-formed document instead of doubly-encoded strings.
+// `nonisolated` throughout. The export is pure translation — records in,
+// JSON out — and every builder here is called from a `map` closure, which is
+// nonisolated. Under this target's default-MainActor isolation they would
+// otherwise each be MainActor-bound, which is both untrue of what they do and
+// a hard error in the Swift 6 language mode rather than a warning.
+enum LogExport {
+    static func json(
+        outcomes: [EstimationOutcome], meals: [BenchmarkMeal], lineage: String
+    ) throws -> Data {
+        let report = BenchmarkReport.compute(meals: meals, outcomes: outcomes, lineage: lineage)
+        let root: [String: Any] = [
+            "v": 1,
+            "exported_at_ms": Int64(Date().timeIntervalSince1970 * 1000),
+            "outcomes": outcomes.map(dict(for:)),
+            "benchmark_meals": meals.map(dict(for:)),
+            "report": dict(for: report)
+        ]
+        return try JSONSerialization.data(
+            withJSONObject: root, options: [.prettyPrinted, .sortedKeys]
+        )
+    }
+
+    nonisolated private static func dict(for outcome: EstimationOutcome) -> [String: Any] {
+        var dict: [String: Any] = [
+            "id": outcome.id.uuidString,
+            "timestamp_ms": outcome.timestampMs,
+            "outcome": outcome.outcome,
+            "measurements": embedded(outcome.measurementsJSON),
+            "model_version": outcome.modelVersion
+        ]
+        if let failure = outcome.failureJSON { dict["failure"] = embedded(failure) }
+        if let mealID = outcome.mealID { dict["meal_id"] = mealID.uuidString }
+        if let benchmarkMealID = outcome.benchmarkMealID {
+            dict["benchmark_meal_id"] = benchmarkMealID.uuidString
+        }
+        return dict
+    }
+
+    nonisolated private static func dict(for meal: BenchmarkMeal) -> [String: Any] {
+        [
+            "id": meal.id.uuidString,
+            "name": meal.name,
+            "created_at_ms": meal.createdAtMs,
+            "items": meal.items.map { ["class_id": $0.classID, "grams": $0.grams] },
+            "truth_carbs_g": meal.truthCarbsG,
+            "db_edition": meal.dbEdition,
+            "fidelity": meal.fidelity.rawValue
+        ]
+    }
+
+    nonisolated private static func dict(for report: Report) -> [String: Any] {
+        var dict: [String: Any] = [
+            "lineage": report.lineage,
+            "meal_count": report.mealCount,
+            "completed_meal_count": report.completedMealCount,
+            "completion_rate": report.completionRate,
+            "total_attempt_count": report.totalAttemptCount,
+            "refused_attempt_count": report.refusedAttemptCount,
+            "undecodable_attempt_count": report.undecodableAttemptCount,
+            "headline_valid": report.headlineValid,
+            "missing_staples": report.missingStaples,
+            "anchor_verdict": report.anchorVerdict.rawValue,
+            "anchors": [
+                "snaq_mae_grams": BenchmarkAnchors.snaqMAEGrams,
+                "snaq_mape_percent": BenchmarkAnchors.snaqMAPEPercent,
+                "gocarb_within_10g_percent": BenchmarkAnchors.goCarbWithin10gPercent,
+                "dietitians_within_10g_percent": BenchmarkAnchors.dietitiansWithin10gPercent
+            ],
+            "rows": report.rows.map(dict(for:))
+        ]
+        if let mae = report.maeGrams { dict["mae_grams"] = mae }
+        if let mape = report.mapePercent { dict["mape_percent"] = mape }
+        if let within = report.within10gShare { dict["within_10g_share"] = within }
+        if let attempts = report.meanAttemptsPerMeal { dict["mean_attempts_per_meal"] = attempts }
+        return dict
+    }
+
+    nonisolated private static func dict(for row: Report.MealRow) -> [String: Any] {
+        var dict: [String: Any] = [
+            "meal_id": row.mealID.uuidString,
+            "name": row.name,
+            "truth_carbs_g": row.truthCarbsG,
+            "attempt_count": row.attemptCount,
+            "completed": row.completed
+        ]
+        if let estimate = row.estimateCarbsG { dict["estimate_carbs_g"] = estimate }
+        if let error = row.absoluteErrorG { dict["absolute_error_g"] = error }
+        return dict
+    }
+
+    // Embeds a stored JSON string as a structured value; a row whose JSON
+    // does not parse exports as the raw string rather than being dropped.
+    nonisolated private static func embedded(_ raw: String) -> Any {
+        (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) ?? raw
+    }
+}
+
+// Shared formatter — allocating a DateFormatter per row render is expensive.
+// Row timestamps render through the shared cached en_IE formatter
+// (specs/ui/shared-meal-components Req 4.2).
+
+private func timeString(_ timestampMs: Int64) -> String {
+    MedataFormat.dateTimeString(Date(timeIntervalSince1970: Double(timestampMs) / 1000))
+}

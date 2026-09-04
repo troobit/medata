@@ -1,0 +1,269 @@
+import Foundation
+import PortableContracts
+import SwiftProtobuf
+
+// Swift-ergonomic MealRecord. Uses Pb sub-types for all composite fields so
+// Persistence stays within the PortableContracts dependency boundary.
+// `paletteVersion` is SQL-only (denormalised column); it is NOT in PbMealRecord.
+public struct MealRecord: Sendable, Equatable, Hashable {
+    public let id: UUID
+    public let createdAt: Date
+    public let capturePath: CapturePath
+    public let databaseEdition: String
+    public let paletteVersion: String
+    // PHAsset.localIdentifier for the original captured nadir frame stored in
+    // the user's Photos library (Decision 37, Req §17.3). Empty string when
+    // Photos add-only authorisation was denied or unavailable.
+    public let photoAssetID: String
+    // Identifier for the segmenter that produced this meal (Decision 42, Req §23.6).
+    // "dev_stub" for Phase 1 records, "coreml_<modelVersion>" for Phase 3 records.
+    public let segmenterSource: String
+    public let frames: [PbRawFrameMetadata]
+    public let calibration: PbCameraIntrinsics
+    public let supportPlane: PbSupportPlane
+    public let scale: PbMetricScale
+    public let volumes: PbVolumeResult
+    public let macros: PbMacroResult
+    public let confidence: PbConfidenceResult
+    public let perClassCalibration: [String: PbBetaCalibrationStatus]
+    public let userCorrection: PbUserCorrection?
+    // Retained alternative-class evidence, keyed by detected class name
+    // (estimation/alternative-class-candidates Req 4.1). Empty is not the same
+    // fact as never produced — `candidateEvidenceProduced` carries that.
+    public let candidateEvidence: [String: PbCandidateSet]
+    // Whether the evidence pass ran for this capture (Decision 4). False on
+    // records written before the spec, on captures with no probability tensor,
+    // and on migrated records, which drop evidence by construction (Req 5).
+    public let candidateEvidenceProduced: Bool
+
+    public init(
+        id: UUID = UUID(),
+        createdAt: Date = Date(),
+        capturePath: CapturePath,
+        databaseEdition: String,
+        paletteVersion: String,
+        photoAssetID: String = "",
+        segmenterSource: String = "",
+        frames: [PbRawFrameMetadata] = [],
+        calibration: PbCameraIntrinsics,
+        supportPlane: PbSupportPlane,
+        scale: PbMetricScale,
+        volumes: PbVolumeResult,
+        macros: PbMacroResult,
+        confidence: PbConfidenceResult,
+        perClassCalibration: [String: PbBetaCalibrationStatus] = [:],
+        userCorrection: PbUserCorrection? = nil,
+        candidateEvidence: [String: PbCandidateSet] = [:],
+        candidateEvidenceProduced: Bool = false
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.capturePath = capturePath
+        self.databaseEdition = databaseEdition
+        self.paletteVersion = paletteVersion
+        self.photoAssetID = photoAssetID
+        self.segmenterSource = segmenterSource
+        self.frames = frames
+        self.calibration = calibration
+        self.supportPlane = supportPlane
+        self.scale = scale
+        self.volumes = volumes
+        self.macros = macros
+        self.confidence = confidence
+        self.perClassCalibration = perClassCalibration
+        self.userCorrection = userCorrection
+        self.candidateEvidence = candidateEvidence
+        self.candidateEvidenceProduced = candidateEvidenceProduced
+    }
+
+    // Returns a copy of this record with photoAssetID replaced. Used after the
+    // capture flow saves the nadir frame to Photos and needs to stamp the
+    // resulting PHAsset.localIdentifier on the persisted record (Req §17.3).
+    public func withPhotoAssetID(_ assetID: String) -> MealRecord {
+        MealRecord(
+            id: id, createdAt: createdAt,
+            capturePath: capturePath, databaseEdition: databaseEdition,
+            paletteVersion: paletteVersion, photoAssetID: assetID,
+            segmenterSource: segmenterSource,
+            frames: frames, calibration: calibration, supportPlane: supportPlane,
+            scale: scale, volumes: volumes, macros: macros, confidence: confidence,
+            perClassCalibration: perClassCalibration, userCorrection: userCorrection,
+            candidateEvidence: candidateEvidence,
+            candidateEvidenceProduced: candidateEvidenceProduced
+        )
+    }
+}
+
+// Artefact descriptor — mirrors PbMealArtefact but uses Swift-native Int.
+public struct MealArtefact: Sendable, Equatable {
+    public let kind: String       // 'image' | 'depth' | 'confidence' | 'mask' | 'probs'
+    public let viewId: String     // 'nadir' | 'oblique'
+    public let filename: String
+    public let bytesSize: Int
+    public let sha256Hex: String
+
+    public init(kind: String, viewId: String, filename: String, bytesSize: Int, sha256Hex: String) {
+        self.kind = kind
+        self.viewId = viewId
+        self.filename = filename
+        self.bytesSize = bytesSize
+        self.sha256Hex = sha256Hex
+    }
+}
+
+// MARK: - PbMealRecord bridge
+
+public extension MealRecord {
+    // Converts to PbMealRecord for protobuf-JSON serialisation.
+    // paletteVersion is omitted (SQL column only, not in proto).
+    var pb: PbMealRecord {
+        var out = PbMealRecord()
+        out.id = id.uuidString
+        out.createdAtMs = Int64(createdAt.timeIntervalSince1970 * 1000)
+        out.capturePath = capturePath.pb
+        out.databaseEdition = databaseEdition
+        out.photoAssetID = photoAssetID
+        out.segmenterSource = segmenterSource
+        out.frames = frames
+        out.calibration = calibration
+        out.supportPlane = supportPlane
+        out.scale = scale
+        out.volumes = volumes
+        out.macros = macros
+        out.confidence = confidence
+        out.perClassCalibration = perClassCalibration
+        if let uc = userCorrection { out.userCorrection = uc }
+        out.candidateEvidence = candidateEvidence
+        out.candidateEvidenceProduced = candidateEvidenceProduced
+        return out
+    }
+
+    // Reconstructs from PbMealRecord + the SQL-only columns.
+    init(
+        pb: PbMealRecord,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws {
+        guard let uuid = UUID(uuidString: pb.id) else {
+            throw PersistenceError.corruptRecord("invalid UUID: \(pb.id)")
+        }
+        guard let capturePath = CapturePath(pb: pb.capturePath) else {
+            throw PersistenceError.corruptRecord("unrecognised capture_path")
+        }
+        self.id = uuid
+        self.createdAt = Date(timeIntervalSince1970: Double(pb.createdAtMs) / 1000)
+        self.capturePath = capturePath
+        self.databaseEdition = pb.databaseEdition
+        self.paletteVersion = paletteVersion
+        // Prefer the SQLite column overrides when supplied (the columns are
+        // the index/filter view); otherwise fall back to the protobuf value.
+        // Both storage fields are non-optional so nil collapses to the pb
+        // value, matching the schema's NOT NULL DEFAULT ''.
+        self.photoAssetID = photoAssetID ?? pb.photoAssetID
+        self.segmenterSource = segmenterSource ?? pb.segmenterSource
+        self.frames = pb.frames
+        self.calibration = pb.calibration
+        self.supportPlane = pb.supportPlane
+        self.scale = pb.scale
+        self.volumes = pb.volumes
+        self.macros = pb.macros
+        self.confidence = pb.confidence
+        self.perClassCalibration = pb.perClassCalibration
+        self.userCorrection = pb.hasUserCorrection ? pb.userCorrection : nil
+        // Equal-length parallel arrays are the writer's invariant (Decision 10);
+        // the reader checks it. A set whose arrays disagree reads as no evidence
+        // for that class rather than as a corrupt record — the pass is additive
+        // and must not be able to fail a load.
+        self.candidateEvidence = pb.candidateEvidence.filter {
+            $0.value.classNames.count == $0.value.meanPermille.count
+        }
+        self.candidateEvidenceProduced = pb.candidateEvidenceProduced
+    }
+
+    // Encodes to protobuf-JSON string per Decision 31.
+    func jsonString() throws -> String {
+        try pb.jsonString()
+    }
+
+    // Decodes from protobuf-JSON string + the SQL-only columns.
+    static func from(
+        jsonString: String,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws -> MealRecord {
+        let pb = try PbMealRecord(jsonString: jsonString)
+        return try MealRecord(
+            pb: pb,
+            paletteVersion: paletteVersion,
+            segmenterSource: segmenterSource,
+            photoAssetID: photoAssetID
+        )
+    }
+
+    // MARK: - events.metadata shape (Decision 6)
+    //
+    // The events table stores the verbatim meal record (the protobuf-JSON
+    // that used to live in record_json) plus the SQL-only `palette_version`
+    // column in a single JSON object:
+    //
+    //   { "record": "<pb.jsonString()>", "palette_version": "<paletteVersion>" }
+    //
+    // The inner `record` is held as a JSON string value so it round-trips
+    // byte-identical through any conforming encoder (Decision 31).
+
+    func metadataJSON() throws -> String {
+        let recordJSON = try pb.jsonString()
+        let outer: [String: Any] = [
+            "record": recordJSON,
+            "palette_version": paletteVersion
+        ]
+        // No options: byte stability of the inner `record` string is the
+        // only contract; outer-key order is not.
+        let data = try JSONSerialization.data(withJSONObject: outer, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    static func from(metadata: String) throws -> MealRecord {
+        let data = Data(metadata.utf8)
+        let parsed: Any
+        do {
+            parsed = try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            throw PersistenceError.corruptRecord("metadata is not valid JSON: \(error)")
+        }
+        guard let outer = parsed as? [String: Any] else {
+            throw PersistenceError.corruptRecord("metadata is not a JSON object")
+        }
+        guard let recordJSON = outer["record"] as? String else {
+            throw PersistenceError.corruptRecord("metadata.record missing or not a string")
+        }
+        guard let paletteVersion = outer["palette_version"] as? String else {
+            throw PersistenceError.corruptRecord("metadata.palette_version missing or not a string")
+        }
+        return try MealRecord.from(
+            jsonString: recordJSON,
+            paletteVersion: paletteVersion
+        )
+    }
+}
+
+// MARK: - CapturePath bridge
+
+extension CapturePath {
+    init?(pb: PbCapturePath) {
+        switch pb {
+        case .singleViewLidar: self = .singleViewLidar
+        case .twoViewSfs: self = .twoViewSfS
+        case .unspecified, .UNRECOGNIZED: return nil
+        }
+    }
+
+    var pb: PbCapturePath {
+        switch self {
+        case .singleViewLidar: return .singleViewLidar
+        case .twoViewSfS: return .twoViewSfs
+        }
+    }
+}

@@ -1,0 +1,7 @@
+{
+  "servers": [
+    "devtools"
+  ],
+  "cloud_assets": false,
+  "decision_mode": "overwrite"
+}

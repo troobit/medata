@@ -1,0 +1,13 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "ProbabilityTensor.proto";
+import "ArgmaxMap.proto";
+
+option swift_prefix = "Pb";
+
+message SegmentationResult {
+    ProbabilityTensor probabilities = 1;
+    ArgmaxMap argmax = 2;
+    map<string, float> per_class_mean_prob = 3; // food classes only
+}

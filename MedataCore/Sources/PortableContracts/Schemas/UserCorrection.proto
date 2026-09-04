@@ -1,0 +1,33 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message UserCorrection {
+    int64 created_at_ms = 1;                    // unix epoch ms
+    oneof corrected_total_carbs_g_oneof {
+        float corrected_total_carbs_g = 2;
+    }
+    map<string, float> corrected_per_class = 3;
+    string note = 4;
+    // Predicted class id → corrected class id (meal-review Decision 15).
+    // Additive with an empty default so existing readers stay valid —
+    // required by estimation/pipeline Req 14.4 (schema shared verbatim
+    // with the future clinical track). Every surface that names a food
+    // resolves through this map (meal-review Req 8.7).
+    map<string, string> corrected_class_ids = 5;
+    // insulin-dosing Req 8.3 / 8.8 (F1). A correction adjusts carbohydrate,
+    // and until these landed it left the ORIGINAL pipeline fat and protein in
+    // place — so the fat figure was least trustworthy on exactly the meals
+    // that got the most human attention. Both are oneof-wrapped for the same
+    // reason `corrected_total_carbs_g` is: proto3 defaults a bare float to 0,
+    // and a fat-free meal must stay distinguishable from an unrecorded one
+    // (Req 8.1's absent-is-not-zero rule). Derived at write from the corrected
+    // masses on the same per-100 g lines the pipeline uses.
+    oneof corrected_fat_g_oneof {
+        float corrected_fat_g = 6;
+    }
+    oneof corrected_protein_g_oneof {
+        float corrected_protein_g = 7;
+    }
+}

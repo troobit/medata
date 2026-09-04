@@ -1,0 +1,3386 @@
+{
+  "palette_class_list": [
+    "white_rice",
+    "brown_rice",
+    "pasta",
+    "bread_white",
+    "bread_wholemeal",
+    "potato_boiled",
+    "potato_mashed",
+    "chips_fries",
+    "chicken",
+    "beef",
+    "pork",
+    "fish_white",
+    "egg",
+    "cheese",
+    "salad_leaves",
+    "broccoli",
+    "carrot",
+    "peas",
+    "beans_baked",
+    "lentils",
+    "apple",
+    "banana",
+    "tomato",
+    "mixed_vegetables",
+    "cereal",
+    "water",
+    "coffee",
+    "tea",
+    "milk",
+    "fruit_juice",
+    "soup",
+    "beer",
+    "wine"
+  ],
+  "n5k_metadata_version": "87a9bbd1fd2e28f09f16305a04946ddbe31eb7d9d03686d7e2fb3d8f19f3effb",
+  "mappings": [
+    {
+      "n5k_ingredient_id": "ingr_0000000001",
+      "n5k_ingredient_name": "cottage cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000002",
+      "n5k_ingredient_name": "strawberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000003",
+      "n5k_ingredient_name": "garden salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000004",
+      "n5k_ingredient_name": "bacon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000005",
+      "n5k_ingredient_name": "potatoes",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "potato_boiled",
+        "potato_mashed"
+      ]
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000006",
+      "n5k_ingredient_name": "caesar salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000007",
+      "n5k_ingredient_name": "cauliflower",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000008",
+      "n5k_ingredient_name": "scrambled eggs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000009",
+      "n5k_ingredient_name": "wild rice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000010",
+      "n5k_ingredient_name": "steak",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000011",
+      "n5k_ingredient_name": "cheese pizza",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000012",
+      "n5k_ingredient_name": "olives",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000013",
+      "n5k_ingredient_name": "berries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000014",
+      "n5k_ingredient_name": "asparagus",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000015",
+      "n5k_ingredient_name": "hash browns",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000016",
+      "n5k_ingredient_name": "brussels sprouts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000017",
+      "n5k_ingredient_name": "pasta salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000018",
+      "n5k_ingredient_name": "turkey",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000019",
+      "n5k_ingredient_name": "bread",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "bread_white",
+        "bread_wholemeal"
+      ]
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000020",
+      "n5k_ingredient_name": "duck",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000021",
+      "n5k_ingredient_name": "squash",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000022",
+      "n5k_ingredient_name": "guacamole",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000023",
+      "n5k_ingredient_name": "brown rice",
+      "class_id": "brown_rice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000024",
+      "n5k_ingredient_name": "artic char",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000025",
+      "n5k_ingredient_name": "beef",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000026",
+      "n5k_ingredient_name": "white rice",
+      "class_id": "white_rice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000027",
+      "n5k_ingredient_name": "broccoli",
+      "class_id": "broccoli",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000028",
+      "n5k_ingredient_name": "chicken",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000029",
+      "n5k_ingredient_name": "mixed greens",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000030",
+      "n5k_ingredient_name": "lettuce",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000031",
+      "n5k_ingredient_name": "cucumbers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000032",
+      "n5k_ingredient_name": "tomatoes",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000033",
+      "n5k_ingredient_name": "bell peppers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000034",
+      "n5k_ingredient_name": "celery",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000035",
+      "n5k_ingredient_name": "blue cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000036",
+      "n5k_ingredient_name": "spinach (raw)",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000037",
+      "n5k_ingredient_name": "cantaloupe",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000038",
+      "n5k_ingredient_name": "pineapple",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000039",
+      "n5k_ingredient_name": "sausage",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000040",
+      "n5k_ingredient_name": "raspberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000041",
+      "n5k_ingredient_name": "blackberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000042",
+      "n5k_ingredient_name": "avocado",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000043",
+      "n5k_ingredient_name": "green beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000044",
+      "n5k_ingredient_name": "bean sprouts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000045",
+      "n5k_ingredient_name": "carrot",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000046",
+      "n5k_ingredient_name": "mushroom",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000047",
+      "n5k_ingredient_name": "corn",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000048",
+      "n5k_ingredient_name": "ham",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000049",
+      "n5k_ingredient_name": "fish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000050",
+      "n5k_ingredient_name": "tofu",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000051",
+      "n5k_ingredient_name": "shrimp",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000052",
+      "n5k_ingredient_name": "cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000053",
+      "n5k_ingredient_name": "nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000054",
+      "n5k_ingredient_name": "apple",
+      "class_id": "apple",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000055",
+      "n5k_ingredient_name": "banana",
+      "class_id": "banana",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000056",
+      "n5k_ingredient_name": "kiwi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000057",
+      "n5k_ingredient_name": "lemon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000058",
+      "n5k_ingredient_name": "orange",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000059",
+      "n5k_ingredient_name": "oatmeal",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000060",
+      "n5k_ingredient_name": "tortilla",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000061",
+      "n5k_ingredient_name": "potato chips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000062",
+      "n5k_ingredient_name": "noodles",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000063",
+      "n5k_ingredient_name": "bean(seed)",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000064",
+      "n5k_ingredient_name": "alcohol",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000065",
+      "n5k_ingredient_name": "grape juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000066",
+      "n5k_ingredient_name": "ground beef",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000067",
+      "n5k_ingredient_name": "syrup",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000068",
+      "n5k_ingredient_name": "grapefruits",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000069",
+      "n5k_ingredient_name": "fruit punch",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000070",
+      "n5k_ingredient_name": "figs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000071",
+      "n5k_ingredient_name": "macaroni and cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000072",
+      "n5k_ingredient_name": "kale",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000073",
+      "n5k_ingredient_name": "radishes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000074",
+      "n5k_ingredient_name": "pasta",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000075",
+      "n5k_ingredient_name": "refried beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000076",
+      "n5k_ingredient_name": "brisket",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000077",
+      "n5k_ingredient_name": "almonds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000078",
+      "n5k_ingredient_name": "protein powder",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000079",
+      "n5k_ingredient_name": "okra",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000080",
+      "n5k_ingredient_name": "turkey bacon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000081",
+      "n5k_ingredient_name": "pickles",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000082",
+      "n5k_ingredient_name": "pecans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000083",
+      "n5k_ingredient_name": "muenster cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000084",
+      "n5k_ingredient_name": "brie cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000085",
+      "n5k_ingredient_name": "apple juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000086",
+      "n5k_ingredient_name": "raisin bran",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000087",
+      "n5k_ingredient_name": "coleslaw",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000088",
+      "n5k_ingredient_name": "margarine",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000089",
+      "n5k_ingredient_name": "spaghetti",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000090",
+      "n5k_ingredient_name": "ground pork",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000091",
+      "n5k_ingredient_name": "herring",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000092",
+      "n5k_ingredient_name": "wine",
+      "class_id": "wine",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000093",
+      "n5k_ingredient_name": "alfalfa",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000094",
+      "n5k_ingredient_name": "onions",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000095",
+      "n5k_ingredient_name": "artichokes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000096",
+      "n5k_ingredient_name": "mussels",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000097",
+      "n5k_ingredient_name": "falafel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000098",
+      "n5k_ingredient_name": "multigrain bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000099",
+      "n5k_ingredient_name": "marshmallows",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000100",
+      "n5k_ingredient_name": "oats",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000101",
+      "n5k_ingredient_name": "leeks",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000102",
+      "n5k_ingredient_name": "snow peas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000103",
+      "n5k_ingredient_name": "pretzels",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000104",
+      "n5k_ingredient_name": "strudels",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000105",
+      "n5k_ingredient_name": "grilled chicken",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000106",
+      "n5k_ingredient_name": "half and half",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000107",
+      "n5k_ingredient_name": "mixed nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000108",
+      "n5k_ingredient_name": "spring rolls",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000109",
+      "n5k_ingredient_name": "french toast",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000110",
+      "n5k_ingredient_name": "barbecue sauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000111",
+      "n5k_ingredient_name": "clams",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000112",
+      "n5k_ingredient_name": "honeydew melons",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000113",
+      "n5k_ingredient_name": "ketchup",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000114",
+      "n5k_ingredient_name": "polenta",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000115",
+      "n5k_ingredient_name": "lemonade",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000116",
+      "n5k_ingredient_name": "mayonnaise",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000117",
+      "n5k_ingredient_name": "tacos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000118",
+      "n5k_ingredient_name": "eggnog",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000119",
+      "n5k_ingredient_name": "tabouli",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000120",
+      "n5k_ingredient_name": "gelatin",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000121",
+      "n5k_ingredient_name": "watermelon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000122",
+      "n5k_ingredient_name": "garlic",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000123",
+      "n5k_ingredient_name": "crawfish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000124",
+      "n5k_ingredient_name": "walnuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000125",
+      "n5k_ingredient_name": "octopus",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000126",
+      "n5k_ingredient_name": "mustard",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000127",
+      "n5k_ingredient_name": "pastries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000128",
+      "n5k_ingredient_name": "egg whites",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000129",
+      "n5k_ingredient_name": "raisins",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000130",
+      "n5k_ingredient_name": "rye bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000131",
+      "n5k_ingredient_name": "dark chocolate",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000132",
+      "n5k_ingredient_name": "croissants",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000133",
+      "n5k_ingredient_name": "shallots",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000134",
+      "n5k_ingredient_name": "biscuits",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000135",
+      "n5k_ingredient_name": "tilapia",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000136",
+      "n5k_ingredient_name": "poached eggs",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000137",
+      "n5k_ingredient_name": "succotash",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000138",
+      "n5k_ingredient_name": "seafood",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000139",
+      "n5k_ingredient_name": "egg rolls",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000140",
+      "n5k_ingredient_name": "caesar dressing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000141",
+      "n5k_ingredient_name": "tuna salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000142",
+      "n5k_ingredient_name": "india pale ale beer",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000143",
+      "n5k_ingredient_name": "veal",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000144",
+      "n5k_ingredient_name": "sorbet",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000145",
+      "n5k_ingredient_name": "bison",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000146",
+      "n5k_ingredient_name": "scallops",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000147",
+      "n5k_ingredient_name": "turkey breast",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000148",
+      "n5k_ingredient_name": "parmesan cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000149",
+      "n5k_ingredient_name": "sushi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000150",
+      "n5k_ingredient_name": "swordfish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000151",
+      "n5k_ingredient_name": "agave nectar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000152",
+      "n5k_ingredient_name": "cabbage",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000153",
+      "n5k_ingredient_name": "bulgur",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000154",
+      "n5k_ingredient_name": "brown sugar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000155",
+      "n5k_ingredient_name": "chicken thighs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000156",
+      "n5k_ingredient_name": "paella",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000157",
+      "n5k_ingredient_name": "colby cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000158",
+      "n5k_ingredient_name": "gumbo",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000159",
+      "n5k_ingredient_name": "apple cider",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000160",
+      "n5k_ingredient_name": "chow mein",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000161",
+      "n5k_ingredient_name": "olive oil",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000162",
+      "n5k_ingredient_name": "parsnips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000163",
+      "n5k_ingredient_name": "kidney beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000164",
+      "n5k_ingredient_name": "chowders",
+      "class_id": "soup",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000165",
+      "n5k_ingredient_name": "skim milk",
+      "class_id": "milk",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000166",
+      "n5k_ingredient_name": "grapefruit juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000167",
+      "n5k_ingredient_name": "tamales",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000168",
+      "n5k_ingredient_name": "lasagna",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000169",
+      "n5k_ingredient_name": "whole wheat bread",
+      "class_id": "bread_wholemeal",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000170",
+      "n5k_ingredient_name": "gravy",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000171",
+      "n5k_ingredient_name": "almond butter",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000172",
+      "n5k_ingredient_name": "cherry pie",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000173",
+      "n5k_ingredient_name": "chestnuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000174",
+      "n5k_ingredient_name": "bread crumbs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000175",
+      "n5k_ingredient_name": "apple pie",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000176",
+      "n5k_ingredient_name": "french dressing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000177",
+      "n5k_ingredient_name": "tempeh",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000178",
+      "n5k_ingredient_name": "pies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000179",
+      "n5k_ingredient_name": "eggs",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000180",
+      "n5k_ingredient_name": "rice noodles",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000181",
+      "n5k_ingredient_name": "milk shakes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000182",
+      "n5k_ingredient_name": "soy yogurt",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000183",
+      "n5k_ingredient_name": "chips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000184",
+      "n5k_ingredient_name": "ravioli",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000185",
+      "n5k_ingredient_name": "collards",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000186",
+      "n5k_ingredient_name": "green peas",
+      "class_id": "peas",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000187",
+      "n5k_ingredient_name": "chickpeas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000188",
+      "n5k_ingredient_name": "carrot cake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000189",
+      "n5k_ingredient_name": "vinegar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000190",
+      "n5k_ingredient_name": "hamburgers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000191",
+      "n5k_ingredient_name": "cheesecake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000192",
+      "n5k_ingredient_name": "yam",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000193",
+      "n5k_ingredient_name": "hot dogs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000194",
+      "n5k_ingredient_name": "fried rice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000195",
+      "n5k_ingredient_name": "wafers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000196",
+      "n5k_ingredient_name": "cod",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000197",
+      "n5k_ingredient_name": "salads",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000198",
+      "n5k_ingredient_name": "breadsticks",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000199",
+      "n5k_ingredient_name": "swiss cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000200",
+      "n5k_ingredient_name": "buttermilk",
+      "class_id": "milk",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000201",
+      "n5k_ingredient_name": "blueberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000202",
+      "n5k_ingredient_name": "enchiladas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000203",
+      "n5k_ingredient_name": "chili",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000204",
+      "n5k_ingredient_name": "pork chops",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000205",
+      "n5k_ingredient_name": "corn on the cob",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000206",
+      "n5k_ingredient_name": "muffins",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000207",
+      "n5k_ingredient_name": "fried chicken",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000208",
+      "n5k_ingredient_name": "ice cream cones",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000209",
+      "n5k_ingredient_name": "pastrami",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000210",
+      "n5k_ingredient_name": "chocolate milk",
+      "class_id": "milk",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000211",
+      "n5k_ingredient_name": "plums",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000212",
+      "n5k_ingredient_name": "burgers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000213",
+      "n5k_ingredient_name": "pears",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000214",
+      "n5k_ingredient_name": "seeds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000215",
+      "n5k_ingredient_name": "squid",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000216",
+      "n5k_ingredient_name": "tostadas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000217",
+      "n5k_ingredient_name": "lamb",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000218",
+      "n5k_ingredient_name": "brazil nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000219",
+      "n5k_ingredient_name": "macaroni",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000220",
+      "n5k_ingredient_name": "pita bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000221",
+      "n5k_ingredient_name": "vegetable oil",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000222",
+      "n5k_ingredient_name": "pine nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000223",
+      "n5k_ingredient_name": "macadamia nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000224",
+      "n5k_ingredient_name": "potato salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000225",
+      "n5k_ingredient_name": "veggie burgers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000226",
+      "n5k_ingredient_name": "pasta sauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000227",
+      "n5k_ingredient_name": "calamari",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000228",
+      "n5k_ingredient_name": "cornmeal",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000229",
+      "n5k_ingredient_name": "bologna",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000230",
+      "n5k_ingredient_name": "frostings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000231",
+      "n5k_ingredient_name": "deprecated",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000232",
+      "n5k_ingredient_name": "oysters",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000233",
+      "n5k_ingredient_name": "vodka",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000234",
+      "n5k_ingredient_name": "smoothies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000235",
+      "n5k_ingredient_name": "pecan pie",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000236",
+      "n5k_ingredient_name": "roast beef",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000237",
+      "n5k_ingredient_name": "hot chocolate",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000238",
+      "n5k_ingredient_name": "hominy",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000239",
+      "n5k_ingredient_name": "custard",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000240",
+      "n5k_ingredient_name": "smoked salmon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000241",
+      "n5k_ingredient_name": "scones",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000242",
+      "n5k_ingredient_name": "tortellini",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000243",
+      "n5k_ingredient_name": "mozzarella cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000244",
+      "n5k_ingredient_name": "chicken breast",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000245",
+      "n5k_ingredient_name": "wheat bread",
+      "class_id": "bread_wholemeal",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000246",
+      "n5k_ingredient_name": "baked beans",
+      "class_id": "beans_baked",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000247",
+      "n5k_ingredient_name": "blueberry pie",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000248",
+      "n5k_ingredient_name": "hard boiled eggs",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000249",
+      "n5k_ingredient_name": "cashews",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000250",
+      "n5k_ingredient_name": "rolls",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000251",
+      "n5k_ingredient_name": "tortilla chips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000252",
+      "n5k_ingredient_name": "broth",
+      "class_id": "soup",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000253",
+      "n5k_ingredient_name": "tahini",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000254",
+      "n5k_ingredient_name": "mashed potatoes",
+      "class_id": "potato_mashed",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000255",
+      "n5k_ingredient_name": "nougat",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000256",
+      "n5k_ingredient_name": "fish oil",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000257",
+      "n5k_ingredient_name": "brownies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000258",
+      "n5k_ingredient_name": "popcorn",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000259",
+      "n5k_ingredient_name": "corned beef",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000260",
+      "n5k_ingredient_name": "iced tea",
+      "class_id": "tea",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000261",
+      "n5k_ingredient_name": "pumpkins",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000262",
+      "n5k_ingredient_name": "yogurt",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000263",
+      "n5k_ingredient_name": "mousse",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000264",
+      "n5k_ingredient_name": "bagels",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000265",
+      "n5k_ingredient_name": "sardines",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000266",
+      "n5k_ingredient_name": "pot pies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000267",
+      "n5k_ingredient_name": "coconuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000268",
+      "n5k_ingredient_name": "soft serve ice creams",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000269",
+      "n5k_ingredient_name": "onion rings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000270",
+      "n5k_ingredient_name": "cocoa",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000271",
+      "n5k_ingredient_name": "peaches",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000272",
+      "n5k_ingredient_name": "cupcakes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000273",
+      "n5k_ingredient_name": "sandwiches",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000274",
+      "n5k_ingredient_name": "trail mix",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000275",
+      "n5k_ingredient_name": "frozen yogurt",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000276",
+      "n5k_ingredient_name": "chocolate cake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000277",
+      "n5k_ingredient_name": "chimichangas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000278",
+      "n5k_ingredient_name": "beer",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000279",
+      "n5k_ingredient_name": "omelets",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000280",
+      "n5k_ingredient_name": "souffle",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000281",
+      "n5k_ingredient_name": "edamame",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000282",
+      "n5k_ingredient_name": "energy drinks",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000283",
+      "n5k_ingredient_name": "salad dressing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000284",
+      "n5k_ingredient_name": "ribs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000285",
+      "n5k_ingredient_name": "trout",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000286",
+      "n5k_ingredient_name": "romano cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000287",
+      "n5k_ingredient_name": "toast",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000288",
+      "n5k_ingredient_name": "empanadas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000289",
+      "n5k_ingredient_name": "ranch dressing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000290",
+      "n5k_ingredient_name": "cheddar cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000291",
+      "n5k_ingredient_name": "salt",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000292",
+      "n5k_ingredient_name": "spreads",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000293",
+      "n5k_ingredient_name": "sandwich cookies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000294",
+      "n5k_ingredient_name": "granola",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000295",
+      "n5k_ingredient_name": "provolone cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000296",
+      "n5k_ingredient_name": "sundaes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000297",
+      "n5k_ingredient_name": "pepperoni",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000298",
+      "n5k_ingredient_name": "focaccia",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000299",
+      "n5k_ingredient_name": "soy milk",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000300",
+      "n5k_ingredient_name": "egg yolks",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000301",
+      "n5k_ingredient_name": "english muffins",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000302",
+      "n5k_ingredient_name": "pie crust",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000303",
+      "n5k_ingredient_name": "chocolate chip cookies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000304",
+      "n5k_ingredient_name": "puddings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000305",
+      "n5k_ingredient_name": "fudge",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000306",
+      "n5k_ingredient_name": "croutons",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000307",
+      "n5k_ingredient_name": "stuffing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000308",
+      "n5k_ingredient_name": "lamb chops",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000309",
+      "n5k_ingredient_name": "rum",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000310",
+      "n5k_ingredient_name": "corn chips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000311",
+      "n5k_ingredient_name": "granola bars",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000312",
+      "n5k_ingredient_name": "pepper",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000313",
+      "n5k_ingredient_name": "peanut butter",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000314",
+      "n5k_ingredient_name": "sourdough bread",
+      "class_id": "bread_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000315",
+      "n5k_ingredient_name": "corn dogs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000316",
+      "n5k_ingredient_name": "roast chicken",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000317",
+      "n5k_ingredient_name": "flounder",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000318",
+      "n5k_ingredient_name": "flour",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000319",
+      "n5k_ingredient_name": "feta cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000320",
+      "n5k_ingredient_name": "black beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000321",
+      "n5k_ingredient_name": "water",
+      "class_id": "water",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000322",
+      "n5k_ingredient_name": "garlic bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000323",
+      "n5k_ingredient_name": "salami",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000324",
+      "n5k_ingredient_name": "chocolate",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000325",
+      "n5k_ingredient_name": "nectarines",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000326",
+      "n5k_ingredient_name": "chicken soup",
+      "class_id": "soup",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000327",
+      "n5k_ingredient_name": "root beer",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000328",
+      "n5k_ingredient_name": "sugar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000329",
+      "n5k_ingredient_name": "pate nutrition",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000330",
+      "n5k_ingredient_name": "haddock",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000331",
+      "n5k_ingredient_name": "pancakes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000332",
+      "n5k_ingredient_name": "salmon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000333",
+      "n5k_ingredient_name": "potato bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000334",
+      "n5k_ingredient_name": "white bread",
+      "class_id": "bread_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000335",
+      "n5k_ingredient_name": "eggplant",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000336",
+      "n5k_ingredient_name": "peanuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000337",
+      "n5k_ingredient_name": "waffles",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000338",
+      "n5k_ingredient_name": "vinaigrette",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000339",
+      "n5k_ingredient_name": "grits",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000340",
+      "n5k_ingredient_name": "lo mein",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000341",
+      "n5k_ingredient_name": "cream",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000342",
+      "n5k_ingredient_name": "turnips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000343",
+      "n5k_ingredient_name": "cranberry juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000344",
+      "n5k_ingredient_name": "peach",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000345",
+      "n5k_ingredient_name": "roast pork",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000346",
+      "n5k_ingredient_name": "turnover",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000347",
+      "n5k_ingredient_name": "baby carrots",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000348",
+      "n5k_ingredient_name": "egg salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000349",
+      "n5k_ingredient_name": "mangos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000350",
+      "n5k_ingredient_name": "miso soup",
+      "class_id": "soup",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000351",
+      "n5k_ingredient_name": "mackerel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000352",
+      "n5k_ingredient_name": "calzones",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000353",
+      "n5k_ingredient_name": "burritos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000354",
+      "n5k_ingredient_name": "soy nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000355",
+      "n5k_ingredient_name": "crackers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000356",
+      "n5k_ingredient_name": "french fries",
+      "class_id": "chips_fries",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000357",
+      "n5k_ingredient_name": "lentils",
+      "class_id": "lentils",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000358",
+      "n5k_ingredient_name": "mixed vegetables",
+      "class_id": "mixed_vegetables",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000359",
+      "n5k_ingredient_name": "honey",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000360",
+      "n5k_ingredient_name": "risotto",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000361",
+      "n5k_ingredient_name": "roast turkey",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000362",
+      "n5k_ingredient_name": "ice creams",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000363",
+      "n5k_ingredient_name": "meatloaf",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000364",
+      "n5k_ingredient_name": "sunflower seeds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000365",
+      "n5k_ingredient_name": "quiche",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000366",
+      "n5k_ingredient_name": "sauerkraut",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000367",
+      "n5k_ingredient_name": "lime",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000368",
+      "n5k_ingredient_name": "donuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000369",
+      "n5k_ingredient_name": "fritters",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000370",
+      "n5k_ingredient_name": "mahi mahi",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000371",
+      "n5k_ingredient_name": "dumplings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000372",
+      "n5k_ingredient_name": "chilaquiles",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000373",
+      "n5k_ingredient_name": "snapper",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000374",
+      "n5k_ingredient_name": "peas",
+      "class_id": "peas",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000375",
+      "n5k_ingredient_name": "fruit salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000376",
+      "n5k_ingredient_name": "naan",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000377",
+      "n5k_ingredient_name": "quinoa",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000378",
+      "n5k_ingredient_name": "catfish",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000379",
+      "n5k_ingredient_name": "lima beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000380",
+      "n5k_ingredient_name": "pizza",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000381",
+      "n5k_ingredient_name": "gouda cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000382",
+      "n5k_ingredient_name": "cheeseburgers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000383",
+      "n5k_ingredient_name": "italian dressing",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000384",
+      "n5k_ingredient_name": "coffee",
+      "class_id": "coffee",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000385",
+      "n5k_ingredient_name": "curries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000386",
+      "n5k_ingredient_name": "eel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000387",
+      "n5k_ingredient_name": "candies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000388",
+      "n5k_ingredient_name": "fried eggs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000389",
+      "n5k_ingredient_name": "chicken drumsticks",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000390",
+      "n5k_ingredient_name": "margarita",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000391",
+      "n5k_ingredient_name": "cobbler",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000392",
+      "n5k_ingredient_name": "pepperoni pizza",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000393",
+      "n5k_ingredient_name": "teriyaki sauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000394",
+      "n5k_ingredient_name": "gorgonzola cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000395",
+      "n5k_ingredient_name": "string cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000396",
+      "n5k_ingredient_name": "wheat beer",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000397",
+      "n5k_ingredient_name": "gyros",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000398",
+      "n5k_ingredient_name": "champagne",
+      "class_id": "wine",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000399",
+      "n5k_ingredient_name": "raisin bread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000400",
+      "n5k_ingredient_name": "cornbread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000401",
+      "n5k_ingredient_name": "wraps",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000402",
+      "n5k_ingredient_name": "tuna",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000403",
+      "n5k_ingredient_name": "fruit cocktail",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000404",
+      "n5k_ingredient_name": "potato skins",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000405",
+      "n5k_ingredient_name": "seaweed",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000406",
+      "n5k_ingredient_name": "sherbet",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000407",
+      "n5k_ingredient_name": "horseradish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000408",
+      "n5k_ingredient_name": "jambalaya",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000409",
+      "n5k_ingredient_name": "greek salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000410",
+      "n5k_ingredient_name": "goulash",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000411",
+      "n5k_ingredient_name": "stews",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000412",
+      "n5k_ingredient_name": "havarti cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000413",
+      "n5k_ingredient_name": "pilaf",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000414",
+      "n5k_ingredient_name": "chutney",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000415",
+      "n5k_ingredient_name": "cereal",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000416",
+      "n5k_ingredient_name": "ground chicken",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000417",
+      "n5k_ingredient_name": "fajitas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000418",
+      "n5k_ingredient_name": "chicken wings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000419",
+      "n5k_ingredient_name": "hard cider",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000420",
+      "n5k_ingredient_name": "ice pop",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000421",
+      "n5k_ingredient_name": "ground turkey",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000422",
+      "n5k_ingredient_name": "crab",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000423",
+      "n5k_ingredient_name": "plate only",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000424",
+      "n5k_ingredient_name": "prunes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000425",
+      "n5k_ingredient_name": "goat cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000426",
+      "n5k_ingredient_name": "tomato soup",
+      "class_id": "soup",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000427",
+      "n5k_ingredient_name": "muesli",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000428",
+      "n5k_ingredient_name": "white wine",
+      "class_id": "wine",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000429",
+      "n5k_ingredient_name": "gnocchi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000430",
+      "n5k_ingredient_name": "apricots",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000431",
+      "n5k_ingredient_name": "licorice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000432",
+      "n5k_ingredient_name": "red potatoes",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "potato_boiled",
+        "potato_mashed"
+      ]
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000433",
+      "n5k_ingredient_name": "roasted potatoes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000434",
+      "n5k_ingredient_name": "sour cream",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000435",
+      "n5k_ingredient_name": "jerky",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000436",
+      "n5k_ingredient_name": "coffee creamer",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000437",
+      "n5k_ingredient_name": "sweet potato",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000438",
+      "n5k_ingredient_name": "chicken nuggets",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000439",
+      "n5k_ingredient_name": "anchovies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000440",
+      "n5k_ingredient_name": "grapes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000441",
+      "n5k_ingredient_name": "butter",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000442",
+      "n5k_ingredient_name": "hummus",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000443",
+      "n5k_ingredient_name": "crispbread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000444",
+      "n5k_ingredient_name": "dates",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000445",
+      "n5k_ingredient_name": "papayas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000446",
+      "n5k_ingredient_name": "stout beer",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000447",
+      "n5k_ingredient_name": "nutrition bars",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000448",
+      "n5k_ingredient_name": "jalapenos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000449",
+      "n5k_ingredient_name": "cappuccino",
+      "class_id": "coffee",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000450",
+      "n5k_ingredient_name": "buns",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000451",
+      "n5k_ingredient_name": "taco shells",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000452",
+      "n5k_ingredient_name": "maple syrup",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000453",
+      "n5k_ingredient_name": "deprecated",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000454",
+      "n5k_ingredient_name": "rice cakes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000455",
+      "n5k_ingredient_name": "cookies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000456",
+      "n5k_ingredient_name": "barley",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000457",
+      "n5k_ingredient_name": "sun dried tomatoes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000458",
+      "n5k_ingredient_name": "deprecated",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000459",
+      "n5k_ingredient_name": "cereal bars",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000460",
+      "n5k_ingredient_name": "nectar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000461",
+      "n5k_ingredient_name": "samosas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000462",
+      "n5k_ingredient_name": "pork",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000463",
+      "n5k_ingredient_name": "beets",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000464",
+      "n5k_ingredient_name": "baked potatoes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000465",
+      "n5k_ingredient_name": "american cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000466",
+      "n5k_ingredient_name": "pistachios",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000467",
+      "n5k_ingredient_name": "relish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000468",
+      "n5k_ingredient_name": "camembert cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000469",
+      "n5k_ingredient_name": "carp",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000470",
+      "n5k_ingredient_name": "deprecated",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000471",
+      "n5k_ingredient_name": "cherry tomatoes",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000472",
+      "n5k_ingredient_name": "couscous",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000473",
+      "n5k_ingredient_name": "cranberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000474",
+      "n5k_ingredient_name": "quesadillas",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000475",
+      "n5k_ingredient_name": "salsa",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000476",
+      "n5k_ingredient_name": "almond milk",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000477",
+      "n5k_ingredient_name": "light beer",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000478",
+      "n5k_ingredient_name": "sweet rolls",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000479",
+      "n5k_ingredient_name": "challah",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000480",
+      "n5k_ingredient_name": "ice cream soda",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000481",
+      "n5k_ingredient_name": "flatbread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000482",
+      "n5k_ingredient_name": "rice",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "white_rice",
+        "brown_rice"
+      ]
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000483",
+      "n5k_ingredient_name": "water chestnuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000484",
+      "n5k_ingredient_name": "chicken salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000485",
+      "n5k_ingredient_name": "zucchini",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000486",
+      "n5k_ingredient_name": "cakes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000487",
+      "n5k_ingredient_name": "crepes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000488",
+      "n5k_ingredient_name": "mexican cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000489",
+      "n5k_ingredient_name": "lobster",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000490",
+      "n5k_ingredient_name": "tea",
+      "class_id": "tea",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000491",
+      "n5k_ingredient_name": "nachos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000492",
+      "n5k_ingredient_name": "taco salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000493",
+      "n5k_ingredient_name": "lager",
+      "class_id": "beer",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000494",
+      "n5k_ingredient_name": "jams",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000495",
+      "n5k_ingredient_name": "cream cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000496",
+      "n5k_ingredient_name": "capers",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000497",
+      "n5k_ingredient_name": "halibut",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000498",
+      "n5k_ingredient_name": "orange juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000499",
+      "n5k_ingredient_name": "latte",
+      "class_id": "coffee",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000500",
+      "n5k_ingredient_name": "taquitos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000501",
+      "n5k_ingredient_name": "cherries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000502",
+      "n5k_ingredient_name": "milk",
+      "class_id": "milk",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000503",
+      "n5k_ingredient_name": "applesauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000504",
+      "n5k_ingredient_name": "vegetable juice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000505",
+      "n5k_ingredient_name": "meatballs",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000506",
+      "n5k_ingredient_name": "pinto beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000507",
+      "n5k_ingredient_name": "mandarin oranges",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000508",
+      "n5k_ingredient_name": "soy sauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000509",
+      "n5k_ingredient_name": "tempura",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000510",
+      "n5k_ingredient_name": "chicken apple sausage",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000511",
+      "n5k_ingredient_name": "spinach (cooked)",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000512",
+      "n5k_ingredient_name": "kimchi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000513",
+      "n5k_ingredient_name": "millet",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000514",
+      "n5k_ingredient_name": "wheat berry",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000515",
+      "n5k_ingredient_name": "arugula",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000516",
+      "n5k_ingredient_name": "rosemary",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000517",
+      "n5k_ingredient_name": "chard",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000518",
+      "n5k_ingredient_name": "thyme",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000519",
+      "n5k_ingredient_name": "oregano",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000520",
+      "n5k_ingredient_name": "lemon juice",
+      "class_id": "fruit_juice",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000521",
+      "n5k_ingredient_name": "basil",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000522",
+      "n5k_ingredient_name": "tatsoi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000523",
+      "n5k_ingredient_name": "cilantro",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000524",
+      "n5k_ingredient_name": "parsley",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000525",
+      "n5k_ingredient_name": "bok choy",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000526",
+      "n5k_ingredient_name": "mustard greens",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000527",
+      "n5k_ingredient_name": "chive",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000528",
+      "n5k_ingredient_name": "celery root",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000529",
+      "n5k_ingredient_name": "chayote squash",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000530",
+      "n5k_ingredient_name": "endive",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000531",
+      "n5k_ingredient_name": "pumpkin seeds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000532",
+      "n5k_ingredient_name": "pesto",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000533",
+      "n5k_ingredient_name": "orzo",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000534",
+      "n5k_ingredient_name": "country rice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000535",
+      "n5k_ingredient_name": "green onions",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000536",
+      "n5k_ingredient_name": "banana with peel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000537",
+      "n5k_ingredient_name": "orange with peel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000538",
+      "n5k_ingredient_name": "jicama",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000539",
+      "n5k_ingredient_name": "nopales",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000540",
+      "n5k_ingredient_name": "ginger",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000541",
+      "n5k_ingredient_name": "tomatillo",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000542",
+      "n5k_ingredient_name": "white beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000543",
+      "n5k_ingredient_name": "chia seeds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000544",
+      "n5k_ingredient_name": "corn starch",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000545",
+      "n5k_ingredient_name": "greek yogurt",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000546",
+      "n5k_ingredient_name": "balsamic vinegar",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000547",
+      "n5k_ingredient_name": "corn nuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000548",
+      "n5k_ingredient_name": "coconut milk",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000549",
+      "n5k_ingredient_name": "pizza dough",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000550",
+      "n5k_ingredient_name": "fennel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000551",
+      "n5k_ingredient_name": "pizza sauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000552",
+      "n5k_ingredient_name": "pomegranate",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000553",
+      "n5k_ingredient_name": "nut cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000554",
+      "n5k_ingredient_name": "soy sausage",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "n5k_ingredient_id": "ingr_0000000555",
+      "n5k_ingredient_name": "oil",
+      "class_id": null,
+      "status": "unmapped"
+    }
+  ]
+}

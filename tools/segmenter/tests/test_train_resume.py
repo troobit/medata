@@ -1,0 +1,305 @@
+"""Tests for train.py --resume (specs/estimation/resumable-segmenter-training).
+
+The rest of this suite runs torch-free (see conftest.py); resume behaviour
+exercises the real training loop, so the whole module skips unless torch and
+torchvision are installed (the tools/segmenter/.venv from docs/ml-training.md §1).
+
+The happy path simulates an interrupt by making the final checkpoint save raise:
+the per-epoch sidecar written before the "crash" must survive (a completed run
+deletes it — smolspec requirement), then a --resume invocation continues the
+epoch sequence, produces an export.load_checkpoint-compatible artifact, and
+cleans the sidecar up.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+torch = pytest.importorskip("torch")
+pytest.importorskip("torchvision")
+
+import export  # noqa: E402  (sys.path set up by conftest.py)
+import train  # noqa: E402
+
+# Small enough for seconds-scale CPU epochs; ASPP tolerates 64 (bump to 128 if
+# a torchvision upgrade ever rejects it — smolspec risk note).
+TARGET_SIZE = 64
+# Letterbox padding labels masks with the palette background channel (32), so
+# train.py refuses anything that doesn't cover the full 35-class palette; only
+# the classifier head widens, epochs stay seconds-scale.
+NUM_CLASSES = 35
+
+
+@pytest.fixture
+def dataset_root(tmp_path):
+    """Tiny PIL-generated train split (2 image/mask pairs); no val split."""
+    from PIL import Image
+    import numpy as np
+
+    rng = np.random.default_rng(seed=0)
+    split = tmp_path / "data" / "train"
+    (split / "images").mkdir(parents=True)
+    (split / "masks").mkdir(parents=True)
+    for i in range(2):
+        rgb = rng.integers(0, 256, (TARGET_SIZE, TARGET_SIZE, 3), dtype=np.uint8)
+        Image.fromarray(rgb, "RGB").save(split / "images" / f"img{i}.png")
+        ids = rng.integers(0, NUM_CLASSES, (TARGET_SIZE, TARGET_SIZE), dtype=np.uint8)
+        Image.fromarray(ids, "L").save(split / "masks" / f"img{i}.png")
+    return tmp_path / "data"
+
+
+def _argv(data_root, out, epochs, **overrides):
+    opts = {
+        "--data": str(data_root),
+        "--num-classes": str(NUM_CLASSES),
+        "--target-size": str(TARGET_SIZE),
+        "--epochs": str(epochs),
+        "--batch-size": "2",
+        "--lr": "1e-3",
+        "--out": str(out),
+        "--limit": "2",
+        "--num-workers": "0",
+        "--device": "cpu",
+    }
+    opts.update(overrides)
+    argv = ["--no-pretrained"]
+    for flag, value in opts.items():
+        argv += [flag, value]
+    return argv
+
+
+def _sidecar_for(out):
+    return out.parent / (out.name + ".resume.pt")
+
+
+def test_interrupt_then_resume_completes_run(dataset_root, tmp_path, monkeypatch, capsys):
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+
+    # --- epoch 1, interrupted before the final save: sidecar must survive ---
+    def crash(*args, **kwargs):
+        raise RuntimeError("simulated interrupt before final save")
+
+    monkeypatch.setattr(train, "_save_checkpoint", crash)
+    with pytest.raises(RuntimeError, match="simulated interrupt"):
+        train.main(_argv(dataset_root, out, epochs=1))
+    monkeypatch.undo()
+
+    assert sidecar.is_file(), "per-epoch sidecar missing after interrupted run"
+    state = torch.load(sidecar, map_location="cpu")
+    assert state["epoch"] == 1
+    assert state["num_classes"] == NUM_CLASSES
+    assert state["target_size"] == TARGET_SIZE
+    assert state["palette_version"] == train.PALETTE_VERSION
+    assert state["pretrained"] is False
+    assert "optimizer" in state
+    capsys.readouterr()  # drop interrupted-run output
+
+    # --- resume to --epochs 2: only epoch 2 runs ---
+    rc = train.main(_argv(dataset_root, out, epochs=2, **{"--resume": str(sidecar)}))
+    assert rc == 0
+    output = capsys.readouterr().out
+    assert "epoch 2/2" in output
+    assert "epoch 1/2" not in output
+
+    # Final artifact stays byte-compatible with the export path.
+    model = export.load_checkpoint(NUM_CLASSES, str(out))
+    assert model is not None
+    checkpoint = torch.load(out, map_location="cpu")
+    assert checkpoint["pretrained"] is False  # carried from the sidecar
+
+    # Lineage records the resume so provenance never claims one uninterrupted run.
+    lineage = json.loads((out.parent / "lineage.json").read_text())
+    assert lineage["train_config"]["resumed_from_epoch"] == 1
+
+    # Completed run leaves no stale state.
+    assert not sidecar.exists()
+
+
+def test_resume_rejects_hyperparameter_mismatch(dataset_root, tmp_path, monkeypatch):
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    torch.save(
+        {
+            "model": {},
+            "optimizer": {},
+            "epoch": 1,
+            "num_classes": NUM_CLASSES,
+            "target_size": TARGET_SIZE,
+            "palette_version": train.PALETTE_VERSION,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "pretrained": False,
+            "last_food_class_miou": float("nan"),
+        },
+        sidecar,
+    )
+
+    # Validation must happen BEFORE the model is built (smolspec requirement).
+    def built_too_early(*args, **kwargs):
+        pytest.fail("build_model called before sidecar validation")
+
+    monkeypatch.setattr(train, "build_model", built_too_early)
+
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(
+            _argv(
+                dataset_root, out, epochs=2,
+                **{"--resume": str(sidecar), "--num-classes": str(NUM_CLASSES + 1)},
+            )
+        )
+    message = str(excinfo.value.code)
+    assert excinfo.value.code != 0
+    assert message.startswith("[train]")
+    assert str(NUM_CLASSES) in message  # sidecar value
+    assert str(NUM_CLASSES + 1) in message  # invocation value
+
+
+def test_resume_rejects_legacy_weighted_loss_sidecar(dataset_root, tmp_path, monkeypatch):
+    """A weighted-loss sidecar with no class_weighting key predates the
+    inverse-frequency removal (Decision 25): defaulting the missing key to
+    "none" would silently change the training criterion mid-run, so the resume
+    must be rejected outright — not accepted under the legacy default."""
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    torch.save(
+        {
+            "model": {},
+            "optimizer": {},
+            "epoch": 1,
+            "num_classes": NUM_CLASSES,
+            "target_size": TARGET_SIZE,
+            "palette_version": train.PALETTE_VERSION,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "augment": True,
+            "loss": "combined",  # weighted loss; class_weighting key absent
+            "pretrained": False,
+            "last_food_class_miou": float("nan"),
+        },
+        sidecar,
+    )
+    monkeypatch.setattr(
+        train, "build_model",
+        lambda *a, **k: pytest.fail("build_model called before sidecar validation"),
+    )
+    # --class-weighting defaults to "none": under the old legacy-default
+    # mapping this invocation would have resumed with a silently changed
+    # criterion; it must be rejected instead.
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(_argv(dataset_root, out, epochs=2,
+                         **{"--resume": str(sidecar), "--loss": "combined"}))
+    message = str(excinfo.value.code)
+    assert message.startswith("[train]")
+    assert "class_weighting" in message
+    assert "combined" in message
+
+
+def test_missing_resume_file_exits_with_train_message(dataset_root, tmp_path):
+    out = tmp_path / "checkpoint.pt"
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(
+            _argv(dataset_root, out, epochs=1, **{"--resume": str(tmp_path / "nope.pt")})
+        )
+    assert excinfo.value.code != 0
+    assert str(excinfo.value.code).startswith("[train]")
+
+
+def _classifier_state_dict(marker: float):
+    """A torchvision MobileNetV3-Large CLASSIFIER state dict with the stem
+    conv filled with ``marker`` — the file format --init-checkpoint consumes
+    (adapter_probe.py --save-adapted / an IMAGENET1K_V2 download)."""
+    from torchvision.models import mobilenet_v3_large
+
+    state = mobilenet_v3_large(weights=None).state_dict()
+    state["features.0.0.weight"] = torch.full_like(state["features.0.0.weight"], marker)
+    return state
+
+
+def test_build_model_consumes_init_checkpoint(tmp_path):
+    import train as train_mod
+
+    # Plain torchvision serialisation.
+    plain = tmp_path / "plain.pt"
+    torch.save(_classifier_state_dict(0.123), plain)
+    model = train_mod.build_model(NUM_CLASSES, pretrained=True,
+                                  init_checkpoint=str(plain))
+    stem = model.backbone.state_dict()["0.0.weight"]
+    assert torch.all(stem == 0.123), "backbone stem not taken from --init-checkpoint"
+
+    # adapter_probe.py --save-adapted wrapper ({"model": ...}).
+    wrapped = tmp_path / "wrapped.pt"
+    torch.save({"model": _classifier_state_dict(0.456), "source": "probe"}, wrapped)
+    model = train_mod.build_model(NUM_CLASSES, pretrained=True,
+                                  init_checkpoint=str(wrapped))
+    stem = model.backbone.state_dict()["0.0.weight"]
+    assert torch.all(stem == 0.456)
+
+
+def test_init_checkpoint_rejects_non_backbone_file(tmp_path):
+    import train as train_mod
+
+    bogus = tmp_path / "bogus.pt"
+    torch.save({"not_features": torch.zeros(1)}, bogus)
+    with pytest.raises(SystemExit) as excinfo:
+        train_mod.build_model(NUM_CLASSES, pretrained=True,
+                              init_checkpoint=str(bogus))
+    assert "features" in str(excinfo.value.code)
+
+
+def test_init_checkpoint_conflicts_with_no_pretrained(dataset_root, tmp_path):
+    out = tmp_path / "checkpoint.pt"
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(_argv(dataset_root, out, epochs=1,
+                         **{"--init-checkpoint": str(tmp_path / "init.pt")}))
+    assert excinfo.value.code == 2  # argparse error: mutually exclusive
+
+
+def test_resume_rejects_init_checkpoint_drift(dataset_root, tmp_path, monkeypatch):
+    """A sidecar without an init (legacy default None) must refuse an
+    invocation that adds --init-checkpoint mid-run."""
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    torch.save(
+        {
+            "model": {},
+            "optimizer": {},
+            "epoch": 1,
+            "num_classes": NUM_CLASSES,
+            "target_size": TARGET_SIZE,
+            "palette_version": train.PALETTE_VERSION,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "augment": True,
+            "pretrained": False,
+            "last_food_class_miou": float("nan"),
+        },
+        sidecar,
+    )
+    monkeypatch.setattr(
+        train, "build_model",
+        lambda *a, **k: pytest.fail("build_model called before sidecar validation"),
+    )
+    init = tmp_path / "init.pt"
+    argv = [a for a in _argv(dataset_root, out, epochs=2,
+                             **{"--resume": str(sidecar),
+                                "--init-checkpoint": str(init)})
+            if a != "--no-pretrained"]
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(argv)
+    assert "init_checkpoint" in str(excinfo.value.code)
+
+
+def test_refuses_to_start_over_existing_sidecar(dataset_root, tmp_path):
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    sidecar.write_bytes(b"stale interrupted-run state")
+
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(_argv(dataset_root, out, epochs=1))
+    assert excinfo.value.code != 0
+    message = str(excinfo.value.code)
+    assert message.startswith("[train]")
+    assert "--resume" in message

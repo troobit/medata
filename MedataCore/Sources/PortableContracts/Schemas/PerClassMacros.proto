@@ -1,0 +1,23 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "BetaCorrectionTable.proto";
+
+option swift_prefix = "Pb";
+
+message PerClassMacros {
+    float volume_cm3 = 1;                       // β-corrected
+    float mass_g = 2;                           // V · ρ
+    float carbs_g = 3;                          // m · κ / 100
+    string density_source = 4;
+    string coefficient_source = 5;
+    float beta_used = 6;
+    BetaCalibrationStatus beta_status = 7;
+
+    // nutrition5k-calibration (Req 10.1, 8.1): protein/fat from the same
+    // β-corrected mass; banner inputs baked per class from the food DB.
+    float protein_g = 8;
+    float fat_g = 9;
+    bool device_verified = 10;
+    bool is_liquid = 11;
+}

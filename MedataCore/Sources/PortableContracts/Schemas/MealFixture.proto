@@ -1,0 +1,65 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "CameraIntrinsics.proto";
+import "DepthMap.proto";
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+// Off-line fixture used by HarnessCLI for accuracy-mode and β_c calibration. Per design §7.3.
+message MealFixture {
+    string fixture_id = 1;                              // stable across fixture revisions
+    string fixture_revision = 2;                        // versioning of THIS schema (not the data)
+    string palette_version = 3;
+    string database_edition = 4;
+    string segmenter_checkpoint_sha256 = 5;             // hard guard against checkpoint drift
+
+    // PNG-encoded RGB8 in sRGB colour space, top-left origin.
+    bytes nadir_image = 6;
+    bytes oblique_image = 7;                            // optional
+
+    DepthMap nadir_depth = 8;                           // optional
+
+    // Probability tensor: FP16 IEEE-754 binary16 LE, [H, W, C] row-major (HWC), top-left origin.
+    bytes nadir_probs = 9;
+    bytes oblique_probs = 10;
+
+    // Argmax: UInt8 [H, W] row-major, top-left origin, value in [0, C).
+    bytes nadir_argmax = 11;
+    bytes oblique_argmax = 12;
+
+    CameraIntrinsics nadir_intrinsics = 13;
+    CameraIntrinsics oblique_intrinsics = 14;
+    Mat4 t_1_to_2 = 15;                                 // optional, two-view; column-major per §6.0
+    Vec3 gravity = 16;                                  // unit vector in nadir-camera frame
+
+    map<string, float> ground_truth_class_mass_g = 17;  // gravimetric, per class
+    float ground_truth_total_carbs_g = 18;
+
+    string capture_path_canonical = 19;                 // 'single_view_lidar' | 'two_view_sfs'
+
+    // nutrition5k-calibration (Req 3.5, 1.4, 3.7). Protein/fat are additive
+    // alongside the retained ground_truth_total_carbs_g.
+    float ground_truth_protein_g = 20;
+    float ground_truth_fat_g = 21;
+    string source_dataset = 22;                         // e.g. "nutrition5k@<release>/<metaver>"
+    string estimator_path = 23;                         // 'single_dominant' | 'mixture' — authoritative load-path selector; any other value malformed
+
+    // Per-class ground-truth macros summed from N5k per-ingredient values
+    // (Req 6.2/6.6). These are the eval's GT basis — deliberately NOT
+    // re-derivable from the DB composition, so the Req 6.7 cross-macro
+    // check can see mapping/composition-source errors.
+    map<string, float> ground_truth_class_carbs_g = 24;
+    map<string, float> ground_truth_class_protein_g = 25;
+    map<string, float> ground_truth_class_fat_g = 26;
+
+    // capture-bundle-recorder task 5: the pre-shutter preview-resolution food
+    // mask, UInt8 [H, W] row-major, non-zero = food. On an emptyFoodMask
+    // refusal the pipeline short-circuits before segmentation, so the bundle
+    // carries no probs/argmax and this mask is the only record of the decision
+    // the live preview segmenter made. Absent on pre-recorder bundles.
+    bytes pre_shutter_mask = 27;
+    int32 pre_shutter_mask_width = 28;
+    int32 pre_shutter_mask_height = 29;
+}
