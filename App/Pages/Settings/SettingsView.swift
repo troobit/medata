@@ -1,7 +1,9 @@
 import Dosing
 import GlucoseWidgetShared
+import ImageIO
 import Pipeline
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Wraps the exported archive URL so it can drive `.sheet(item:)`.
 private struct ArchiveFile: Identifiable {
@@ -85,6 +87,7 @@ struct SettingsView: View {
     @State private var confirmsClear = false
     @State private var isSeedingMeal = false
     @State private var isSeedingReview = false
+    @State private var isSeedingWorstCase = false
     @State private var demoReview: MealRecord?
     #endif
 
@@ -266,6 +269,18 @@ struct SettingsView: View {
                 }
                 .disabled(isSeedingReview)
                 .accessibilityIdentifier("settings.reviewDemoMeal")
+
+                Button {
+                    reviewWorstCaseMeal()
+                } label: {
+                    if isSeedingWorstCase {
+                        MedataLoadingSymbol(mode: .loop, size: 22)
+                    } else {
+                        Text("Review worst-case meal")
+                    }
+                }
+                .disabled(isSeedingWorstCase)
+                .accessibilityIdentifier("settings.reviewWorstCaseMeal")
 
                 Button(role: .destructive) {
                     confirmsClear = true
@@ -466,6 +481,33 @@ struct SettingsView: View {
         }
     }
 
+    // The meal-review Req 6.6 prerequisite check: the worst case the
+    // requirements permit — four detected foods AND every accessory signal at
+    // once (calibration banner, liquid over-estimate, unknown region,
+    // unsupported liquid). No real capture reaches this state today:
+    // `liquidOverEstimate` is never set at runtime (LiquidResolver is not
+    // wired into Pipeline) and the unknown/unsupported signals require the
+    // segmenter to emit those raster classes. So the record forces the macro
+    // flags directly and a synthetic mask artefact carries the sentinel
+    // classes — the review surface then renders the signals through the same
+    // decode path a real capture would use.
+    private func reviewWorstCaseMeal() {
+        isSeedingWorstCase = true
+        Task {
+            defer { isSeedingWorstCase = false }
+            let record = SettingsView.worstCaseMeal()
+            try? await store.save(record, artefacts: [])
+            if let png = SettingsView.worstCaseMaskPNG() {
+                let artefact = MealArtefact(
+                    kind: "mask", viewId: "nadir", filename: "mask.png",
+                    bytesSize: png.count, sha256Hex: ""
+                )
+                try? await store.writeArtefact(mealId: record.id, artefact: artefact, data: png)
+            }
+            demoReview = record
+        }
+    }
+
     // Retake and Delete discard the demo meal the same way they discard a
     // just-captured one (`CaptureFlowModel.deleteAndDismiss`). The correction
     // rows survive that delete (Req 9.10), which is what leaves the
@@ -522,6 +564,102 @@ struct SettingsView: View {
                 uniqueKeysWithValues: foods.map { ($0.0, PbBetaCalibrationStatus.calibrated) }
             )
         )
+    }
+
+    // Four solids, one of them uncalibrated (pooled β → the full calibration
+    // banner) and the result-level liquid over-estimate flag forced on. The
+    // unknown-region and unsupported-liquid signals come from the mask below,
+    // not from perClass — those classes never carry a macro entry (Req 1.5).
+    private static func worstCaseMeal() -> MealRecord {
+        // (class, volume cm³, mass g, carbs g, protein g, fat g, status)
+        let foods: [(String, Float, Float, Float, Float, Float, PbBetaCalibrationStatus)] = [
+            ("white_rice", 150, 180, 50.4, 4.7, 0.5, .calibrated),
+            ("pasta", 130, 140, 43.4, 7.3, 1.3, .uncalibratedPooled),
+            ("chicken", 110, 120, 0.0, 29.0, 7.6, .calibrated),
+            ("broccoli", 110, 80, 5.6, 3.4, 0.7, .calibrated)
+        ]
+        let beta: Float = 0.9
+        var macros = PbMacroResult()
+        var volumes = PbVolumeResult()
+        for (classId, volume, mass, carbs, protein, fat, status) in foods {
+            var perClass = PbPerClassMacros()
+            perClass.volumeCm3 = volume
+            perClass.massG = mass
+            perClass.carbsG = carbs
+            perClass.proteinG = protein
+            perClass.fatG = fat
+            perClass.betaUsed = beta
+            perClass.betaStatus = status
+            macros.perClass[classId] = perClass
+            volumes.perClassVolumesCm3[classId] = volume
+            volumes.perClassVolumesPreBetaCm3[classId] = volume / beta
+        }
+        macros.totalCarbsG = foods.reduce(0) { $0 + $1.3 }
+        macros.liquidOverEstimate = true
+
+        var confidence = PbConfidenceResult()
+        confidence.sigmaMeal = 0.82  // above the very-low gate, so Req 6.6 applies
+        confidence.sigmaScale = 0.90
+        confidence.sigmaSeg = 0.85
+
+        return MealRecord(
+            capturePath: .singleViewLidar,
+            databaseEdition: "CoFID 2024 + AFCD 2024",
+            paletteVersion: ClassPalette.standard.version,
+            segmenterSource: "demo_seed",
+            calibration: PbCameraIntrinsics(),
+            supportPlane: PbSupportPlane(),
+            scale: PbMetricScale(),
+            volumes: volumes,
+            macros: macros,
+            confidence: confidence,
+            perClassCalibration: Dictionary(
+                uniqueKeysWithValues: foods.map { ($0.0, $0.6) }
+            )
+        )
+    }
+
+    // A synthetic label raster matching the worst-case record: one rectangle
+    // per food class plus unknown_food and unsupported_liquid, background
+    // elsewhere. Encoded exactly as `MaskArtefactWriter.encodeLabelPNG` does —
+    // 8-bit DeviceGray, alpha none, raw class indices — so the read side
+    // (`MaskOverlayDecoder`) treats it as a real capture's mask.
+    private static func worstCaseMaskPNG() -> Data? {
+        let width = 400, height = 300  // 4:3, the review photo aspect
+        let palette = ClassPalette.standard
+        var labels = [UInt8](repeating: UInt8(palette.background), count: width * height)
+
+        func fill(_ classIndex: Int, x: Range<Int>, y: Range<Int>) {
+            for row in y {
+                for col in x { labels[row * width + col] = UInt8(classIndex) }
+            }
+        }
+        // Class indices per ClassPalette.standard.
+        fill(0, x: 20..<140, y: 30..<140)                          // white_rice
+        fill(2, x: 160..<280, y: 30..<140)                         // pasta
+        fill(8, x: 300..<380, y: 30..<140)                         // chicken
+        fill(15, x: 20..<140, y: 160..<270)                        // broccoli
+        fill(palette.unknownFood, x: 160..<280, y: 160..<270)
+        fill(palette.unsupportedLiquid, x: 300..<380, y: 160..<270)
+
+        guard let provider = CGDataProvider(data: Data(labels) as CFData),
+              let cgImage = CGImage(
+                  width: width, height: height,
+                  bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,
+                  space: CGColorSpaceCreateDeviceGray(),
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                  provider: provider, decode: nil,
+                  shouldInterpolate: false, intent: .defaultIntent
+              )
+        else { return nil }
+
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            out as CFMutableData, UTType.png.identifier as CFString, 1, nil
+        ) else { return nil }
+        CGImageDestinationAddImage(destination, cgImage, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return out as Data
     }
 
     private func clearAllData() {

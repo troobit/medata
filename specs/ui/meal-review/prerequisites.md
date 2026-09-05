@@ -6,10 +6,10 @@ Device: iPhone 16 Pro (`6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, name `you`). Matc
 
 ## Layout and interaction cost
 
-- [ ] **Req 6.6** — The scale control is visible without scrolling when the review surface first appears, on a meal carrying *all three* accessory signals (calibration banner, liquid over-estimate, unknown region) and four or more detected foods. This is the worst case the requirements permit and the one the layout is most likely to fail.
-- [ ] **Req 7.5** — Recording an unmodified estimate takes exactly one tap.
-- [ ] **Req 7.6** — Scaling the whole meal and recording takes no more than two taps.
-- [ ] **Req 7.7** — On a three-food meal, adjusting one food by one serving step and recording takes no more than six interactions.
+- [x] **Req 6.6** — The scale control is visible without scrolling when the review surface first appears, on a meal carrying *all three* accessory signals (calibration banner, liquid over-estimate, unknown region) and four or more detected foods. This is the worst case the requirements permit and the one the layout is most likely to fail. No real capture reaches this state today (the liquid flag is never set at runtime and the sentinel raster classes are segmenter-dependent), so produce it with Settings → Debug → **Review worst-case meal**, which seeds a four-food record with every accessory signal forced and a synthetic mask artefact.
+- [x] **Req 7.5** — Recording an unmodified estimate takes exactly one tap.
+- [x] **Req 7.6** — Scaling the whole meal and recording takes no more than two taps.
+- [x] **Req 7.7** — On a three-food meal, adjusting one food by one serving step and recording takes no more than six interactions.
 - [ ] **Req 7.8** — On a three-food meal, relabelling one food from the offered alternatives and recording takes no more than six interactions.
 
 ## Overlay legibility and performance
