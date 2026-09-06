@@ -37,6 +37,12 @@ struct MealReviewView: View {
     @FocusState private var gramFieldFocused: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // AX sizes relayout the row controls (Req 3.4/10.6 device finding,
+    // 2026-09-05): one line of five controls cannot hold at AX5.
+    @Environment(\.dynamicTypeSize) private var typeSize
+    // The row badge grows with its digit instead of clipping it; the photo
+    // badge stays capped because the photo it annotates never scales.
+    @ScaledMetric(relativeTo: .caption2) private var rowBadgeSide: CGFloat = 22
     // The dose readout is computed HERE, on appearance and on every correction
     // (specs/data/insulin-dosing Decision 19): no shared readout state, so this
     // surface cannot show another surface's leftovers.
@@ -361,6 +367,10 @@ struct MealReviewView: View {
             .frame(width: 22, height: 22)
             .background(Color.captureScrim, in: Circle())
             .overlay(Circle().stroke(strokeColour(for: food), lineWidth: 1.5))
+            // Pinned to photo geometry, which does not scale with type size —
+            // an uncapped digit escapes the circle at AX sizes. The scaling
+            // identity channel is the row badge; this one is decorative.
+            .dynamicTypeSize(...DynamicTypeSize.large)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -704,45 +714,20 @@ struct MealReviewView: View {
                     .foregroundStyle(Color.captureChromeText.opacity(0.75))
                     .contentTransition(reduceMotion ? .identity : .numericText())
             }
-            HStack(spacing: 8) {
-                if editingClassId == food.classId {
-                    ServingGramEditor(
-                        text: $gramEditText,
-                        grams: food.currentMassG,
-                        serving: model.solidServing(for: food.classId),
-                        idPrefix: "review.row.\(food.classId)",
-                        focus: $gramFieldFocused
-                    ) { grams in
-                        model.setAmount(classId: food.classId, grams: grams)
-                    }
-                } else {
-                    ServingAmountButton(
-                        grams: food.currentMassG,
-                        serving: model.solidServing(for: food.classId),
-                        idPrefix: "review.row.\(food.classId)"
-                    ) {
-                        editingClassId = food.classId
-                        gramEditText = String(Int(food.currentMassG.rounded()))
-                        gramFieldFocused = true
-                    }
+            // One line of five controls cannot hold at accessibility sizes:
+            // the amount takes its own line and the buttons keep theirs
+            // (device finding 2026-09-05). Below AX, the shipped single line.
+            if typeSize.isAccessibilitySize {
+                amountControl(food)
+                HStack(spacing: 8) {
+                    rowButtons(food)
                 }
-                Spacer(minLength: 8)
-                ServingStepButton(
-                    symbol: "minus",
-                    enabled: food.currentMassG > 0,
-                    idPrefix: "review.row.\(food.classId)"
-                ) {
-                    step(food, direction: -1)
+            } else {
+                HStack(spacing: 8) {
+                    amountControl(food)
+                    Spacer(minLength: 8)
+                    rowButtons(food)
                 }
-                ServingStepButton(
-                    symbol: "plus",
-                    enabled: food.currentMassG < ServingStepLogic.maxRowGrams,
-                    idPrefix: "review.row.\(food.classId)"
-                ) {
-                    step(food, direction: 1)
-                }
-                relabelButton(food)
-                rejectButton(food)
             }
         }
         .padding(.horizontal, 14)
@@ -756,6 +741,51 @@ struct MealReviewView: View {
         .onTapGesture { model.select(classId: food.classId) }  // Req 2.4
         .animation(reduceMotion ? nil : .smooth, value: food.currentMassG)
         .accessibilityIdentifier("review.row.\(food.classId)")
+    }
+
+    @ViewBuilder
+    private func amountControl(_ food: ReviewFood) -> some View {
+        if editingClassId == food.classId {
+            ServingGramEditor(
+                text: $gramEditText,
+                grams: food.currentMassG,
+                serving: model.solidServing(for: food.classId),
+                idPrefix: "review.row.\(food.classId)",
+                focus: $gramFieldFocused
+            ) { grams in
+                model.setAmount(classId: food.classId, grams: grams)
+            }
+        } else {
+            ServingAmountButton(
+                grams: food.currentMassG,
+                serving: model.solidServing(for: food.classId),
+                idPrefix: "review.row.\(food.classId)"
+            ) {
+                editingClassId = food.classId
+                gramEditText = String(Int(food.currentMassG.rounded()))
+                gramFieldFocused = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowButtons(_ food: ReviewFood) -> some View {
+        ServingStepButton(
+            symbol: "minus",
+            enabled: food.currentMassG > 0,
+            idPrefix: "review.row.\(food.classId)"
+        ) {
+            step(food, direction: -1)
+        }
+        ServingStepButton(
+            symbol: "plus",
+            enabled: food.currentMassG < ServingStepLogic.maxRowGrams,
+            idPrefix: "review.row.\(food.classId)"
+        ) {
+            step(food, direction: 1)
+        }
+        relabelButton(food)
+        rejectButton(food)
     }
 
     // De-emphasised remnant for a rejected food: predicted name struck
@@ -773,7 +803,7 @@ struct MealReviewView: View {
             } label: {
                 Text("Restore")
                     .font(.caption.weight(.semibold))
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .padding(.horizontal, 12)
                     .contentShape(Rectangle())
             }
@@ -798,7 +828,7 @@ struct MealReviewView: View {
                     .font(.caption2.weight(.bold).monospacedDigit())
                     .strikethrough(food.flags.rejected)
                     .foregroundStyle(Color.captureChromeText)
-                    .frame(width: 22, height: 22)
+                    .frame(width: rowBadgeSide, height: rowBadgeSide)
                     .background(Color.captureBackground.opacity(0.6), in: Circle())
                     .overlay(Circle().stroke(strokeColour(for: food), lineWidth: 1.5))
             }
@@ -854,6 +884,9 @@ struct MealReviewView: View {
                 .background(Color.captureBackground.opacity(0.6), in: Circle())
                 .foregroundStyle(Color.captureChromeText)
                 .contentShape(Circle())
+                // The circle is fixed at the 44 pt hit target (Req 10.4); an
+                // uncapped glyph outgrows it at AX sizes.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .accessibilityLabel("Change food")
         .accessibilityIdentifier("review.row.\(food.classId).relabel")
@@ -869,6 +902,7 @@ struct MealReviewView: View {
                 .background(Color.captureBackground.opacity(0.6), in: Circle())
                 .foregroundStyle(Color.captureChromeText.opacity(0.8))
                 .contentShape(Circle())
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .accessibilityLabel("Reject")
         .accessibilityIdentifier("review.row.\(food.classId).reject")
