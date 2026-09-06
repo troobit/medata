@@ -134,6 +134,9 @@ struct ServingGramEditor: View {
     /// Called with each clamped whole-gram value as it is typed.
     let onGrams: (Double) -> Void
 
+    // Sized for four digits at the field's own font; a fixed width clips
+    // them at AX sizes (meal-review device finding, 2026-09-05).
+    @ScaledMetric(relativeTo: .subheadline) private var fieldWidth: CGFloat = 52
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -142,7 +145,7 @@ struct ServingGramEditor: View {
                 .focused(focus)
                 .font(.subheadline.weight(.semibold).monospacedDigit())
                 .foregroundStyle(Color.captureChromeText)
-                .frame(width: 52)
+                .frame(width: fieldWidth)
                 .padding(.vertical, 4)
                 .padding(.horizontal, 8)
                 .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: Metrics.cornerChip))
@@ -189,6 +192,10 @@ struct ServingStepButton: View {
                 .background(Color.captureBackground.opacity(0.6), in: Circle())
                 .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
                 .contentShape(Circle())
+                // The circle is fixed at the 44 pt hit target; an uncapped
+                // glyph outgrows it at AX sizes (meal-review device finding,
+                // 2026-09-05).
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .disabled(!enabled)
         .accessibilityLabel(symbol == "plus" ? "Increase amount" : "Decrease amount")
