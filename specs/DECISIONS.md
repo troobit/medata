@@ -60,6 +60,7 @@ per-decision format see `rules/references/decision-log-format.md`.
 | [MD-26](#md-26-phased-delivery-behind-a-dev-stub-segmenter) | Process & Method | Phased delivery behind a dev-stub segmenter | accepted |
 | [MD-27](#md-27-evaluation-harness-gated-behind-a-compile-flag) | Process & Method | Evaluation harness gated behind a compile flag | accepted |
 | [MD-28](#md-28-measure-latency-in-release-before-treating-it-as-a-defect) | Process & Method | Measure latency in Release before treating it as a defect | accepted |
+| [MD-32](#md-32-accessibility-is-never-a-blocking-gate) | Process & Method | Accessibility is never a blocking gate | accepted |
 | [MD-29](#md-29-palette-v2--cereal-solid-class-on-a-cofid-porridge-basis) | Segmentation & Classes | Palette v2 — cereal solid class on a CoFID porridge basis | accepted |
 | [MD-30](#md-30-bridge-dataset-substituted--food-recognition-benchmark-2022-replaces-myfoodrepo-273-v04) | Segmentation & Classes | Bridge dataset substituted — Food Recognition Benchmark 2022 replaces MyFoodRepo-273 v0.4 | accepted |
 
@@ -1244,5 +1245,87 @@ non-defects and builds throwaway crutches that hide the real bug.
 
 - **Positive:** Avoids fixing non-defects; keeps the record honest.
 - **Negative:** Requires Release measurement and on-device captures before diagnosis.
+
+---
+
+## MD-32: Accessibility is never a blocking gate
+
+**Status**: accepted
+**Sources**: owner directive 2026-09-10; `design-system/MASTER.md` pre-delivery checklist
+
+### Context
+
+The MVP is on-the-fly carb estimation from a photograph: capture, segment, scale,
+carve, and return a number the user can dose against. Through 2026-08 and 2026-09
+a run of UI work was arbitrated against `design-system/MASTER.md`'s pre-delivery
+checklist, which stated a 48pt touch-target bar and a 4.5:1 contrast bar without
+saying whether either could hold a delivery. In practice they did: work was
+reshaped to clear them, exceptions were argued in decision logs, and a standing
+contrast finding was carried as a defect. That attention did not come from
+nowhere — it came off the capture-to-estimate path, which is where the product
+either exists or does not.
+
+An audit at the time of this decision found **no open task in any of the 17 task
+files gated on an accessibility bar**. The cost was never a blocked ledger entry;
+it was where the effort went.
+
+### Decision
+
+Accessibility bars are **advisory and never blocking**, at any point in the
+lifecycle. No task, review, delivery, or release may be held on an accessibility
+bar alone. A miss is recorded against the screen and shipped.
+
+Shipped accessibility conformance is **not** to be removed, reverted, or degraded
+to satisfy this decision. `accessibilityLabel`s, Reduce Motion gates, Dynamic Type
+support and the rest stay exactly as built. This decision governs *scheduling and
+gating*, not the code that already exists.
+
+### Rationale
+
+A gate is a claim that the thing behind it is not worth shipping without. For a
+pre-MVP product whose core loop does not yet reliably produce a trustworthy
+number, that claim is false for accessibility and true for the estimate. Stating
+it once, at the level the checklist is read from, is cheaper and more durable than
+re-arguing an exception in each spec's decision log — which is what was happening.
+
+Making the bars advisory rather than deleting them keeps the target visible, so
+conformance remains the default when it is free, and the record of each miss stays
+honest instead of disappearing.
+
+### Alternatives Considered
+
+- **Leave every spec untouched and simply never schedule a11y work**: No edits, no
+  risk of losing shipped conformance — rejected because the gating language stays
+  in `MASTER.md` and the requirements, so the next session (or the next reviewer)
+  re-derives the gate from the written word and the directive dies with this
+  conversation.
+- **Delete the accessibility bars from `MASTER.md` and the requirements outright**:
+  Unambiguous — rejected because it discards the target as well as the gate,
+  invites regression of conformance that already ships at no cost, and is far
+  harder to reverse when the MVP is through and accessibility is due real work.
+
+### Consequences
+
+**Positive:**
+
+- The capture-to-estimate path stops competing with checklist conformance for
+  attention.
+- Exceptions stop being argued per-spec; the answer is stated in one place.
+- Shipped conformance is explicitly protected, so nothing already built regresses.
+
+**Negative:**
+
+- Accessibility debt will accumulate silently unless the recorded misses are
+  reviewed; nothing in this decision schedules that review.
+- The gap between MVP and a genuinely accessible app grows, and the eventual
+  remediation is larger for having been deferred.
+- Two registers now exist in the checklist (blocking, advisory), which a hurried
+  reader can miss.
+
+### Impact
+
+`design-system/MASTER.md` pre-delivery checklist (split blocking / advisory), and
+the accessibility clauses in the `ui` domain requirements — see the
+`NON-BLOCKING (MD-32)` markers.
 
 ---
