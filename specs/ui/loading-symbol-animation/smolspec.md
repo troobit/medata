@@ -35,12 +35,16 @@ so it can be dropped into loading screens or timed delays anywhere in the app.
 - The stroke colour MUST default to `Color.medataAccent` and be overridable via a
   parameter, so the loader works on both the OLED capture chrome and light
   system-grouped surfaces.
-- When **Reduce Motion** is enabled, the component MUST present the finished mark
+- When **Reduce Motion** is enabled, the component SHOULD present the finished mark
   statically with no draw-on animation (accessibility — no essential information
   is lost, the mark is simply shown complete).
-- The component MUST expose an accessibility label of "Loading" and a stable
-  accessibility identifier (`medata.loadingSymbol`) so it is announced to
-  VoiceOver and addressable from UI checks.
+  **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))** —
+  shipped conformance stays.
+- The component MUST expose a stable accessibility identifier
+  (`medata.loadingSymbol`) so it is addressable from UI checks — this half stays
+  **blocking**, because it is a test hook rather than an accessibility bar. The
+  accessibility label of "Loading" SHOULD be present so it is announced to
+  VoiceOver: **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**.
 - The geometry MUST be authored in the same 128×128 canvas as `icon.svg` (one
   source of truth for the mark's shape), not re-drawn by eye.
 

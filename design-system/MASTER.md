@@ -135,12 +135,21 @@ Animate `transform` + `opacity` only. Never `width`/`height`/`top`/`left`.
 
 ## Pre-delivery checklist (applies to every screen)
 
+**Blocking** — a screen is not deliverable until these pass:
+
 - [ ] No emojis as icons (SF Symbols only)
-- [ ] Touch targets ≥48pt (use `hitSlop` if visual ≥44pt is the goal)
 - [ ] Press feedback within 100ms (`.scale 0.97`)
-- [ ] Text contrast ≥4.5:1 in light and dark mode
-- [ ] Reduced-motion respected (crossfade only)
-- [ ] Dynamic Type respected up to AX5
 - [ ] Safe areas respected (no content under notch / Dynamic Island / home indicator)
 - [ ] Single primary CTA per screen
 - [ ] One accent colour (`medataAccent`) per screen + system semantic colours only
+
+**Advisory — never blocking.** See [MD-32](../specs/DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate).
+
+- [ ] Touch targets ≥48pt (use `hitSlop` if visual ≥44pt is the goal)
+- [ ] Text contrast ≥4.5:1 in light and dark mode
+- [ ] Reduced-motion respected (crossfade only)
+- [ ] Dynamic Type respected up to AX5
+
+These four stay the target and shipped conformance is not to be removed. A miss
+is recorded against the screen and shipped anyway — never held. Do not open a
+bugfix, block a task, or fail a review on an accessibility bar alone.
