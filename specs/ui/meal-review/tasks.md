@@ -221,7 +221,7 @@ references:
   - Blocked-by: fffbfgz (MedataCore tests: beta re-derivation, cascade, row identity), fffbfh5 (Capture-stack rewire and ResultView collapse), fffbfh6 (Corrected food names on every display surface), fffbfh7 (Corrections browse and JSONL export in EstimationLogView), fffbfha (New design-system/pages/meal-review.md; retire segmentation-review.md), fffbfhb (Agent notes, OVERVIEW and nextup)
   - Stream: 1
 
-- [x] 23. Req 10.1 visual adoption: bring MealReviewView onto Intake's language
+- [x] 23. Req 10.1 visual adoption: bring MealReviewView onto Intake's language <!-- id:gphhqo9 -->
   - Raised by a device look on 2026-09-04: Req 10.1 shipped as row metrics only, and the surface still read as a different product from Intake
   - The palettes have already converged under the forced dark theme — captureBackground and surfacePrimary both resolve #000000, captureChromeText and textPrimary both #FFFFFF — so every change is layout and chrome, and none swaps a token
   - Delete the hand-drawn 1 pt rule above the scroll; Intake separates groups with space alone

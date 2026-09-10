@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/estimation/ml-feedback-loop/requirements.md
+    - specs/estimation/ml-feedback-loop/design.md
+    - specs/estimation/ml-feedback-loop/decision_log.md
 ---
 # ML Feedback Loop
 
@@ -244,12 +244,12 @@ references:
   - Stream: 3
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
 
-- [x] 35. field_pull: byte-based progress with ETA, and the DB snapshot made required
+- [x] 35. field_pull: byte-based progress with ETA, and the DB snapshot made required <!-- id:tjctb10 -->
   - Progress is bytes, not files: bundles span 2-400 MB. Each copy line carries pct, MB/s and an ETA once three copies have set a rate. Measured 10.6 GB / 100 bundles / 12 min = ~14.5 MB/s.
   - meals.sqlite moved from optional to required (DB_PRIMARY vs DB_SIBLINGS): the first real pull landed 100 bundles with db_integrity=absent and joins_resolved=0 because one silent copy failure scrolled past.
   - Requirements: [3.8](requirements.md#3.8), [3.10](requirements.md#3.10)
 
-- [x] 36. make field-notes: a notes-only pull for feedback on work in flight
+- [x] 36. make field-notes: a notes-only pull for feedback on work in flight <!-- id:jeqwpyu -->
   - --notes-only pulls notes + the DB snapshot and skips capture bundles: ~6 s against the device that takes 12 min for a full pull.
   - Separate <date>-notes-<n> dir series so it cannot resume or renumber an interrupted backlog pull; refuses --prune, which would retire an outcome protection before its bundle is ashore.
   - Verified on device 2026-08-27: 3 notes + 152 outcome rows + 23 correction rows ingested, db_integrity=ok.
@@ -257,10 +257,10 @@ references:
 
 ## Triage routing
 
-- [x] 37. Rolling triage ledger: field_triage.py, make field-triage, merge-preserving regeneration
+- [x] 37. Rolling triage ledger: field_triage.py, make field-triage, merge-preserving regeneration <!-- id:72784pu -->
   - Extract the triage writer from field_close into field_triage.py: rolling ledger at cycles_dir.parent/triage.md; merge not rewrite (checked state and routed: details preserved by note-keyed ids task_id(0; triage/<note-id>)); refuse a dirty ledger; field_close refreshes the same file; make field-triage target
   - Requirements: [7.2](requirements.md#7.2)
 
-- [x] 38. First routing pass over the rolling triage ledger
+- [x] 38. First routing pass over the rolling triage ledger <!-- id:t2tlfnm -->
   - Route every unchecked ledger item to one destination per the design's routing contract and check it off with routed: <destination>; <date>
   - Requirements: [7.3](requirements.md#7.3)
