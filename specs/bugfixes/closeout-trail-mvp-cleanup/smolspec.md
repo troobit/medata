@@ -54,7 +54,7 @@ Total wall-clock from `estimate.start` to `estimate.end`: **141.7 s**.
 
 ### Refusal sheet (UI)
 
-- The system MUST allow the user to read the full refusal message regardless of message length, on supported devices in supported Dynamic Type sizes. The shipping pattern is two detents (`[.fraction(0.35), .large]`) so the user can drag the sheet up to a near-full-screen presentation; alternatively the message MAY be wrapped in a `ScrollView`. Pick whichever is fewer lines.
+- The system MUST allow the user to read the full refusal message regardless of message length on supported devices — this stays **blocking**, because an unreadable refusal is a functional defect. Holding it across the full range of supported Dynamic Type sizes is **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**. The shipping pattern is two detents (`[.fraction(0.35), .large]`) so the user can drag the sheet up to a near-full-screen presentation; alternatively the message MAY be wrapped in a `ScrollView`. Pick whichever is fewer lines.
 - The fix MUST NOT change the `RefusalSheet`'s default presentation height (still ~35% on first appearance) so the existing tests in `MeData/Tests/RefusalSheetTests.swift` continue to pass without test-side changes.
 - The accessibility identifier `refusal.message` MUST remain queryable from XCUITests.
 

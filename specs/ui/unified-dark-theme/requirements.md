@@ -59,9 +59,11 @@ budget, so that nothing becomes less readable in the name of consistency.
 
 **Acceptance Criteria:**
 
-1. <a name="2.1"></a>All text SHALL meet a contrast ratio of at least 4.5:1 against its
+1. <a name="2.1"></a>All text SHOULD meet a contrast ratio of at least 4.5:1 against its
    resolved dark background (`design-system/MASTER.md` contrast budget; system semantic
    colours satisfy this by construction).
+   **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))** —
+   a miss is recorded and shipped, never held; shipped conformance stays.
 2. <a name="2.2"></a>Components that hard-code capture-palette colours and also appear on
    grouped surfaces (`ConfidencePill`'s `captureChromeText` foreground) SHALL be legible on
    the resolved dark grouped surfaces without modification, and this SHALL be confirmed in

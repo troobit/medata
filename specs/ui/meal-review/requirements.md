@@ -49,7 +49,7 @@ The purpose is a corpus. Prediction, result and correction are retained together
 3. <a name="2.3"></a>Each detected food SHALL be identified between photo and row by a means other than colour alone.  
 4. <a name="2.4"></a>WHEN the user taps any marked area, THE SYSTEM SHALL select that food and its row; WHEN the user taps a row, THE SYSTEM SHALL select that food and all its marked areas.  
 5. <a name="2.5"></a>WHEN a food is selected, THE SYSTEM SHALL de-emphasise the photo outside its areas such that the selected areas remain the highest-contrast content in the image.  
-6. <a name="2.6"></a>Each detected food's marking SHALL be reachable by VoiceOver as one element whose label names the food and whose activation selects it.  
+6. <a name="2.6"></a>Each detected food's marking SHOULD be reachable by VoiceOver as one element whose label names the food and whose activation selects it. **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))** — shipped conformance stays.  
 7. <a name="2.7"></a>Selecting a detected food SHALL NOT by itself present the relabel alternatives, and SHALL leave the photo unobscured so that the selected areas remain visible.  
 8. <a name="2.8"></a>WHERE the mask marks an area for a class that carries no volume or macro entry, THE SYSTEM SHALL leave that area unmarked rather than marking an area with no corresponding row.
 
@@ -165,10 +165,10 @@ The purpose is a corpus. Prediction, result and correction are retained together
 
 1. <a name="10.1"></a>The surface SHALL adopt the row grouping, spacing and single-prominent-primary-action layout of the Intake surface, while remaining on the capture palette.  
 2. <a name="10.2"></a>The surface SHALL take its colour values from the design system tokens without introducing new inline values.  
-3. <a name="10.3"></a>Text rendered over the photo SHALL meet a contrast ratio of at least 4.5:1 against the composited result at its worst case, not against an assumed background.  
-4. <a name="10.4"></a>Every interactive control SHALL present a hit region of at least 44 × 44 pt.  
-5. <a name="10.5"></a>WHEN Reduce Transparency is enabled, THE SYSTEM SHALL render any translucent chrome on the surface opaquely.  
-6. <a name="10.6"></a>The meal carbohydrate total SHALL remain legible at Dynamic Type sizes up to AX5.  
+3. <a name="10.3"></a>Text rendered over the photo SHOULD meet a contrast ratio of at least 4.5:1 against the composited result at its worst case, not against an assumed background. **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**  
+4. <a name="10.4"></a>Every interactive control SHOULD present a hit region of at least 44 × 44 pt. **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**  
+5. <a name="10.5"></a>WHEN Reduce Transparency is enabled, THE SYSTEM SHOULD render any translucent chrome on the surface opaquely. **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**  
+6. <a name="10.6"></a>The meal carbohydrate total SHOULD remain legible at Dynamic Type sizes up to AX5. **NON-BLOCKING ([MD-32](../../DECISIONS.md#md-32-accessibility-is-never-a-blocking-gate))**  
 7. <a name="10.7"></a>The surface SHALL carry no reassurance, disclaimer, or data-preservation copy, per `ui/design-handoff-00` Req 14.5.
 
 ## Supersession Register
