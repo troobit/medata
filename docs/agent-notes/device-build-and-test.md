@@ -267,6 +267,20 @@ one while it exists.
 | Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
 | ProductRelease (`make deploy-product`) | real Core ML model | **Yes** — identical estimation path to Release; the only difference is the absent field-note layer |
 
+The symptom of shooting on a Debug build is silent: every shutter press does
+nothing, no error, no estimate. The launch line gives it away —
+`buildStamp=unstamped segmenterSource=stub` is an Xcode Run, not a Make deploy
+(seen again 2026-09-23 on a white-plate sitting). Check the launch line before
+blaming the segmenter.
+
+`make deploy-release` used to exit 1 with no message when the bundled
+`.mlpackage` carried no `medata.modelVersion` stamp (an export run without
+`--checkpoint`): the `strings | grep | tail` lookup returned 1 and
+`set -eo pipefail` killed the script before its own "unstamped" fallback.
+Fixed 2026-09-23 with `|| true`; the fallback now prints. An unstamped bundle
+still means captures carry no model id, so re-export from the promoted
+checkpoint before a sitting whose captures you intend to cite.
+
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
 window is unhittable; details and the log tells are in the sections below.
 
