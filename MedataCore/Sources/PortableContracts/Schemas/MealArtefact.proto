@@ -1,0 +1,12 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message MealArtefact {
+    string kind = 1;                            // 'image' | 'depth' | 'confidence' | 'mask' | 'probs'
+    string view_id = 2;                         // 'nadir' | 'oblique'
+    string filename = 3;
+    int64 bytes_size = 4;
+    string sha256_hex = 5;
+}

@@ -1,0 +1,19 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+// One image-plane corner in pixel coordinates (top-left origin per §6.0).
+message Vec2 {
+    float x = 1;
+    float y = 2;
+}
+
+message CardObservation {
+    repeated Vec2 corners_image_px = 1;         // [topLeft, topRight, bottomRight, bottomLeft]
+    Mat4 card_pose = 2;                         // SE(3) card → camera, per §6.1
+    float scale_at_card_plane = 3;              // mm/pixel at the card plane
+    float pnp_residual_px = 4;                  // mean reprojection error (informational only)
+}

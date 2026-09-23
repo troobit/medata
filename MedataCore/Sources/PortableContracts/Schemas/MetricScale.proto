@@ -1,0 +1,11 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message MetricScale {
+    float metres_per_voxel_edge = 1;
+    float sigma_scale = 2;                      // σ_s ∈ [ε, 1]
+    bool card_scale_available = 3;
+    bool lidar_scale_available = 4;
+}

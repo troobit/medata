@@ -1,0 +1,16 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+// Distortion ordering: AVCameraCalibrationData order (iOS-canonical). Android adapter
+// re-orders Camera2's LENS_DISTORTION coefficients into this order before constructing.
+message CameraIntrinsics {
+    float fx = 1;
+    float fy = 2;
+    float cx = 3;
+    float cy = 4;
+    repeated float distortion = 5;  // [] if no model
+    int32 image_width = 6;
+    int32 image_height = 7;
+}

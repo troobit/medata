@@ -1,0 +1,320 @@
+# UI capture flow (App/)
+
+> **Post-capture flow re-merged by `specs/ui/meal-review/` (2026-08-09, superseding
+> design-handoff-00 §5 and the capture-step Result; implemented on the App side in the
+> same cycle).** The two-screen split — `SegmentationReviewView` then
+> `ResultView(.justCaptured)` — is replaced by one review surface (`MealReviewView` +
+> `MealReviewModel`, both registered in the four pbxproj places): `CaptureRoute` is the
+> single `.result` case, estimation completion pushes the surface directly,
+> `SegmentationReviewView` is deleted, and `ResultView` serves only the Records/Graph
+> history read path (the `ResultPresentation` enum, `onRetake`, and the very-low retake
+> surface are gone from it — the very-low surface lives on `MealReviewView`, where it owns
+> the fold below σ 0.20). The surface permits relabel, reject, absent-food and amount
+> corrections; each is persisted per detected food in the **`correction_records`** table
+> the moment it is made (mutators call `updateCorrectionRecord(_:upsertingCorrection:)` so
+> the corpus row and the reconciling `corrections` row share one transaction; amount edits
+> debounce the store write 500 ms per food; `discard()` stamps `capture_abandoned` with NO
+> corrections upsert so an abandoned meal never gains the corrected marker).
+> **`correction_records` is the one store exempt from every deletion path** — no
+> `deleteMeal`/`deleteRecords` cascade, no age or count bound, excluded from the artefact
+> sweep's reach, and **must never be added to the Settings Debug reset
+> (`deleteAllData()`)** — the corpus is the deliverable, not test data (meal-review
+> Req 9.9/9.10, Decision 16). The four-place `project.pbxproj` registration checklist below
+> still applies to any new `App/` file (e.g. `MealReviewView.swift`,
+> `MealReviewModel.swift`). Mentions of `CaptureRoute` "(review/result)" and the
+> `SegmentationReviewView` "Carbs" button below predate this merge and are historical.
+
+> **Shell re-rooted by `specs/ui/home-router/` (2026-07-10, superseding design-handoff-00
+> Decision 20's Graph root).** The launch root is **`HomeView`** — a pure router with six
+> controls (Capture primary, then Intake / Dose / Records / Graph / Settings). Capture /
+> Intake / Records / Graph / Settings present as mutually-exclusive `.fullScreenCover`s
+> (`AppRoot.ActiveSheet`); Dose stays the insulin `.sheet`, presented from `AppRoot`
+> (home-router Decision 10). **Graph** (`TrendsView`, renamed in UI only — Decision 21) is
+> visualisation-only: no entry-point toolbar controls, no delete affordance (the day-insulin
+> `.onDelete` is gone; `TrendsModel.deleteDose` is now unreferenced but deliberately left in
+> the perf-sensitive file). `RecordsView`/`RecordsModel`/`RecordRow` replaced the meal-only
+> `DataView` (deleted); the shared `mealRouteDestination`/`CloseCoverButton` live in
+> `App/MealRouting.swift`. `App/IntakeView.swift` is now the real Intake surface, landed
+> by `manual-carb-intake` (`IntakeView` + `IntakeModel` + `CarbEntrySheet`/`CarbEntryModel`
+> + `QuickPresetEditSheet`; quick-add presets live in the new `quick_presets` table). The AR session still runs ONLY while the Capture cover is frontmost:
+> `CaptureFlowModel.capturePresented()` arms (via `.initialising`),
+> `captureDismissed()` releases; `evaluatePermissions` is gated on `isCapturePresented`, so
+> launch shows no camera prompt. The old `tabSelectionChanged`/`sheetDidPresent` hooks are
+> these same bodies renamed. Capture chrome: close control (top-leading, returns home),
+> mode capsule (`1-VIEW · LiDAR` / `2-VIEW · NADIR` / `2-VIEW · OBLIQUE`), 76 pt bubble level
+> (stage-relative, non-gating), telemetry capsule, bottom row = mode + shutter (torch,
+> Trends/Data/Settings buttons all gone). Navigation: route enums only — `CaptureRoute`
+> (review/result) on the capture stack, `MealRoute` (overview/result) on Graph/Records
+> stacks — the `.correction` routes and `ManualCorrectionView` were retired by
+> `specs/serving-adjust/` (2026-07-18): the Result screen's per-food serving rows are the
+> adjustment surface (steppers per household unit, plate-fraction control, per-row gram
+> reveal; corrections persist via one appended `PbUserCorrection` whose note carries the
+> machine-readable `servings …` stamp from `ServingNote` in MedataCore Foods, with legacy
+> `portion N/M` notes still parsed for seeding);
+> `navigationDestination(for: MealRecord.self)` no longer exists, and an `.onChange` on
+> `navigationPath` resyncs `.showingResult` if the user pops via back-gesture (soft-lock fix).
+> Developer-phase copy rule (CLAUDE.md / Req 14.5): no reassurance/disclaimer strings.
+> Retired dead files: `CaptureTopBar`, `CaptureModeToggle`, `RefusalSheet` (replaced by
+> `CaptureErrorOverlay`), `MealsTabView`, `MealRow`. The architecture notes below (state
+> machine, gating, pre-shutter mask, one-ARSession rule) remain accurate.
+
+The iOS SwiftUI capture flow per `specs/ui/iphone-experience/` (shell/chrome now per
+`design-handoff-00`, see banner). New code lives in `App/`; the
+Xcode project (`MeData/MeData.xcodeproj`) references the files in place via
+`../App/*.swift`. All spec tasks (1–28) are implemented.
+
+## Architecture
+
+`CaptureFlowModel` (`@Observable @MainActor`) is the single source of truth.
+It owns the `CaptureState` state machine, a `CaptureSession`, an
+`any PipelineEstimator`, and the child `LiveIndicatorModel`. The view layer is
+composition only; all behaviour is in the model and is unit-tested.
+
+- **CaptureFlowModel** — drives the state machine from `specs/ui/iphone-experience/design.md`.
+  Public commands: `shutter()`, `forceTwoView()`, `tryAgain()`,
+  `dismissResult()`, `scenePhaseChanged(_:)`, `liveSampleDidUpdate(...)`,
+  `trackingDegraded()`, `handleInterruption(_:)`. Derived view state:
+  `canShutter`, `currentSnapshot`, `isBusy`, `awaitingObliqueView`. Conforms to
+  `CaptureFlowDelegate` with no-op `didUpdateTilt`/`didUpdateLiDARCoverage`/
+  `didDetectInterClassOcclusion` (Decisions 9, 11).
+- **LiveSampleObserver** — iterates `engine.frames`, computes per-frame
+  tilt/distance/coverage via `LiveSampleMath` (pure, testable on simd +
+  CVPixelBuffer because `ARFrame` has no public init), forwards to the model.
+  Write-gating lives in `apply(_:)`: samples are dropped unless state is
+  `.ready`/`.forcingTwoView`/`.initialising`/`.trackingLost`.
+- **ARPreviewView** — `UIViewRepresentable` over `ARView`. `ARView.session` is
+  get-only, so the engine's own session can't be injected into the view.
+  Instead the engine **adopts the ARView's session** as the one authoritative
+  `ARSession` via `engine.bindPreviewSession(_:)` (called from both makeUIView
+  and updateUIView through the testable `bind(to:)` seam). The engine becomes
+  that session's sole delegate and runs the world-tracking config on it. This
+  is the single-session realisation of Decision 11/14. Tests drive `bind(to:)`
+  with a plain `ARSession` because the SwiftUI `Context` has no public init.
+
+## Gotchas / non-obvious behaviour
+
+- **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
+  `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
+  ahead of SwiftUI-drawn siblings, and `allowsHitTesting(false)`/`zIndex` on the
+  representable are NOT reliable across that boundary (the 3429ddc fix that didn't take on
+  device — Retry/2-view dead, Cancel alive). The preview is render-only; all controls are
+  SwiftUI. Regression: `specs/bugfixes/capture-no-flat-surface-gravity-frame/report.md`.
+- **Full-width SwiftUI buttons: sizing/`contentShape` go INSIDE the Button label.** A
+  Button's tap gesture covers only its label; `.frame(maxWidth:)`/`.contentShape` applied
+  outside the Button draw a wide pill whose surface is dead. `CaptureErrorOverlay` is the
+  reference pattern. This is NOT ARView-specific — it bites any bare-string
+  `Button(_:action:)` with outside modifiers. The `09aab63` sweep fixed only
+  `CaptureErrorOverlay`; the same dead pill later blocked the whole capture flow via the
+  `SegmentationReviewView` "Carbs" button (advances to Result), and the identical latent bug
+  sat on `ResultView` Adjust/Done/Retake/Keep-as-is, `MealOverviewView` Adjust/Full-result,
+  and `ManualCorrectionView` Save. All fixed to the label-wrapping pattern in one pass —
+  regression: `specs/bugfixes/result-view-defects/report.md`. Rule: never put
+  `.frame`/`.background`/`.contentShape` on a bare-string Button; wrap the label.
+- **`RawFrame.gravity` is world-up in the §6.0 camera frame — pose-dependent.** Derived
+  per-frame via `CameraGravity.worldUpInCameraFrame(worldFromCamera:)` (CaptureKit); a
+  constant only looks right at the identity pose and kills the plane fitter's ±15° gravity
+  gate on every real capture (`supportplane.end candidates=N inliers=0` → "no flat
+  surface" in both modes). Treat `inliers=0` with large `candidates` as a convention/input
+  bug, never a scene problem. Same bugfix report as above.
+- **"No flat surface" specifically on a *matte* table = LiDAR confidence starvation, not
+  gravity.** `LiDARPlaneFitter` seeds RANSAC only from table pixels clearing `τ_conf`.
+  ARKit maps `ARConfidenceLevel.{low,medium,high}` → bytes `{0,127,255}`; the old
+  `τ_conf = 0.66` admitted **only HIGH (255)**. Matte / low-reflectance surfaces return a
+  weaker signal → mostly **MEDIUM (127 = 0.498)** → every candidate filtered → `candidates≈0`
+  / `noLidarPoints` → "no flat surface". Lowered to `0.40` (Decision 49) to accept
+  MEDIUM-or-better and drop only LOW/zero. Diagnostic tell vs the gravity bug: gravity =
+  large `candidates`, `inliers=0`; confidence starvation = `candidates≈0` outright. Regression:
+  `specs/bugfixes/lidar-plane-fit-matte-table-confidence/report.md`.
+- **Device logs for a capture refusal look empty because the pre-shutter mask log floods
+  them.** The pre-shutter segmenter calls `CoreMLSegmenter.segment()` at ~2–3.5 Hz, and
+  `segment()` emits `event=segmenter.mask` at `.info` every call. Over a `log collect --last`
+  window that floods the persisted unified-log store and EVICTS the low-frequency `.info`
+  lines you actually need — `event=launch` (buildStamp) and `event=supportplane.end
+  success=false` (the plane-fit refusal counters: `candidates`/`inliers`/`residual_mm`/`bbox`).
+  Symptom: `/tmp/medata-device.log` is only `segmenter.mask` lines in a few-second window,
+  no launch/supportplane/estimate. Fixed (Decision 18 / `capture-log-flood-…`): the
+  pre-shutter instance is built with `CoreMLSegmenter.MaskLogCadence.livePreview` → `.debug`
+  (in-memory tier, does not evict persisted `.info`); the Pipeline's shutter-time segmenter
+  keeps `.perCapture` → `.info`. Rule: a per-frame diagnostic MUST be `.debug`, never `.info`.
+  Note: Stage D (SupportPlane) runs BEFORE Stage F (Segmentation), so on a "no flat surface"
+  refusal there is NO shutter-time `segmenter.mask` — the `supportplane.end` bbox counters are
+  your mask-quality proxy.
+- **Speckled-coloured mask over the food photo is a MODEL artefact, not a stride/format
+  bug.** The whole image pipeline (YCbCr→BGRA `PixelBufferAdapter`, `canonicaliseToRGB8`,
+  letterbox preprocess, `CoreMLSegmenter` CHW↔HWC auto-detect, `PostProcessing` argmax,
+  `MaskArtefactWriter` encode, `MaskOverlayLoader` colourise) has been re-audited
+  stride-by-stride and is clean. Tell: `segmenter.mask` shows a **coherent 92–99% background**
+  (`topClass=34`) with 4–20 scattered classes — coherent background = valid model input
+  (a corrupted input gives *random* argmax). It is the under-trained segmenter's food-region
+  noise, correctly colourised. Track in the model work-stream; do not hunt for a code bug.
+
+- **`LiveSampleMath.nearSurfaceDistanceCm` (formerly `medianDistanceCm`) is a
+  near-side percentile, not a median — deliberately.** The working-distance
+  gate (`distanceGateOK`, `App/CaptureFlowModel.swift`) blocked the shutter on
+  a genuine in-range ~25 cm one-view LiDAR capture (task 61; field notes
+  C257CA10-81A8-4206-B140-8A205D7D1E94 / C577EE9D-8F5A-480A-9F33-96E7163A16B8
+  in `specs/estimation/ml-feedback-loop/triage.md`). The gate arithmetic
+  (`cm >= 25 && cm <= 50`, both inclusive) and the ARKit units (metres from
+  `frame.sceneDepth`, ×100 for cm) were both already correct; the bug was the
+  reduction of the centre-crop depth window to one number. In a top-down
+  capture the food is always the *closest* surface in the crop and the table
+  around it is always farther, but the crop is centred on the frame, not on
+  the food — a loosely framed or small item can put the farther table over
+  half the crop, and a **median** then reports the table's distance, not the
+  food's (the in-crop majority wins). This is the same "two-surface mixture"
+  failure the support-plane fitter already documents at
+  `specs/estimation/pipeline/design.md` §6.2.1 ("the in-band majority puts
+  the median on the supported surface") — search for that write-up before
+  adding any new median-of-a-region computation in this codebase. Fix: take
+  the near-side 10th percentile instead of the median, which keeps tracking
+  the food even when it is a minority of the crop while still absorbing a
+  stray near-zero noise sample. Tell vs. a genuine boundary/units/label bug:
+  `failingShutterGate` only ever has one string (`too far`) for the whole
+  gate — the design system (`design-system/pages/capture.md`,
+  `specs/ui/design-handoff-00/copy-inventory.md`) never defines a "too close"
+  string to invert, so a mislabelled direction was never the right diagnosis
+  here.
+- **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
+
+
+- **One ARSession only — the engine adopts the ARView's session.** A regression
+  (fixed, Decision 14) had `ARKitCaptureEngine` running its OWN `ARSession` while
+  `ARView` ran a second one. Two AR sessions contend for the single camera capture
+  source → repeated `FigCaptureSourceRemote` failures (`err=-12784`/`-17281` in the
+  device log) and a `sessionWasInterrupted ↔ Ended` loop that flashed the UI between
+  `.initialising`/`.trackingLost`. Fix: the engine no longer runs its placeholder
+  session; `bindPreviewSession(_:)` swaps in the ARView's session and runs the config
+  there (gated by `isRunning` so repeated `updateUIView` calls don't reset tracking).
+  `start()` records intent and defers the run to bind if the view isn't up yet. **Do
+  not reintroduce a second `ARSession`.** All session mutation happens on the main
+  actor (`bindPreviewSession`/`start`/`release` via `MainActor.run`).
+- **`performFlow` awaits `startTask` before capturing.** `CaptureSession`
+  throws `.sessionNotStarted` if `captureNadir/Oblique` races ahead of the
+  fire-and-forget `session.start()` kicked off on `.initialising` entry. In
+  production start finishes during initialising; tests forced the race.
+- **Tilt target depends on stage.** `liveSampleDidUpdate` takes raw
+  `tiltDegrees` (angle from straight-down); the model computes in-range against
+  0° for nadir and 25° once `firstFrame != nil` (awaiting oblique, §2.2/§2.3).
+- **Nadir shutter is gated on a usable pre-shutter mask (`hasUsablePreShutterMask`).**
+  `canShutter` (and the `shutter()` command) refuse the nadir stage until
+  `preShutterSegmenter.latest` exists and is within the same 750 ms freshness
+  bound `performFlow` applies at the nadir-capture instant. Without this, the
+  first tap of a session could fire while `latest` was still nil →
+  `maskAgeMs=-1` → `emptyFoodMask` → `noFoodPixels` refusal; the second tap then
+  succeeded. The gate is bypassed when no segmenter is injected (tests / legacy;
+  `App.swift` always passes one) so the shutter is never permanently disabled.
+  Disabled-nadir state reuses the existing `ShutterButtonState.disabled` "waiting"
+  UX. Regression: `specs/bugfixes/first-shot-nofoodpixels-race/report.md`.
+- **Path hint is frozen at shutter tap** and locked to `.twoViewSfS` while
+  awaiting the oblique view (so a coverage flip can't switch paths mid-sequence).
+- **§8.3 is best-effort (Decision 12).** Backgrounding cancels the in-flight
+  `flowTask` and resets UI to `.initialising`; the pipeline has no cooperative
+  cancellation so a `MealRecord` may still be persisted.
+- **Real pipeline, dev-stub segmenter.** `App.swift` now wires
+  `Pipeline.makeForDevice(store:cardDetector:)` (the `PendingPipeline` stand-in
+  was deleted — research task 81). Under `DEV_STUB_SEGMENTER` (Phase 1) the
+  pipeline runs end-to-end with `StubInferenceEngine`, producing a placeholder
+  carb value rather than a refusal. Capture, gating, refusal, and persistence all
+  work; real estimates await the Phase 3 trained model (Blocker 1 in
+  [`pipeline-wiring-status.md`](pipeline-wiring-status.md)).
+
+## Tests
+
+Unit tests are in `MeData/Tests/` using Swift Testing (`@Test`/`#expect`) with
+`@testable import MeData`. XCUITests are in `MeData/UITests/` (XCTest).
+**Neither is wired into the committed Xcode project** (no test targets exist —
+the pre-existing `CapturePathDeciderTests.swift` is the same).
+
+**Convention (2026-07-03): the files in `MeData/Tests/` and `MeData/UITests/`
+are documentation contracts, not an executable suite.** They compile against
+the app source and record intended behaviour, but no committed target runs
+them. Agents MUST NOT claim to have "run" them, count them in test totals
+(`make test` covers the SwiftPM core only), or write new app-target tests
+expecting execution — the MVP gate for app/UI work is "does it build + does it
+look right on device" (see CLAUDE.md). If execution is ever genuinely needed,
+the historical recipe is a temporary unit-test target with
+`TEST_HOST = $(BUILT_PRODUCTS_DIR)/MeData.app/MeData` (validated once: all 40
+passed on the iPhone 17 Pro simulator).
+
+## Adding a new file under `App/` — nothing to do
+
+**`App/` is a `PBXFileSystemSynchronizedRootGroup` as of 2026-08-28.** Drop a
+`.swift` file anywhere under `App/` and it is in the MeData target. Create a
+folder and it appears in Xcode's navigator. There is no registration step.
+
+This replaced a four-place `project.pbxproj` checklist (`PBXBuildFile`,
+`PBXFileReference`, the `PBXGroup` children list, the `PBXSourcesBuildPhase`
+files list) that had to be repeated per file, where missing one made the build
+either fail or — worse — silently omit the file. `tools/pbx_add_app_file.py`
+existed to automate it and is deleted; 324 lines left `project.pbxproj` with it.
+
+The group is declared with `path = ../App; sourceTree = SOURCE_ROOT`, which
+resolves from the project directory (`MeData/`) up to the repo root. A relative
+path in a synchronised root group is unusual but works — it was verified by
+putting a deliberate type error in a file under a new folder and confirming the
+compiler reported it.
+
+Two consequences worth knowing:
+
+- **Every file under `App/` is now compiled**, including any that were
+  previously on disk but unregistered. `App/Pages/Capture/CapturePathDecider.swift`
+  was exactly that — it survives only because its whole body sits behind
+  `#if AUTO_CAPTURE_MODE`, a flag defined nowhere.
+- **Non-Swift files join Copy Bundle Resources automatically**, and that bites
+  immediately: `App/README.md` and `App/Design/README.md` both tried to copy to
+  `MeData.app/README.md` and the build failed with *"Multiple commands produce
+  … /MeData.app/README.md"*. Two files with the same basename anywhere under
+  `App/` will collide, however deep their folders.
+- **To exclude a file** you need a `PBXFileSystemSynchronizedBuildFileExceptionSet`
+  with a `membershipExceptions` entry, listed on the root group's `exceptions`
+  array, the way `MeDataWidgets` excludes its `Info.plist`. Paths in
+  `membershipExceptions` are relative to the synchronised folder — `README.md`
+  and `Design/README.md`, not `App/README.md`. Deleting a reference no longer
+  works, because there are none.
+
+Files dropped INSIDE `MeData/MeData/` are likewise auto-added, including to
+Copy Bundle Resources — which is why `MeData/Info.plist` (build stamp) lives
+outside that folder ("Multiple commands produce Info.plist" otherwise).
+
+### XCUITests and the DEBUG harness (tasks 26–28)
+
+The capture flow is AR-gated — the shutter only arms once a live `ARSession`
+reaches `.ready`, and ARKit does not run on the simulator. So the three XCUITests
+launch the app with `-uitest` and drive the flow through a `#if DEBUG` harness in
+`App.swift` rather than a real camera:
+
+- **`UITestSupport`** — reads launch args. `-uitest` activates the harness;
+  `-uitestPipeline refuse|stall` selects the stub pipeline (refuse is default).
+- **`UITestHarness`** — builds the `CaptureFlowModel` with a `UITestCaptureEngine`
+  (capture blocks until released, so `.capturing` is observable), a stub pipeline,
+  and an interruption `AsyncStream` it owns. Exposes `driveToReady()`,
+  `releaseCapture()`, `emitInterruptionBegan/Ended()`.
+- **`UITestControlPanel`** — hidden buttons (leading edge, clear of shutter/banner)
+  that call those harness methods, queried by accessibility identifier
+  (`uitest.driveToReady`, `uitest.releaseCapture`, `uitest.interruptionBegan/Ended`).
+
+Other accessibility identifiers the tests query: `shutter`,
+`hint.{initialising,trackingLost,estimating,capturing}`, `refusal.message`
+(also asserted by verbatim text per §12.2), `refusal.tryAgain`. Note: an
+`accessibilityIdentifier` on a plain SwiftUI container (e.g. the refusal banner
+`VStack`) does not reliably surface as a queryable element — query the Label/Button
+inside instead, which is why the refusal test keys off `refusal.message` not the
+banner container.
+
+`driveToReady()` calls `model.liveSampleDidUpdate(...)` directly because `ARFrame`
+has no public init, so `LiveSampleObserver`'s real path can't be exercised on the
+simulator. The interruption test asserts the UI proxy (`.initialising` hint) for
+the `engine.start()` re-call, which is itself covered by the CaptureFlowModel unit
+tests. Running these requires a device + a UI-test target (same separate-validation
+pattern as the unit tests). Compilation was validated by building the app target
+for the iPhone 17 Pro simulator after temporarily repointing the SPM to the local
+`MedataCore` (see Build-path caveat).
+
+## Build-path caveat
+
+The Xcode project's `XCLocalSwiftPackageReference` is `relativePath = ../../medata`
+— it only resolves when the repo is checked out at a directory literally named
+`medata`. In a checkout named otherwise (e.g. `ui`), the package resolves to a
+stale sibling and the SPM-prerequisite symbols (`ARKitCaptureEngine.frames`/
+`.interruptions`/`InterruptionEvent`, `PipelineEstimator`) go missing. Point the
+path at the actual checkout to build locally; do not commit that change.

@@ -1,0 +1,20 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "CameraIntrinsics.proto";
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+// Variable resolution per platform (256x192 on iPhone 12 Pro LiDAR; variable on Android).
+// depth_bytes_mm is Float32 LE row-major in mm (NOT m), per §6.0 unit convention.
+// confidence_bytes is UInt8 0..255 (higher = more reliable), per §6.0.
+message DepthMap {
+    bytes depth_bytes_mm = 1;
+    bytes confidence_bytes = 2;
+    int32 width = 3;
+    int32 height = 4;
+    int32 row_stride_bytes = 5;
+    CameraIntrinsics depth_intrinsics = 6;
+    Mat4 depth_from_colour = 7;                 // rigid transform: depth-frame ← colour-frame
+}

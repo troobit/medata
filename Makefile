@@ -1,0 +1,355 @@
+# MeData developer loop.
+#
+# SwiftPM core:   make build / make test / make spell
+# Device loop:    make deploy-device        (Debug — UI/non-capture work only)
+#                 make deploy-release-stub  (Release + forced stub — capture testing)
+#                 make logs-device          (pull filtered device logs)
+#
+# Device targets need a connected, paired iPhone. Override the default device:
+#   make deploy-device DEVICE_UDID=<devicectl-identifier> DEVICE_NAME=<name>
+
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -ec
+
+# Default device: `you` — iPhone 16 Pro, the current primary test device.
+# DEVICE_UDID is the devicectl (CoreDevice) identifier from
+# `xcrun devicectl list devices`, NOT the hardware UDID Finder/`log collect
+# --device-udid` show. `logs-device` therefore matches on DEVICE_NAME instead.
+# Override for another device:
+#   make <target> DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>
+DEVICE_UDID ?= 6AD781BA-89FF-5A82-A2A1-B5EC9469F465
+DEVICE_NAME ?= you
+BUNDLE_ID   ?= rtob.MeData
+
+# Interpreter for the Python tooling (food-DB bake + its pytest gate).
+# Override when the default python3 on PATH has no pytest:
+#   make food-db PYTHON=/opt/homebrew/bin/python3
+PYTHON ?= python3
+
+DERIVED_DEBUG   ?= /tmp/medata-debug
+DERIVED_RELEASE ?= /tmp/medata-release
+DERIVED_PRODUCT ?= /tmp/medata-product
+LOG_FILE    ?= /tmp/medata-device.log
+LOG_ARCHIVE ?= /tmp/medata-device.logarchive
+LOG_LAST    ?= 30m
+
+# Build stamp: git short SHA (plus -dirty when tracked files were modified) +
+# wall-clock time, injected into Info.plist and logged by the app at launch
+# (event=launch in App/App.swift). Match the stamp printed here against the one
+# in the device log before trusting any capture — stale binaries have silently
+# invalidated whole test rounds before. Dirtiness is measured against TRACKED
+# files only, not `git status --porcelain`: the routine mid-session divergence
+# is untracked-but-not-ignored files (a new agent note, a scratch script), which
+# say nothing about whether the built sources differ from the commit.
+GIT_SHA     := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD || echo '-dirty')
+BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
+
+XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
+	-destination 'id=$(DEVICE_UDID)'
+
+.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
+
+help:
+	@echo "MeData targets:"
+	@echo "  worktree             create .worktrees/<name>"
+	@echo "                       (name=<dir> [branch=<branch>]; branch defaults to name, off HEAD)"
+	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
+	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
+	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
+	@echo "  food-db              regenerate the bundled food databases (CoFID + AFCD,"
+	@echo "                       loop overlay applied) and run the generator test suite"
+	@echo "  field-pull           pull a field session off the device, ingest it into"
+	@echo "                       the corpus, and push the cleanup manifest back"
+	@echo "  field-notes          pull just the notes (and the DB snapshot) — seconds,"
+	@echo "                       for feedback on work still in flight"
+	@echo "  field-triage         regenerate the rolling triage ledger from the corpus;"
+	@echo "                       routing its unchecked items is the agent step"
+	@echo "  field-diagnose       replay the annotated captures and generate the"
+	@echo "                       cycle task file the agent phase executes"
+	@echo "  field-report         alignment report across pulls (key=value, every"
+	@echo "                       figure beside its cell count)"
+	@echo "  field-close          judge the cycle's drafts, commit what survives the six"
+	@echo "                       guards, write the verdict and triage artifacts"
+	@echo "                       (CYCLE=<n> APPLIED_AT=<date> [REPO=<worktree> PROBE_IMAGE=<path>];"
+	@echo "                        run it in a dedicated worktree — it refuses a dirty tree)"
+	@echo "  field-derive         derive training + calibration material from the corpus"
+	@echo "                       (OUT=<merged corpus> / CALIBRATION_OUT=<dir> [IDENT= CYCLE_DIR=];"
+	@echo "                        prepares inputs only — launching a run stays a human step)"
+	@echo "                       [CALIBRATION=<calibrate artifact> PYTHON=$(PYTHON)]"
+	@echo "  field-test           pytest for tools/field_loop/, including the loop rehearsal"
+	@echo "                       (one whole cycle with the device, the agents and the"
+	@echo "                        commits stubbed).  Separate from food-db: the two test"
+	@echo "                        directories cannot be collected in one pytest run"
+	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
+	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
+	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
+	@echo "  build-app            xcodebuild MeData for device, Debug  [DEVICE_UDID=$(DEVICE_UDID)]"
+	@echo "  deploy-device        build-app + install + launch on the device, with build stamp"
+	@echo "  deploy-release       Release build with the REAL bundled segmenter, install + launch"
+	@echo "                       (requires an exported segmenter.mlpackage)"
+	@echo "  deploy-release-stub  Release build with DEV_STUB_SEGMENTER forced on, install + launch"
+	@echo "                       (capture testing — Debug stub is too slow to arm the shutter;"
+	@echo "                        plain Release crashes until the real model ships)"
+	@echo "  build-product        ProductRelease build (FIELD_LOOP compiled out) + the product"
+	@echo "                       gate; no device needed"
+	@echo "  deploy-product       build-product against the device, install + launch"
+	@echo "  logs-device          collect + filter device logs (subsystem ie.medata.app) to"
+	@echo "                       stdout and $(LOG_FILE)."
+	@echo "                       LIMIT: post-hoc snapshot of the last LOG_LAST=$(LOG_LAST), not a"
+	@echo "                       live stream — 'log stream' cannot attach to an iOS device and"
+	@echo "                       devicectl has no log subcommand. For live viewing use Console.app"
+	@echo "                       (recipe: docs/agent-notes/device-build-and-test.md)."
+
+worktree:
+	@tools/new_worktree.sh $(name) $(branch)
+
+build:
+	swift build
+
+# Print BOTH totals: XCTest ("Executed N tests") and swift-testing
+# ("Test run with N tests"). An agent once read only the swift-testing line and
+# concluded the suite was 16 tests when it was 313 + 16.
+# pipefail: without it the target's exit status was tee's (always 0), so a
+# failing suite still "passed" by exit code — discovered 2026-08-09 when a red
+# test survived the gate.
+# The log lives under this checkout's own .build/, not a fixed /tmp path: orbit
+# variant runs execute `make test` in several worktrees at once, and a shared
+# path let one run's totals be grepped from another's log (observed 2026-08-08).
+TEST_LOG := $(CURDIR)/.build/medata-swift-test.log
+
+test:
+	@mkdir -p $(dir $(TEST_LOG))
+	set -o pipefail; swift test 2>&1 | tee $(TEST_LOG)
+	@echo ""
+	@echo "---- Test totals (two frameworks — report BOTH) ----"
+	@echo "XCTest:        $$(grep -E 'Executed [0-9]+ tests' $(TEST_LOG) | tail -1 | sed 's/^[[:space:]]*//')"
+	@echo "swift-testing: $$(grep -E 'Test run with [0-9]+ test' $(TEST_LOG) | tail -1 | sed 's/^[^A-Za-z]*//')"
+
+spell:
+	bash tools/check_spelling.sh
+
+# Regenerate the bundled food databases and hold the generator's own gates.
+# Both halves matter: generate.py aborts before writing on a palette drift, a
+# serving-coverage gap, a bad calibration artifact, or a bad loop overlay, and
+# the pytest suite is what proves those gates still fire. The loop overlay at
+# tools/food_db/loop_overlay.json is read by default — no flag — so a plain
+# `make food-db` regenerates WITH every landed loop fix (ml-feedback-loop
+# Req 5.1).
+#
+# CALIBRATION names the HarnessCLI calibrate artifact. The committed databases
+# carry calibration lineage and that artifact is NOT in this repo (it is fitted
+# from the N5k corpus), so a bare `make food-db` aborts rather than silently
+# re-baking the lineage away:
+#   make food-db CALIBRATION=<path to the calibrate artifact>
+#
+# The pytest check runs BEFORE the bake, not after: a missing pytest must not
+# leave freshly regenerated databases sitting behind a gate that never ran.
+food-db:
+	@$(PYTHON) -c 'import pytest' 2>/dev/null || { \
+	  echo "$(PYTHON) has no pytest — rerun as: make food-db PYTHON=<interpreter>"; \
+	  exit 1; }
+	$(PYTHON) tools/food_db/generate.py \
+	  $(if $(CALIBRATION),--calibration-json "$(CALIBRATION)",)
+	$(PYTHON) -m pytest tools/food_db/tests/ -q
+
+# ml-feedback-loop Req 3.4: ONE command for a field session — copy Documents/
+# off the phone into <repo-parent>/medata-corpus/pulls/<date>-<n>/, ingest it
+# (idempotently) into the corpus and its index, and push back the manifest the
+# app deletes its copies from (Decision 14). Every run prints the Req 3.4
+# counts and the single-copy acceptance line.
+#
+# devicectl has no recursive pull, so this is one `copy from` per file; on a
+# large backlog it is the loop's wall-clock bottleneck and device-side slimming
+# is the mitigation, not a faster transport.
+#
+# Ingest an already-copied directory (no device needed):
+#   make field-pull PULL_DIR=<path>
+field-pull:
+	$(PYTHON) tools/field_loop/field_pull.py \
+	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID) \
+	  $(if $(PULL_DIR),--pull-dir "$(PULL_DIR)",--prune)
+
+# The same pull with the capture bundles left on the phone: notes and the DB
+# snapshot only, so feedback written minutes ago is readable in seconds rather
+# than after a multi-hour backlog copy. Use it while work is in flight — on any
+# branch carrying FIELD_LOOP, whether or not the note is about a capture. It
+# never prunes: retiring an outcome's protection is a full pull's business.
+field-notes:
+	$(PYTHON) tools/field_loop/field_pull.py --notes-only \
+	  --device $(DEVICE_UDID) --bundle-id $(BUNDLE_ID)
+
+# ml-feedback-loop Reqs 7.2-7.4 (Decision 23): rebuild the rolling triage
+# ledger at specs/estimation/ml-feedback-loop/triage.md from the corpus index.
+# Merge-preserving — checked items keep their `routed:` record — and it
+# refuses a ledger with uncommitted edits. Routing the unchecked items is the
+# agent step; the contract is in the spec's design.md.
+field-triage:
+	$(PYTHON) tools/field_loop/field_triage.py
+
+# ml-feedback-loop Reqs 4.1-4.4: replay every annotated capture in the corpus
+# through `HarnessCLI diagnose`, attribute each estimation-vs-stated gap, and
+# generate specs/estimation/ml-feedback-loop/cycles/cycle-<n>/tasks.md.
+#
+# The generated file holds ONLY tasks fireable from the corpus and ends in a
+# terminal close task, so a run over it terminates by construction (Decision
+# 15). Work that needs the device or a human is a STOP line, never a task.
+#
+#   make field-diagnose                       # next unused cycle number
+#   make field-diagnose CYCLE=3
+#   make field-diagnose REPLAY_SHA=<sha256>   # stamp version skew explicitly
+field-diagnose:
+	$(PYTHON) tools/field_loop/field_diagnose.py \
+	  $(if $(CYCLE),--cycle $(CYCLE),) \
+	  $(if $(REPLAY_SHA),--replay-checkpoint $(REPLAY_SHA),)
+
+# ml-feedback-loop Req 6: is the gap shrinking, or am I just hoping?
+#
+# Output follows tools/shortlist_hit_rate.py — key=value lines, every figure
+# beside its cell count, `insufficient` below --min-cell. Captures already used
+# as training material are excluded from the evaluation set and BOTH set sizes
+# are printed, so the metric cannot be inflated by evaluating on trained-on
+# captures. Stated values are labelled developer-stated throughout: the weighed
+# surface is benchmark_meals, not this report.
+field-report:
+	$(PYTHON) tools/field_loop/field_report.py \
+	  $(if $(CYCLE),--cycle $(CYCLE),) $(if $(OUT),--out "$(OUT)",)
+
+# ml-feedback-loop Req 5: close a cycle. This is the loop's SOLE COMMITTER
+# (Decision 19) — agent sessions executing a cycle file draft overlay entries
+# into cycles/cycle-<n>/drafts.json and never run git themselves.
+#
+# Each draft passes six guards in order (cause-specific evidence, evidence
+# floor, bounds, one degree of freedom per class, weighed-truth veto, build
+# gates); the first refusal demotes it to a git-diff-style patch in the cycle
+# directory. Survivors land as one commit each, pairing the overlay edit with
+# the regenerated databases, capped per cycle.
+#
+# RUN IT IN A DEDICATED WORKTREE — it refuses a dirty tree and refuses to run
+# on research or main:
+#   make worktree name=field-loop branch=field-loop
+#   make field-close CYCLE=3 REPO=../medata-field-loop APPLIED_AT=2026-08-30
+#
+# PROBE_IMAGE reads one image through every enabled reference adapter and
+# records the result in the verdict, so a broken standby is found before the
+# active adapter needs replacing (Decision 16).
+field-close:
+	@test -n "$(CYCLE)" || { \
+	  echo "usage: make field-close CYCLE=<n> APPLIED_AT=<YYYY-MM-DD> [REPO=<worktree>] [PROBE_IMAGE=<path>]"; \
+	  exit 1; }
+	$(PYTHON) tools/field_loop/field_close.py \
+	  --cycle $(CYCLE) \
+	  --applied-at "$(or $(APPLIED_AT),$(shell date -u +%Y-%m-%d))" \
+	  $(if $(REPO),--repo "$(REPO)",) \
+	  $(if $(PROBE_IMAGE),--probe-image "$(PROBE_IMAGE)",)
+
+# ml-feedback-loop Req 8.4-8.6: turn the captures that carry signal into
+# training and calibration material. Field data joins train and val only —
+# never the frozen leak-free anchor — capped at the configured share of the
+# merged train set, and every consumed capture leaves the alignment metric's
+# evaluation set, which is why the evaluation floor blocks a derivation that
+# would starve a cell.
+#
+# It PREPARES inputs and records the commands; launching a training or
+# calibration run stays a human step.
+#
+#   make field-derive OUT=data/merged_foodseg_foodrec2022 IDENT=anthropic:claude-opus-5:2026-06
+#   make field-derive CALIBRATION_OUT=/tmp/field-calibration
+field-derive:
+	@test -n "$(OUT)$(CALIBRATION_OUT)" || { \
+	  echo "usage: make field-derive [OUT=<merged corpus root>] [CALIBRATION_OUT=<dir>] [IDENT=<model ident>] [CYCLE_DIR=<dir>]"; \
+	  exit 1; }
+	$(PYTHON) tools/field_loop/derive_dataset.py \
+	  $(if $(OUT),--out "$(OUT)",) \
+	  $(if $(CALIBRATION_OUT),--calibration-out "$(CALIBRATION_OUT)",) \
+	  $(if $(CYCLE_DIR),--cycle-dir "$(CYCLE_DIR)",) \
+	  $(if $(IDENT),--ident "$(IDENT)",)
+
+# The Python suite for the whole Mac-side loop, including the rehearsal that
+# runs one full cycle with the device, the agent phase and the commits stubbed
+# (tools/field_loop/tests/test_rehearsal.py).
+#
+# Deliberately NOT folded into `make food-db`: both test directories carry a
+# conftest.py and the field-loop modules import theirs by name, so pytest
+# cannot collect the two directories in a single invocation.
+field-test:
+	@$(PYTHON) -c 'import pytest' 2>/dev/null || { \
+	  echo "$(PYTHON) has no pytest — rerun as: make field-test PYTHON=<interpreter>"; \
+	  exit 1; }
+	$(PYTHON) -m pytest tools/field_loop/tests/ -q
+
+# Replay recorded capture bundles through the offline accuracy harness.
+# Pull bundles off the device first (Files app, or the devicectl recipe in
+# docs/agent-notes/device-build-and-test.md).
+#
+# Device bundles record ground truth as zero — it is back-filled off-device — so
+# a field replay reports every meal as UNSCORED and exits non-zero. That is the
+# harness working correctly, not a failure of the captures.
+harness-accuracy:
+	@test -n "$(FIXTURES)" || { \
+	  echo "usage: make harness-accuracy FIXTURES=<dir> SHA=<checkpoint-sha256> [OUT=<file>]"; \
+	  echo "  SHA is the bundle's bare segmenter stamp, e.g. ab812dc3aa9d — NOT the"; \
+	  echo "  app-facing lineage form 'coreml_ab812dc3aa9d', which fails the load"; \
+	  exit 1; }
+	swift run HarnessCLI accuracy \
+	  --fixtures-dir "$(FIXTURES)" \
+	  --checkpoint-sha256 "$(SHA)" \
+	  $(if $(OUT),--output "$(OUT)",)
+
+build-app:
+	$(XCODEBUILD) -configuration Debug -derivedDataPath $(DERIVED_DEBUG) \
+		MEDATA_BUILD_STAMP='$(BUILD_STAMP)' build
+	@echo "BUILD STAMP: $(BUILD_STAMP)"
+
+deploy-device: build-app
+	xcrun devicectl device install app --device $(DEVICE_UDID) \
+		$(DERIVED_DEBUG)/Build/Products/Debug-iphoneos/MeData.app \
+		|| { echo "install failed (transient CoreDeviceError 4000 is common) — retrying once"; \
+		     xcrun devicectl device install app --device $(DEVICE_UDID) \
+		         $(DERIVED_DEBUG)/Build/Products/Debug-iphoneos/MeData.app; }
+	xcrun devicectl device process launch --device $(DEVICE_UDID) --terminate-existing $(BUNDLE_ID)
+	@echo ""
+	@echo "DEPLOYED BUILD STAMP: $(BUILD_STAMP)"
+	@echo "Verify the app logged the SAME stamp at launch:"
+	@echo "  event=launch buildStamp=$(BUILD_STAMP) ...   (make logs-device, or Console.app)"
+
+# Post-hoc log pull. `log collect --device-name` talks to a paired device;
+# --device-udid would need the HARDWARE udid, which devicectl does not print,
+# so we match by name. The device must be connected, unlocked and trusted.
+# If collect fails with a permissions error, retry the make target with sudo.
+logs-device:
+	rm -rf $(LOG_ARCHIVE)
+	log collect --device-name '$(DEVICE_NAME)' --last $(LOG_LAST) --output $(LOG_ARCHIVE)
+	log show $(LOG_ARCHIVE) --predicate 'subsystem == "ie.medata.app"' \
+		--info --debug --style compact | tee $(LOG_FILE)
+	@echo ""
+	@echo "Filtered log written to $(LOG_FILE) (full archive: $(LOG_ARCHIVE))"
+
+# Plain Release with the real bundled segmenter (no manifest edit). Requires
+# an exported segmenter.mlpackage; the script refuses to build without it.
+deploy-release:
+	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
+	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release.sh
+
+# ProductRelease: Release minus FIELD_LOOP (ml-feedback-loop Req 9). Debug and
+# Release both carry FIELD_LOOP — field is the daily default, matching the
+# always-on capture recorder — so this is the only way to build the product
+# profile. Both targets run the `strings` gate before they claim anything.
+# NOTE: no CLI SWIFT_ACTIVE_COMPILATION_CONDITIONS override is used or
+# accepted here; passing it on the xcodebuild command line REPLACES the whole
+# value (silently dropping DEBUG) and implies a control over the SwiftPM
+# package graph that xcodebuild does not have.
+build-product:
+	INSTALL=0 BUILD_STAMP='$(BUILD_STAMP)' DERIVED_PRODUCT=$(DERIVED_PRODUCT) \
+	bash tools/deploy_product.sh
+
+deploy-product:
+	INSTALL=1 DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) \
+	BUILD_STAMP='$(BUILD_STAMP)' DERIVED_PRODUCT=$(DERIVED_PRODUCT) \
+	bash tools/deploy_product.sh
+
+# Release + stub for capture testing (docs/agent-notes/device-build-and-test.md
+# Path B, automated). Edits Package.swift to force DEV_STUB_SEGMENTER on,
+# builds/installs/launches, and ALWAYS reverts Package.swift (trap in script).
+deploy-release-stub:
+	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
+	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release_stub.sh

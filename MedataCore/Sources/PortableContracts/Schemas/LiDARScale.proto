@@ -1,0 +1,10 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message LiDARScale {
+    float scale_from_depth_over_food = 1;       // mm/pixel at food plane (m/px × 1000 done at adapter)
+    float coverage_percent = 2;                 // 0..100
+    float confidence_high_fraction = 3;         // 0..1
+}
