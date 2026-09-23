@@ -5,6 +5,49 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-09-23 — sesame bread roll on a white plate: six `noFoodPixels` refusals, model `coreml_ab812dc3aa9d`, build `36b570e-dirty-20260923-145702` (Release; the dirty file is the deploy-script fix committed as 76ac807)
+
+One food, no truth taken. A dark, sesame-crusted bread roll on a white plate,
+first on a white stone benchtop, then on a wooden table, single-view LiDAR at
+34–40 cm. Six shutter presses, six refusals, all "no food detected"
+(`estimate.end failure=noFoodPixels`); three further presses lost to
+`worldTrackingDegraded`. Bundles `1790139770341/774406/777960/780725/783509/788143-refused`
+pulled to the session scratchpad; five of the six nadir frames are well framed
+with the plate centred (the third is a stray taken mid-move).
+
+**What actually happened.** Every refusal came from the support-plane fitter's
+empty-mask gate (`supportplane.end failure=emptyFoodMask`), which runs on the
+pre-shutter mask *before* the full-resolution segmenter. Four bundles carry a
+1920×1440 pre-shutter mask with zero 1-bits; two carry none. The bundled Core
+ML model replayed on the Mac against the six nadir PNGs labels 1.2–4.1 % of
+each frame `unknown_food` and nothing as a named food (one stray frame gets
+3.4 % `bread_wholemeal`). `unknown_food` is not a food class, so the
+pre-shutter `BinaryMask` is all zero, the fitter refuses, and the pipeline
+maps that to `noFoodPixels`. The `enforceRecognisedFoodDominance` gate that
+would have said `unrecognisedFood` (bugfix
+unrecognised-food-estimated-as-residual-sliver) never runs — it sits after
+segmentation, and segmentation never ran.
+
+**Two defects, neither in the model's control:**
+
+1. The refusal copy is wrong. An unknown-dominant scene refuses as "no food"
+   from the pre-shutter path, and as "unrecognised food" from the
+   post-segmentation path. The sliver fix ordered only the latter.
+2. Arm-then-refuse. `canShutter` (`CaptureFlowModel.hasUsablePreShutterMask`)
+   checks that a mask exists and is fresh, not that it has any 1-bits, so the
+   shutter arms on an all-zero mask and every press is a guaranteed refusal.
+   The first-shot-nofoodpixels-race fix gated only on presence.
+
+**Model finding.** A crusty sesame roll is out of distribution for
+`bread_white`/`bread_wholemeal` (the corpus bread is sliced). Worth a
+`myfoodrepo-bridge` note when the next data round is planned; not fixable at
+the desk today.
+
+Refused bundles carry no probs, so `make harness-accuracy` skips them
+(`probsSizeMismatch … got: 0`); replay the nadir PNG through `export.py`'s
+`build_reference_chw` + `run_coreml` instead, which is how the numbers above
+were measured.
+
 ## 2026-08-16 — toast and a cereal bowl, model `coreml_ab812dc3aa9d`, build `a33cb5d-20260815-231735` (Release, clean tree)
 
 The `myfoodrepo-bridge` task 7 capture pass. No scale truth taken — the developer
