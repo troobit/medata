@@ -197,8 +197,11 @@ composition only; all behaviour is in the model and is unit-tested.
   0° for nadir and 25° once `firstFrame != nil` (awaiting oblique, §2.2/§2.3).
 - **Nadir shutter is gated on a usable pre-shutter mask (`hasUsablePreShutterMask`).**
   `canShutter` (and the `shutter()` command) refuse the nadir stage until
-  `preShutterSegmenter.latest` exists and is within the same 750 ms freshness
-  bound `performFlow` applies at the nadir-capture instant. Without this, the
+  `preShutterSegmenter.latest` exists, is within the same 750 ms freshness
+  bound `performFlow` applies at the nadir-capture instant, and carries at
+  least one 1-bit (`TimestampedMask.foodPixelCount`; a fresh all-zero mask
+  would arm into a guaranteed `noFoodPixels`, field session 2026-09-23 —
+  the chip then reads "no food in view"). Without the freshness half, the
   first tap of a session could fire while `latest` was still nil →
   `maskAgeMs=-1` → `emptyFoodMask` → `noFoodPixels` refusal; the second tap then
   succeeded. The gate is bypassed when no segmenter is injected (tests / legacy;

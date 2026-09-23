@@ -109,11 +109,11 @@ public enum HeightFieldEstimator {
                         if (1 - qBg) < tauSilhouette { continue }   // not in silhouette
                         let labelC = Int(labels[y * w + x])
                         // Solid food integrates as before; recognised liquid
-                        // classes integrate surface-to-plane (Req 7.3) —
-                        // strictly opt-in via isLiquidClass. unsupported_liquid
-                        // has no palette class and stays skipped.
-                        if !palette.isFoodClass(labelC)
-                            && !palette.isLiquidClass(labelC) { continue }
+                        // classes integrate surface-to-plane (Req 7.3) and
+                        // `unknown_food` integrates as its own class
+                        // (unknown-food-nameable Req 3). unsupported_liquid
+                        // and background stay skipped.
+                        if !palette.isVolumetricClass(labelC) { continue }
                         totalPixels[labelC, default: 0] += 1
 
                         let conf = sampleConfidenceUInt8(
@@ -175,7 +175,7 @@ public enum HeightFieldEstimator {
         var perClassPixelCount: [String: Int] = [:]
         var lowCoverageClasses: [String] = []
         for (cId, total) in totalPixels {
-            guard let name = palette.className(at: cId) else { continue }
+            guard let name = palette.volumetricClassName(at: cId) else { continue }
             let covered = coveredPixels[cId, default: 0]
             let frac = total > 0 ? Float(covered) / Float(total) : 0
             coverage[name] = frac
@@ -194,7 +194,7 @@ public enum HeightFieldEstimator {
         var preBeta: [String: Float] = [:]
         var betaApplied: [String: Float] = [:]
         for (cId, rawMm3) in vRawMm3 {
-            guard let name = palette.className(at: cId) else { continue }
+            guard let name = palette.volumetricClassName(at: cId) else { continue }
             let preCm3 = Float(rawMm3 / 1000.0)
             let beta = inputs.beta.beta(for: name)
             preBeta[name] = preCm3

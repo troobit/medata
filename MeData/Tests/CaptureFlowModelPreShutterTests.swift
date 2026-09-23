@@ -353,7 +353,8 @@ struct CaptureFlowModelPreShutterTests {
         return PreShutterSegmenter.TimestampedMask(
             box: PreShutterSegmenter.MaskBox(mask),
             producedAt: producedAt,
-            source: .preShutterStub
+            source: .preShutterStub,
+            foodPixelCount: mask.pixels.reduce(0) { $0 + Int($1) }
         )
     }
 

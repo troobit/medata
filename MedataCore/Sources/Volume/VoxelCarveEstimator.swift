@@ -175,8 +175,8 @@ public enum VoxelCarveEstimator {
         // prior height for any class that appears only in one view.
         var fallbackVolumesMm3: [Int: Double] = [:]
         var raySkipCount = 0
-        let fallbackClasses1 = inputs.singleViewOnlyClassesView1.filter { palette.isFoodClass($0) }
-        let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter { palette.isFoodClass($0) }
+        let fallbackClasses1 = inputs.singleViewOnlyClassesView1.filter { palette.isCarvableClass($0) }
+        let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter { palette.isCarvableClass($0) }
         for c in fallbackClasses1 {
             let extruded = singleViewExtrudedVolumeMm3(
                 classId: c, view: inputs.view1,
@@ -207,7 +207,7 @@ public enum VoxelCarveEstimator {
         var thresholdDiscarded: Set<String> = []
 
         for (classId, count) in counts {
-            guard let name = palette.foodClassName(at: classId) else { continue }
+            guard let name = palette.volumetricClassName(at: classId) else { continue }
             let mm3 = Double(count) * voxelVolumeMm3
             let preCm3 = Float(mm3 / 1000.0)
             let beta = inputs.beta.beta(for: name)
@@ -224,7 +224,7 @@ public enum VoxelCarveEstimator {
             foodClassesPresent.append(name)
         }
         for (classId, mm3) in fallbackVolumesMm3 {
-            guard let name = palette.foodClassName(at: classId) else { continue }
+            guard let name = palette.volumetricClassName(at: classId) else { continue }
             let preCm3 = Float(mm3 / 1000.0)
             let beta = inputs.beta.beta(for: name)
             let cm3 = preCm3 * beta
@@ -305,11 +305,11 @@ public enum VoxelCarveEstimator {
                     let off = (y * probs.width + x) * probs.classes
                     let qBg = Float(buf[off + bgId])
                     if (1 - qBg) < tauSilhouette { continue }
-                    // argmax over food classes only (no special classes).
+                    // argmax over carvable classes only (solid food, unknown).
                     var bestC = -1
                     var bestQ: Float = -1
                     for c in 0..<probs.classes {
-                        if !palette.isFoodClass(c) { continue }
+                        if !palette.isCarvableClass(c) { continue }
                         if c == liquidId { continue }
                         let q = Float(buf[off + c])
                         if q > bestQ { bestQ = q; bestC = c }

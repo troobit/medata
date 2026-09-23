@@ -7225,16 +7225,21 @@ struct SupportPlaneCorpusMeasurementTests {
         for coneDeg in Self.gravityConeSweep {
             let traces = (byCone[coneDeg] ?? []).flatMap(\.trace)
             let fallbacks = (byCone[coneDeg] ?? []).compactMap(\.fallback)
-            print("  at \(fmt(coneDeg))°: candidates outside the cone"
-                  + " \(traces.filter { $0.outside(coneDeg) }.count)/\(traces.count)"
-                  + " (worst \(fmt(traces.map(\.finalTiltDeg).max() ?? 0))°),"
-                  + " ungated refinements outside"
-                  + " \(traces.filter { $0.refinementTiltDeg > coneDeg }.count)/\(traces.count),"
-                  + " hypothesis rejections"
-                  + " \(traces.map(\.hypothesisRejected).reduce(0, +))/\(traces.map(\.hypothesisDraws).reduce(0, +))"
-                  + " extraction and"
-                  + " \(fallbacks.map(\.hypothesisRejected).reduce(0, +))/\(fallbacks.map(\.hypothesisDraws).reduce(0, +))"
-                  + " fallback")
+            // Split into parts: one concatenated expression here exceeds the
+            // type-checker's time budget on a loaded machine.
+            let outsideCone = traces.filter { $0.outside(coneDeg) }.count
+            let worstTilt = fmt(traces.map(\.finalTiltDeg).max() ?? 0)
+            let ungated = traces.filter { $0.refinementTiltDeg > coneDeg }.count
+            let traceRejected = traces.map(\.hypothesisRejected).reduce(0, +)
+            let traceDraws = traces.map(\.hypothesisDraws).reduce(0, +)
+            let fallbackRejected = fallbacks.map(\.hypothesisRejected).reduce(0, +)
+            let fallbackDraws = fallbacks.map(\.hypothesisDraws).reduce(0, +)
+            var line = "  at \(fmt(coneDeg))°: candidates outside the cone"
+            line += " \(outsideCone)/\(traces.count) (worst \(worstTilt)°),"
+            line += " ungated refinements outside \(ungated)/\(traces.count),"
+            line += " hypothesis rejections \(traceRejected)/\(traceDraws) extraction and"
+            line += " \(fallbackRejected)/\(fallbackDraws) fallback"
+            print(line)
         }
 
         // MARK: the bracket
@@ -14333,16 +14338,21 @@ struct SupportPlaneCorpusMeasurementTests {
             let logSpread = Foundation.log(stat.s)
             let sigmas = logSpread > 0
                 ? stride.map { (Foundation.log($0) - Foundation.log(stat.g)) / logSpread } : nil
-            print("  \(key) n = \(n): geometric mean \(String(format: "%.3f", stat.g))×"
-                  + " ×/÷ \(String(format: "%.3f", stat.s)) over \(stat.k) draws"
-                  + " (range \(String(format: "%.3f", lo))…\(String(format: "%.3f", hi))×,"
-                  + " the centre known to ×/÷"
-                  + " \(String(format: "%.4f", Foundation.exp(stat.se))))"
-                  + " — the stride reads"
-                  + " \(stride.map { String(format: "%.3f", $0) } ?? "n/a")×, at"
-                  + " \(sigmas.map { String(format: "%+.2f", $0) } ?? "n/a") geometric SD"
-                  + " and \(stride.map { $0 > hi || $0 < lo ? "OUTSIDE" : "inside" } ?? "n/a")"
-                  + " the draws' whole range")
+            // Split into parts: one concatenated expression here exceeds the
+            // type-checker's time budget on a loaded machine.
+            let g3 = String(format: "%.3f", stat.g)
+            let s3 = String(format: "%.3f", stat.s)
+            let lo3 = String(format: "%.3f", lo)
+            let hi3 = String(format: "%.3f", hi)
+            let se4 = String(format: "%.4f", Foundation.exp(stat.se))
+            let strideText = stride.map { String(format: "%.3f", $0) } ?? "n/a"
+            let sigmaText = sigmas.map { String(format: "%+.2f", $0) } ?? "n/a"
+            let whereText = stride.map { $0 > hi || $0 < lo ? "OUTSIDE" : "inside" } ?? "n/a"
+            var line = "  \(key) n = \(n): geometric mean \(g3)× ×/÷ \(s3) over \(stat.k) draws"
+            line += " (range \(lo3)…\(hi3)×, the centre known to ×/÷ \(se4))"
+            line += " — the stride reads \(strideText)×, at \(sigmaText) geometric SD"
+            line += " and \(whereText) the draws' whole range"
+            print(line)
             if let s = sigmas { strideSigmas.append((cell, s)) }
             if let s = stride, s > hi || s < lo { strideEscapes += 1 }
         }

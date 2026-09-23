@@ -23,35 +23,50 @@ public struct PostProcessedOutput: Sendable {
     public let candidateEvidence: [String: [CandidateEvidence.Candidate]]?
 }
 
-// Configuration for the deterministic spatial-regularisation (speckle-removal)
-// pass applied to the argmax label map. The pass is a connected-component area
-// filter: any 4-connected region of one class smaller than `minRegionArea`
-// pixels is reassigned to the class that dominates its immediate border. This
-// removes the "linear stripes of spots" speckle without a model retrain.
+// Configuration for the deterministic spatial-regularisation pass applied to
+// the argmax label map. Two rules run in one connected-component scan:
 //
-// A no-op configuration (`minRegionArea <= 1`, i.e. `.disabled`) reproduces the
-// pre-cleanup argmax byte-for-byte: no region of one pixel or fewer can ever be
-// smaller than a threshold of one, so nothing is ever reassigned.
+// 1. Speckle: any 4-connected region of one class smaller than `minRegionArea`
+//    pixels is reassigned to the class that dominates its immediate border.
+//    This removes the "linear stripes of spots" speckle without a model retrain.
+// 2. Sliver absorption (unknown-food-nameable Req 10): a food-like class whose
+//    total pixel count is under `sliverFraction` of the frame's food-like total
+//    is a sliver, and every component of it is reassigned to the dominant
+//    bordering non-sliver class. Per class, not per component, so a food that
+//    sits in many small clumps keeps its row while a thin fringe of one class
+//    on a larger region of another joins whatever it borders.
+//
+// A no-op configuration (`minRegionArea <= 1` and `sliverFraction <= 0`, i.e.
+// `.disabled`) reproduces the pre-cleanup argmax byte-for-byte.
 public struct MaskRegularisationConfig: Sendable, Equatable {
     /// Connected regions strictly smaller than this many pixels are treated as
     /// speckle and reassigned to their dominant bordering class. A value of 0 or
-    /// 1 disables the pass entirely (passthrough).
+    /// 1 disables the speckle rule.
     public let minRegionArea: Int
 
-    public init(minRegionArea: Int) {
+    /// A food-like class (solid, liquid, or unknown_food) whose total pixel
+    /// count is strictly under this fraction of the frame's food-like pixels is
+    /// a sliver and is absorbed into its bordering non-sliver class. Background
+    /// is never a sliver and is a valid absorber; the frame's only food-like
+    /// class is never a sliver. 0 disables the rule (passthrough).
+    public let sliverFraction: Double
+
+    public init(minRegionArea: Int, sliverFraction: Double = 0) {
         self.minRegionArea = minRegionArea
+        self.sliverFraction = sliverFraction
     }
 
     /// Passthrough: identical output to the pre-cleanup argmax.
-    public static let disabled = MaskRegularisationConfig(minRegionArea: 0)
+    public static let disabled = MaskRegularisationConfig(minRegionArea: 0, sliverFraction: 0)
 
     /// Default cleanup strength. 12 pixels removes isolated speckle and thin
     /// stripes while leaving any coherent food silhouette (hundreds+ of pixels)
-    /// untouched.
-    public static let standard = MaskRegularisationConfig(minRegionArea: 12)
+    /// untouched. The sliver fraction starts at 0.10 and is fixed by the N5k
+    /// measurement in unknown-food-nameable task 3.
+    public static let standard = MaskRegularisationConfig(minRegionArea: 12, sliverFraction: 0.10)
 
     /// True when the pass would reassign nothing regardless of input.
-    public var isPassthrough: Bool { minRegionArea <= 1 }
+    public var isPassthrough: Bool { minRegionArea <= 1 && sliverFraction <= 0 }
 }
 
 public enum SegmenterPostProcessor {
@@ -207,6 +222,7 @@ public enum SegmenterPostProcessor {
         let cleanedArgmax = regulariseLabelMap(
             argmaxData,
             width: originalWidth, height: originalHeight,
+            palette: palette,
             config: regularisation
         )
 
@@ -242,21 +258,30 @@ public enum SegmenterPostProcessor {
     }
 }
 
-// Deterministic connected-component speckle filter over a UInt8 label map.
+// Deterministic connected-component regularisation over a UInt8 label map.
 //
-// Every 4-connected region of a single class that is strictly smaller than
-// `config.minRegionArea` is reassigned to the class that occupies the most
-// pixels on its immediate 4-neighbour border. Regions are discovered by a
-// deterministic scan in raster order with an explicit LIFO flood fill, so the
-// same input always produces the same output (no hashing, no float ordering, no
-// concurrency). The reassignment reads the ORIGINAL labels for every region, so
-// the result is independent of the order in which regions are processed.
+// Regions are discovered by a deterministic scan in raster order with an
+// explicit LIFO flood fill, so the same input always produces the same output
+// (no hashing, no float ordering, no concurrency). Every reassignment reads the
+// ORIGINAL labels, so the result is independent of the order in which regions
+// are processed. Ties between bordering classes resolve to the lowest class id.
 //
-// A passthrough config (`minRegionArea <= 1`) returns the input Data unchanged.
+// Per region, in order:
+// 1. Sliver rule — if the region's class is a sliver (see
+//    `MaskRegularisationConfig.sliverFraction`) and it borders at least one
+//    non-sliver class, it is reassigned to the dominant such class.
+// 2. Speckle rule — otherwise, if the region is smaller than
+//    `config.minRegionArea`, it is reassigned to its dominant bordering class of
+//    any kind. A sliver region bordered only by other slivers therefore falls
+//    through to exactly today's speckle behaviour, which keeps
+//    `sliverFraction: 0` byte-identical to the speckle-only pass.
+//
+// A passthrough config returns the input Data unchanged.
 func regulariseLabelMap(
     _ labels: Data,
     width: Int,
     height: Int,
+    palette: ClassPalette,
     config: MaskRegularisationConfig
 ) -> Data {
     guard !config.isPassthrough, width > 0, height > 0 else { return labels }
@@ -265,10 +290,57 @@ func regulariseLabelMap(
 
     let original = [UInt8](labels)
     var output = original
+
+    // Sliver set from a single histogram of the original labels. Only
+    // food-like classes can be slivers; a frame with one food-like class has
+    // none.
+    var isSliver = [Bool](repeating: false, count: 256)
+    if config.sliverFraction > 0 {
+        var histogram = [Int](repeating: 0, count: 256)
+        for label in original { histogram[Int(label)] += 1 }
+        var foodLikeTotal = 0
+        var foodLikeClasses = 0
+        for cls in 0..<256 where histogram[cls] > 0 && palette.isVolumetricClass(cls) {
+            foodLikeTotal += histogram[cls]
+            foodLikeClasses += 1
+        }
+        if foodLikeClasses > 1 {
+            let threshold = config.sliverFraction * Double(foodLikeTotal)
+            for cls in 0..<256 where histogram[cls] > 0 && palette.isVolumetricClass(cls) {
+                isSliver[cls] = Double(histogram[cls]) < threshold
+            }
+        }
+    }
+
     var visited = [Bool](repeating: false, count: count)
-    // Reusable scratch buffer for the pixels of the current region.
+    // Reusable scratch buffers for the pixels of the current region.
     var region = [Int]()
     var stack = [Int]()
+
+    // Dominant class among the region's differing 4-neighbours in the ORIGINAL
+    // labels, restricted to classes accepted by `absorbs`. Ties resolve to the
+    // lowest class id. nil when no accepted neighbour exists.
+    func dominantBorder(of region: [Int], label: UInt8, absorbs: (UInt8) -> Bool) -> UInt8? {
+        var borderCounts = [Int: Int]()
+        func tally(_ nl: UInt8) {
+            if nl != label && absorbs(nl) { borderCounts[Int(nl), default: 0] += 1 }
+        }
+        for p in region {
+            let x = p % width
+            let y = p / width
+            if x > 0 { tally(original[p - 1]) }
+            if x < width - 1 { tally(original[p + 1]) }
+            if y > 0 { tally(original[p - width]) }
+            if y < height - 1 { tally(original[p + width]) }
+        }
+        var bestClass = -1
+        var bestCount = 0
+        for (cls, cnt) in borderCounts where cnt > bestCount || (cnt == bestCount && cls < bestClass) {
+            bestCount = cnt
+            bestClass = cls
+        }
+        return bestClass >= 0 ? UInt8(bestClass) : nil
+    }
 
     for start in 0..<count where !visited[start] {
         let label = original[start]
@@ -300,30 +372,19 @@ func regulariseLabelMap(
             }
         }
 
+        // Sliver rule: absorb into the dominant bordering NON-sliver class.
+        if isSliver[Int(label)],
+           let replacement = dominantBorder(of: region, label: label, absorbs: { !isSliver[Int($0)] }) {
+            for p in region { output[p] = replacement }
+            continue
+        }
+
         if region.count >= config.minRegionArea { continue }
 
-        // Sub-threshold speckle: reassign to the dominant bordering class from
-        // the ORIGINAL labels. Ties resolve to the lowest class id for
-        // determinism.
-        var borderCounts = [Int: Int]()
-        for p in region {
-            let x = p % width
-            let y = p / width
-            if x > 0 { let nl = original[p - 1]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
-            if x < width - 1 { let nl = original[p + 1]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
-            if y > 0 { let nl = original[p - width]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
-            if y < height - 1 { let nl = original[p + width]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
-        }
-        // A region touching no differing neighbour (e.g. the whole image is one
+        // Sub-threshold speckle: reassign to the dominant bordering class. A
+        // region touching no differing neighbour (e.g. the whole image is one
         // class) has no dominant border — leave it as-is.
-        guard !borderCounts.isEmpty else { continue }
-        var bestClass = -1
-        var bestCount = 0
-        for (cls, cnt) in borderCounts where cnt > bestCount || (cnt == bestCount && cls < bestClass) {
-            bestCount = cnt
-            bestClass = cls
-        }
-        let replacement = UInt8(bestClass)
+        guard let replacement = dominantBorder(of: region, label: label, absorbs: { _ in true }) else { continue }
         for p in region { output[p] = replacement }
     }
 

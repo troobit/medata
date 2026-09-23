@@ -39,6 +39,26 @@ public struct ClassPalette: Sendable, Equatable {
         classId >= foodClasses.count && classId < foodClasses.count + liquidClasses.count
     }
 
+    // Every class that carries volume: solid food, recognised liquid, or the
+    // `unknown_food` sentinel (unknown-food-nameable Req 1–3). This is what
+    // the mask builders, the coverage gate and the height-field integrator
+    // count as food-bearing. `isFoodClass` keeps its solid-only meaning for
+    // the occlusion and low-coverage rules.
+    public func isVolumetricClass(_ classId: Int) -> Bool {
+        isFoodClass(classId) || isLiquidClass(classId) || classId == unknownFood
+    }
+
+    // The two-view carve never integrates liquids (a glass is not a
+    // silhouette-bounded solid), so it widens from solid food to solid food
+    // plus unknown, and no further.
+    public func isCarvableClass(_ classId: Int) -> Bool {
+        isFoodClass(classId) || classId == unknownFood
+    }
+
+    // Class-id string the pipeline, review and persistence use for the
+    // unknown row. Not a database class; Macros synthesises its row.
+    public static let unknownFoodClassId = "unknown_food"
+
     public func foodClassName(at classId: Int) -> String? {
         guard isFoodClass(classId) else { return nil }
         return foodClasses[classId]
@@ -52,6 +72,13 @@ public struct ClassPalette: Sendable, Equatable {
     // Name for any solid or liquid class index; nil for the sentinels.
     public func className(at classId: Int) -> String? {
         foodClassName(at: classId) ?? liquidClassName(at: classId)
+    }
+
+    // Name for any volumetric class index: solid, liquid, or `unknown_food`;
+    // nil for background and unsupported_liquid.
+    public func volumetricClassName(at classId: Int) -> String? {
+        if classId == unknownFood { return Self.unknownFoodClassId }
+        return className(at: classId)
     }
 }
 

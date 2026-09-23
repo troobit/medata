@@ -625,7 +625,7 @@ struct MealReviewView: View {
         if present.contains(palette.unknownFood) {
             out.append(AccessorySignal(
                 id: "unknown", symbol: "questionmark.circle.fill",
-                shortLabel: "Unknown region", copy: "Unknown region · counted as unknown carbs"
+                shortLabel: "Unknown food", copy: "Unknown food · name it to count its carbs"
             ))
         }
         if present.contains(palette.unsupportedLiquid) {
@@ -745,7 +745,14 @@ struct MealReviewView: View {
 
     @ViewBuilder
     private func amountControl(_ food: ReviewFood) -> some View {
-        if editingClassId == food.classId {
+        if food.isUnnamed {
+            // No density to step by until the row has a class (Req 6):
+            // the measured volume stands in for the amount.
+            Text("\(Int(food.predicted.volumeCm3.rounded())) cm³")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                .accessibilityIdentifier("review.row.\(food.classId).volume")
+        } else if editingClassId == food.classId {
             ServingGramEditor(
                 text: $gramEditText,
                 grams: food.currentMassG,
@@ -770,19 +777,21 @@ struct MealReviewView: View {
 
     @ViewBuilder
     private func rowButtons(_ food: ReviewFood) -> some View {
-        ServingStepButton(
-            symbol: "minus",
-            enabled: food.currentMassG > 0,
-            idPrefix: "review.row.\(food.classId)"
-        ) {
-            step(food, direction: -1)
-        }
-        ServingStepButton(
-            symbol: "plus",
-            enabled: food.currentMassG < ServingStepLogic.maxRowGrams,
-            idPrefix: "review.row.\(food.classId)"
-        ) {
-            step(food, direction: 1)
+        if !food.isUnnamed {
+            ServingStepButton(
+                symbol: "minus",
+                enabled: food.currentMassG > 0,
+                idPrefix: "review.row.\(food.classId)"
+            ) {
+                step(food, direction: -1)
+            }
+            ServingStepButton(
+                symbol: "plus",
+                enabled: food.currentMassG < ServingStepLogic.maxRowGrams,
+                idPrefix: "review.row.\(food.classId)"
+            ) {
+                step(food, direction: 1)
+            }
         }
         relabelButton(food)
         rejectButton(food)

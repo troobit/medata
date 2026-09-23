@@ -84,14 +84,19 @@ public enum Macros {
     // Compute macros for all food classes present in perClassVolumesCm3.
     //
     // Classes with no database entry are skipped (logged at debug level via assertion).
-    // unknown_food volumes contribute 0 carbs with calibrationStatus = .uncalibratedUnity
-    // (Req 8.6), which the caller should detect and flag separately.
+    // `unknown_food` is the one class with no database row that still gets a
+    // row here: volume only, 0 g, β 1, `.uncalibratedUnity` (pipeline Req 8.6,
+    // unknown-food-nameable Req 4). Review names it or rejects it.
     //
     // `liquidClassIds` marks entries as liquid (the palette's coarse liquid
     // classes — liquid-ness is a palette property, not a DB column). A liquid
     // entry here came through the depth-integrated path, which over-reads
     // (Req 7.3), so it raises `liquidOverEstimate`; `liquidOverEstimate: true`
     // threads the same flag from the LiquidResolver vessel path (Req 7.4/8.2).
+    // Mirrors `ClassPalette.unknownFoodClassId` (Segmentation is not a
+    // dependency of this module).
+    public static let unknownFoodClassId = "unknown_food"
+
     public static func compute(
         perClassVolumesCm3: [String: Float],
         database: FoodDatabase,
@@ -107,6 +112,17 @@ public enum Macros {
         var perClass: [String: PerClassMacros] = [:]
 
         for (classId, volumeCm3) in perClassVolumesCm3 {
+            if classId == Macros.unknownFoodClassId {
+                // Food the segmenter could not name (unknown-food-nameable
+                // Req 4): the row carries its measured volume so review can
+                // relabel it, but no mass or macros until it has a class.
+                perClass[classId] = PerClassMacros(
+                    volumeCm3: volumeCm3, massG: 0, carbsG: 0,
+                    densitySource: "unknown", coefficientSource: "unknown",
+                    betaUsed: 1, betaStatus: .uncalibratedUnity
+                )
+                continue
+            }
             guard let entry = database.entry(for: classId, edition: edition) else {
                 // Class not in database — skip silently (flagged at Pipeline level).
                 continue

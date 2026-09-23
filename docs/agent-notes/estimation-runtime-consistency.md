@@ -80,9 +80,14 @@ Stage F (segmentation), before β/Volume, for BOTH capture paths.
 - **Threshold**: `minimumFoodCoverageFraction = 0.001` (0.1 % of frame pixels,
   ~2 765 px at 1920×1440). Real plates run 1–8 % of the frame (device masks
   are 92–99 % background), so genuine meals never trip it. Coverage counts
-  pixels whose argmax is a food OR recognised liquid class (the estimators'
-  integration predicates); background/unknown_food/unsupported_liquid do not
-  count. Exactly-at-threshold accepts.
+  pixels whose argmax is a volumetric class (`ClassPalette.isVolumetricClass`:
+  solid food, recognised liquid, or `unknown_food` — the height-field
+  integration predicate); background/unsupported_liquid do not count.
+  Exactly-at-threshold accepts. Since unknown-food-nameable (2026-09-23)
+  `unknown_food` is carried through as a row rather than refused: the
+  `enforceRecognisedFoodDominance` gate and its `unrecognisedFood` throw are
+  gone (the enum case stays for decoding history). The two-view carve widens
+  through `isCarvableClass` (solid + unknown, never liquid) instead.
 - **Refusal**: reuses the EXISTING `EstimationFailure.noFoodPixels` (§5 edge
   case 3 "zero food pixels" extends to "too few to estimate") — no new enum
   case, same user-facing message.

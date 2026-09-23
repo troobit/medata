@@ -107,3 +107,36 @@ Per class rather than per component is what makes it safe: many small pieces of 
 - Two adjacent slivers with no other border stay as they are.
 
 ---
+
+## Decision 4: The device pass runs on the provisional sliver fraction; the measurement gates the merge
+
+**Date**: 2026-09-23
+**Status**: accepted
+
+### Context
+
+Task 3 (the N5k mean-IoU and carb-MAE sweep over 0, 0.05 and 0.10) is hours of harness time on the Mac. Task 8, the sesame-roll device pass, was blocked on it. The device session on 2026-09-23 exists to remove blockers to food recognition and recording, and the roll is the only field case in hand.
+
+### Decision
+
+Task 8 is blocked by tasks 6 and 7 only. The device pass runs with `MaskRegularisationConfig.standard` carrying the provisional 0.10. Task 3 stays open and gates the merge of `research` into `main`; its result is written into Decision 3 in place (repo `decision_mode` is `overwrite`).
+
+### Rationale
+
+The device pass answers a different question from the measurement: does an unknown-dominant capture reach review, name, and record. The fraction affects which fringes merge, not whether the row exists. Waiting on the sweep would spend the phone-in-hand session idle.
+
+### Alternatives Considered
+
+- **Keep task 8 blocked on task 3**: Honest to Req 10's "before ships" wording - Rejected because the session would end with no field evidence for the whole feature.
+- **Device pass at fraction 0**: Passthrough, nothing provisional - Rejected because the sliver bugfix's case would return on the phone as a confident named row, which is the failure the rule exists to prevent.
+
+### Consequences
+
+**Positive:**
+- The session yields the field trail for Req 1–9 today.
+- The measurement still lands before any user-facing build.
+
+**Negative:**
+- The field note for 2026-09-23 records a build whose sliver constant may change.
+
+---

@@ -66,6 +66,12 @@ struct ReviewFood: Identifiable {
         flags.classCorrected ? (corrected?.classID ?? predicted.classID) : predicted.classID
     }
 
+    // Food the segmenter could not name (unknown-food-nameable Req 6): the
+    // row shows its volume and no amount controls until it is relabelled.
+    var isUnnamed: Bool {
+        currentClassId == ClassPalette.unknownFoodClassId
+    }
+
     var currentMassG: Double {
         if flags.rejected { return 0 }
         return corrected?.massG ?? predicted.massG
@@ -844,6 +850,7 @@ final class MealReviewModel {
     }
 
     private static func paletteIndex(of classId: String, in palette: ClassPalette) -> Int? {
+        if classId == ClassPalette.unknownFoodClassId { return palette.unknownFood }
         if let index = palette.foodClasses.firstIndex(of: classId) { return index }
         if let index = palette.liquidClasses.firstIndex(of: classId) {
             return palette.foodClasses.count + index

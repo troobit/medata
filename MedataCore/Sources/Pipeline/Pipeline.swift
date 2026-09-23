@@ -341,15 +341,14 @@ public struct Pipeline: Sendable {
         diagnostics.debugNadirSegmentation = nadirSeg
         let palette = nadirSeg.probabilities.palette
 
-        // Fail-closed gates on the nadir argmax, guarding both capture paths —
-        // the nadir mask is the primary silhouette for each. Order matters:
-        // a dominant `unknown_food` region refuses `unrecognisedFood` first
-        // (the model saw food it cannot name — bugfix
-        // unrecognised-food-estimated-as-residual-sliver); only then does a
-        // near-empty recognised mask surface as `noFoodPixels`
+        // Fail-closed gate on the nadir argmax, guarding both capture paths —
+        // the nadir mask is the primary silhouette for each. A near-empty
+        // food-like mask surfaces as `noFoodPixels`
         // (estimation-runtime-consistency), so a speckle-only mask refuses
         // legibly rather than emitting a wildly variable carb number.
-        try enforceRecognisedFoodDominance(argmax: nadirSeg.argmax, palette: palette)
+        // `unknown_food` counts as food-like here: an unnamed region is
+        // carried through as a row the user names in review
+        // (unknown-food-nameable Req 1), not refused.
         try enforceMinimumFoodCoverage(argmax: nadirSeg.argmax, palette: palette)
 
         // β-correction table from database at current edition.

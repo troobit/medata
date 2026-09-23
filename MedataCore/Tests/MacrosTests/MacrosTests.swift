@@ -256,6 +256,27 @@ final class MacrosTests: XCTestCase {
         XCTAssertEqual(result.totalCarbsG, 33.6, accuracy: 1e-3)
         XCTAssertEqual(result.perClass.count, 2)
     }
+
+    // MARK: - unknown-food-nameable Req 4: the unknown row
+
+    func testUnknownFoodRowCarriesVolumeAndNothingElse() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0, "unknown_food": 80.0],
+            database: db,
+            edition: "CoFID 2024"
+        )
+        let row = try! XCTUnwrap(result.perClass["unknown_food"])
+        XCTAssertEqual(row.volumeCm3, 80.0)
+        XCTAssertEqual(row.massG, 0)
+        XCTAssertEqual(row.carbsG, 0)
+        XCTAssertEqual(row.betaUsed, 1)
+        XCTAssertEqual(row.betaStatus, .uncalibratedUnity)
+        XCTAssertEqual(row.densitySource, "unknown")
+        XCTAssertFalse(row.isLiquid)
+        // Contributes nothing to the meal total.
+        XCTAssertEqual(result.totalCarbsG, 33.6, accuracy: 1e-3)
+        XCTAssertEqual(result.perClass.count, 2)
+    }
 }
 
 // MARK: - Stub

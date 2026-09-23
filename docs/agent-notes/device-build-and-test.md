@@ -366,10 +366,11 @@ prediction has come true — do not build process tooling around what remains
 The shutter will not arm in a Debug build, so you cannot record a meal from a plain
 Xcode Run.
 
-- The nadir shutter requires a pre-shutter food mask **≤ 750 ms old**
-  (`App/CaptureFlowModel.swift` `hasUsablePreShutterMask`, ~L165). This gate is
-  correct — it prevents the first-shot `noFoodPixels` race (firing before any mask
-  exists).
+- The nadir shutter requires a pre-shutter food mask **≤ 750 ms old** with at
+  least one food-like pixel (`App/Pages/Capture/CaptureFlowModel.swift`
+  `hasUsablePreShutterMask`). This gate is correct — it prevents the first-shot
+  `noFoodPixels` race (firing before any mask exists) and the arm-then-refuse
+  on an empty scene ("no food in view" chip).
 - In a **Debug** build the stub segmenter runs at `-Onone` and takes **17–21 s per
   cycle** (`event=preshutter.mask.update … latencyMs≈20000`,
   `preshutter.cadence.miss actualMs≈20000`). So the latest mask is older than
