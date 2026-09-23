@@ -33,8 +33,10 @@ fi
 # the app reports as `segmenterSource = coreml_<id>` on every capture. Printed
 # here because swapping the bundled model is a plain `cp -R` that leaves no
 # other trace — the build stamp identifies the BUILD, not the model in it.
+# `|| true` because the pipeline exits 1 on an unstamped model and, under
+# `set -eo pipefail`, that would kill the script before the fallback below.
 MODEL_VERSION="$(strings -a "$MODEL_PATH/Data/com.apple.CoreML/model.mlmodel" 2>/dev/null \
-    | grep -A1 -x 'medata\.modelVersion' | tail -1)"
+    | grep -A1 -x 'medata\.modelVersion' | tail -1 || true)"
 [ -n "$MODEL_VERSION" ] || MODEL_VERSION="unstamped (exported without --checkpoint)"
 echo "BUNDLED SEGMENTER: $MODEL_VERSION"
 
