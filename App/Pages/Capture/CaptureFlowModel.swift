@@ -228,9 +228,22 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // callers, App.swift always passes one) the gate is bypassed so the shutter
     // is never permanently disabled.
     private var hasUsablePreShutterMask: Bool {
+        hasFreshPreShutterMask && !preShutterMaskIsEmpty
+    }
+
+    private var hasFreshPreShutterMask: Bool {
         guard let producer = preShutterSegmenter else { return true }
         guard let ts = producer.latest else { return false }
         return millisecondsBetween(ts.producedAt, ContinuousClock.now) <= 750
+    }
+
+    // A fresh mask with no food-like pixels would arm the shutter into a
+    // guaranteed `noFoodPixels` refusal (field session 2026-09-23), so it
+    // keeps the shutter disarmed and names the gate instead
+    // (unknown-food-nameable Req 11).
+    private var preShutterMaskIsEmpty: Bool {
+        guard let ts = preShutterSegmenter?.latest else { return false }
+        return ts.foodPixelCount == 0
     }
 
     // True iff the live tilt is within the oblique hard cap window
@@ -257,7 +270,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             return "wait"
         case .ready(let snapshot):
             if !distanceGateOK(snapshot) { return "too far" }
-            if firstFrame == nil, !hasUsablePreShutterMask { return "wait" }
+            if firstFrame == nil, !hasFreshPreShutterMask { return "wait" }
+            if firstFrame == nil, preShutterMaskIsEmpty { return "no food in view" }
             return nil
         default:
             return nil

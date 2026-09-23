@@ -151,7 +151,7 @@ enum PipelineBridges {
         }
     }
 
-    // MARK: - BinaryMask from ArgmaxMap (food pixels only)
+    // MARK: - BinaryMask from ArgmaxMap (food-like pixels: solid, liquid, unknown)
 
     static func foodMask(from argmax: ArgmaxMap, palette: ClassPalette) -> BinaryMask {
         var pixels = [UInt8](repeating: 0, count: argmax.width * argmax.height)
@@ -159,7 +159,7 @@ enum PipelineBridges {
             let buf = raw.bindMemory(to: UInt8.self).baseAddress!
             for i in 0..<(argmax.width * argmax.height) {
                 let c = Int(buf[i])
-                pixels[i] = palette.isFoodClass(c) ? 1 : 0
+                pixels[i] = palette.isVolumetricClass(c) ? 1 : 0
             }
         }
         return BinaryMask(pixels: pixels, width: argmax.width, height: argmax.height)

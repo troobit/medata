@@ -58,8 +58,8 @@ func computeFoodRegionCoverage(
 
 // MARK: - Fail-closed food-coverage gate (estimation-runtime-consistency)
 
-// Minimum fraction of frame pixels that must carry a food or recognised liquid
-// argmax label for the estimate to proceed. Below this the volume→β→carbs
+// Minimum fraction of frame pixels that must carry a food-like argmax label
+// (solid, recognised liquid, or `unknown_food`) for the estimate to proceed. Below this the volume→β→carbs
 // chain is driven by a handful of noisy depth samples and β multiplies that
 // noise straight into the carb number, so run-to-run readings of the same
 // plate vary wildly. 0.001 (0.1 % of the frame, ~2 765 px at 1920×1440) sits
@@ -67,9 +67,9 @@ func computeFoodRegionCoverage(
 // so real plates are unaffected while speckle-only masks refuse legibly.
 let minimumFoodCoverageFraction: Float = 0.001
 
-// Fraction of frame pixels whose argmax label is a food or recognised liquid
-// class — exactly the pixels eligible to contribute volume in either estimator
-// (HeightFieldEstimator / VoxelCarveEstimator integration predicates).
+// Fraction of frame pixels whose argmax label is a volumetric class — solid
+// food, recognised liquid, or `unknown_food` — the pixels the height-field
+// estimator integrates (unknown-food-nameable Req 1).
 func foodCoverageFraction(argmax: ArgmaxMap, palette: ClassPalette) -> Float {
     let total = argmax.width * argmax.height
     guard total > 0 else { return 0 }
@@ -78,7 +78,7 @@ func foodCoverageFraction(argmax: ArgmaxMap, palette: ClassPalette) -> Float {
         let buf = raw.bindMemory(to: UInt8.self).baseAddress!
         for i in 0..<total {
             let c = Int(buf[i])
-            if palette.isFoodClass(c) || palette.isLiquidClass(c) { food += 1 }
+            if palette.isVolumetricClass(c) { food += 1 }
         }
     }
     return Float(food) / Float(total)
@@ -90,52 +90,5 @@ func foodCoverageFraction(argmax: ArgmaxMap, palette: ClassPalette) -> Float {
 func enforceMinimumFoodCoverage(argmax: ArgmaxMap, palette: ClassPalette) throws {
     if foodCoverageFraction(argmax: argmax, palette: palette) < minimumFoodCoverageFraction {
         throw EstimationFailure.noFoodPixels
-    }
-}
-
-// MARK: - Recognised-food dominance gate
-// (bugfix unrecognised-food-estimated-as-residual-sliver)
-
-// Floor below which an `unknown_food` region never trips the dominance gate,
-// so a genuinely empty scene still refuses `noFoodPixels` downstream. 1 % of
-// the frame (~27 650 px at 1920×1440) is a real food-sized region — an order
-// of magnitude above edge speckle, and below the ~10 % a plated
-// out-of-palette food measured in the field captures.
-let unknownFoodRefuseFloorFraction: Float = 0.01
-
-// The unknown_food fraction must strictly exceed this multiple of the
-// recognised food+liquid fraction to refuse — i.e. refuse only when > 80 % of
-// the food-like area is food the model cannot name. An evenly mixed plate
-// (half recognised) keeps its partial estimate.
-let unknownFoodDominanceRatio: Float = 4
-
-// Refuses with `unrecognisedFood` when the segmenter's `unknown_food`
-// sentinel dominates the recognised classes: the model saw food it cannot
-// name, so an estimate would be driven by a residual sliver (or nothing) and
-// misreport the meal. Runs BEFORE `enforceMinimumFoodCoverage` so the
-// unknown-dominant case wins over the misleading `noFoodPixels` copy.
-// Boundary semantics match the sibling gate: exactly at the floor or exactly
-// at the ratio accepts.
-func enforceRecognisedFoodDominance(argmax: ArgmaxMap, palette: ClassPalette) throws {
-    let total = argmax.width * argmax.height
-    guard total > 0 else { return }
-    var recognised = 0
-    var unknown = 0
-    argmax.pixels.withUnsafeBytes { raw in
-        let buf = raw.bindMemory(to: UInt8.self).baseAddress!
-        for i in 0..<total {
-            let c = Int(buf[i])
-            if palette.isFoodClass(c) || palette.isLiquidClass(c) {
-                recognised += 1
-            } else if c == palette.unknownFood {
-                unknown += 1
-            }
-        }
-    }
-    let unknownFraction = Float(unknown) / Float(total)
-    let recognisedFraction = Float(recognised) / Float(total)
-    if unknownFraction >= unknownFoodRefuseFloorFraction,
-       unknownFraction > unknownFoodDominanceRatio * recognisedFraction {
-        throw EstimationFailure.unrecognisedFood
     }
 }

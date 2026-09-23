@@ -50,7 +50,7 @@ public enum MaskMatcher {
             let buf = raw.bindMemory(to: UInt8.self).baseAddress!
             for i in 0..<(map.width * map.height) {
                 let c = Int(buf[i])
-                if palette.isFoodClass(c) { out.insert(c) }
+                if palette.isCarvableClass(c) { out.insert(c) }
             }
         }
         return out

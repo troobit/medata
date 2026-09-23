@@ -576,12 +576,15 @@ struct SettingsView: View {
             ("white_rice", 150, 180, 50.4, 4.7, 0.5, .calibrated),
             ("pasta", 130, 140, 43.4, 7.3, 1.3, .uncalibratedPooled),
             ("chicken", 110, 120, 0.0, 29.0, 7.6, .calibrated),
-            ("broccoli", 110, 80, 5.6, 3.4, 0.7, .calibrated)
+            ("broccoli", 110, 80, 5.6, 3.4, 0.7, .calibrated),
+            // Food the segmenter could not name (unknown-food-nameable Req 6):
+            // volume only, unity β, nothing counted until it is relabelled.
+            ("unknown_food", 95, 0, 0.0, 0.0, 0.0, .uncalibratedUnity)
         ]
-        let beta: Float = 0.9
         var macros = PbMacroResult()
         var volumes = PbVolumeResult()
         for (classId, volume, mass, carbs, protein, fat, status) in foods {
+            let beta: Float = classId == ClassPalette.unknownFoodClassId ? 1 : 0.9
             var perClass = PbPerClassMacros()
             perClass.volumeCm3 = volume
             perClass.massG = mass

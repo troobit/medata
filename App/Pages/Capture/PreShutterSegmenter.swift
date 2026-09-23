@@ -61,6 +61,10 @@ final class PreShutterSegmenter: PreShutterMaskSource {
         let box: MaskBox
         let producedAt: ContinuousClock.Instant
         let source: Source
+        /// Count of 1-bits in the mask. Zero means the live frame holds no
+        /// food-like pixels, and the shutter stays disarmed on it
+        /// (unknown-food-nameable Req 11).
+        let foodPixelCount: Int
     }
 
     enum Source: String, Sendable {
@@ -277,10 +281,11 @@ final class PreShutterSegmenter: PreShutterMaskSource {
             }
         }
         lastPublishedAt = now
-        latest = TimestampedMask(box: MaskBox(mask), producedAt: now, source: source)
-        #if DEBUG
         var foodPixels = 0
         for byte in mask.pixels where byte != 0 { foodPixels += 1 }
+        latest = TimestampedMask(box: MaskBox(mask), producedAt: now, source: source,
+                                 foodPixelCount: foodPixels)
+        #if DEBUG
         log.debug(
             """
             event=preshutter.mask.update foodPixels=\(foodPixels, privacy: .public) \
@@ -300,7 +305,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
             let buf = raw.bindMemory(to: UInt8.self).baseAddress!
             for i in 0..<(argmax.width * argmax.height) {
                 let c = Int(buf[i])
-                pixels[i] = palette.isFoodClass(c) ? 1 : 0
+                pixels[i] = palette.isVolumetricClass(c) ? 1 : 0
             }
         }
         return BinaryMask(pixels: pixels, width: argmax.width, height: argmax.height)
