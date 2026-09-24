@@ -155,7 +155,11 @@ internal func sampleConfidenceUInt8(
                  max(0, Int((Float(colourX) + 0.5) * Float(depth.width) / Float(colourWidth))))
     let dy = min(depth.height - 1,
                  max(0, Int((Float(colourY) + 0.5) * Float(depth.height) / Float(colourHeight))))
-    return depth.confidenceBytes[dy * depth.width + dx]
+    // A depth map with no confidence plane (Nutrition5k's RealSense depth has
+    // none; ARKit's always does) reads as fully confident rather than trapping.
+    let i = dy * depth.width + dx
+    guard i < depth.confidenceBytes.count else { return 255 }
+    return depth.confidenceBytes[i]
 }
 
 // Bilinear depth sample (mm). Returns nil when out of range.

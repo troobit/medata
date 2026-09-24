@@ -140,7 +140,9 @@ public enum FoodRegionGrowth {
                 let z = readDepthMm(depth, x: dx, y: dy)
                 zMm[i] = z
                 guard z > 0, z.isFinite else { continue }
-                guard Float(depth.confidenceBytes[i]) / 255 >= confFloor else { continue }
+                // No confidence plane (Nutrition5k) reads as fully confident.
+                let conf: Float = i < depth.confidenceBytes.count ? Float(depth.confidenceBytes[i]) : 255
+                guard conf / 255 >= confFloor else { continue }
                 admissible[i] = cellClearsFloor(
                     dx: dx, dy: dy, depthMm: z, width: w, height: h,
                     depthWidth: dw, depthHeight: dh, intrinsics: intrinsics,
