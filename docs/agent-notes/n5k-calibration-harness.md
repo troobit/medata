@@ -291,3 +291,25 @@ report and exits 0. Details: `ml-feedback-loop.md`, "`HarnessCLI diagnose`".
   nadir fixtures use gravity (0,0,−1), so the fitter returns n̂ = (0,0,−1)
   with positive `distanceMm`; the volume integrators only use |z| magnitudes,
   so the sign convention is safe.
+
+## This corpus cannot measure segmentation (2026-09-24, unknown-food-nameable task 3)
+
+Stated here because the unknown-food-nameable smolspec assumed otherwise and the
+assumption survived into a task. `tmp/n5k_fixtures` can measure neither segmentation
+quality nor carb error through `HarnessCLI`:
+
+- **No truth masks, at any ingestion setting.** `tools/nutrition5k/ingest.py` writes
+  `argmax_hw=None` unconditionally — "N5k has no ground-truth mask, so nadir_argmax
+  stays empty" — so `seg-bench` has nothing to score IoU against. `--checkpoint` adds
+  the model's PREDICTION as `nadir_probs`; it does not add truth.
+- **No probability tensor today, so `accuracy` skips everything.** All 3,485 fixtures
+  are `estimator_path=mixture` / `segmenter_checkpoint_sha256=no_segmenter`, and
+  `FixtureRunner.run` rejects them at its first guard:
+  `probsSizeMismatch(expected: 22118400, got: 0)`. A run over the corpus reports
+  "pipeline skips 3485 of 3485" and refuses to emit a report. Nothing downstream of
+  segmentation — the sliver rule included — can move a number here.
+
+The corpus with truth masks is the segmenter's leak-free held-out split; see
+`mask-regularisation.md`, "Measuring a fraction". N5k regains an `accuracy` path only
+after the Bucket C re-ingestion with `--checkpoint` this note already describes, and
+it never regains an IoU one.

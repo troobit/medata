@@ -179,13 +179,84 @@ final class SegBenchTests: XCTestCase {
         fx.nadirProbs = probs.withUnsafeBytes { Data($0) }
         fx.nadirArgmax = Data([3, 0])
 
-        let sample = try SegBench.sample(from: fx, palette: makeTestPalette())
+        // `.disabled` because this asserts the FP16 decode, not the cleanup: at
+        // `.standard` the two 1-pixel regions are both under minRegionArea and
+        // the speckle rule swaps them.
+        let sample = try SegBench.sample(
+            from: fx, palette: makeTestPalette(), regularisation: .disabled)
 
         XCTAssertEqual(sample.fixtureID, "good_bundle")
         XCTAssertEqual(sample.predictedArgmax, [3, 0])
         XCTAssertEqual(sample.groundTruthArgmax, [3, 0])
         XCTAssertEqual(sample.width, 2)
         XCTAssertEqual(sample.height, 1)
+    }
+
+    // MARK: - Regularised predictions (unknown-food-nameable task 3)
+    // The bench scores the mask the app ships, so `sample` runs the same
+    // regularisation `SegmenterPostProcessor.process` runs on device. Without
+    // this the sliver fraction would have been tuned against a raw argmax the
+    // app never produces.
+
+    // A `pasta` sliver inside a large `rice` region is absorbed before scoring,
+    // so the bench sees the cleaned mask rather than the raw argmax.
+    func testSampleAppliesSliverAbsorptionToPrediction() throws {
+        let palette = makeTestPalette()
+        // 8×8 all rice (class 0) except a 2×2 pasta (class 1) block: 4 of 64
+        // food-like pixels = 6.25 %, a sliver at 0.10 and not at 0.05.
+        let w = 8, h = 8, c = 5
+        var labels = [UInt8](repeating: 0, count: w * h)
+        for y in 3..<5 { for x in 3..<5 { labels[y * w + x] = 1 } }
+        var probs = [Float16](repeating: 0.01, count: w * h * c)
+        for i in 0..<(w * h) { probs[i * c + Int(labels[i])] = 0.9 }
+
+        var fx = PbMealFixture()
+        fx.fixtureID = "sliver_bundle"
+        fx.nadirIntrinsics.imageWidth = Int32(w)
+        fx.nadirIntrinsics.imageHeight = Int32(h)
+        fx.nadirProbs = probs.withUnsafeBytes { Data($0) }
+        fx.nadirArgmax = Data(labels)
+
+        let raw = try SegBench.sample(from: fx, palette: palette, regularisation: .disabled)
+        XCTAssertEqual(raw.predictedArgmax, labels, "disabled must decode unchanged")
+
+        let absorbed = try SegBench.sample(
+            from: fx, palette: palette,
+            regularisation: MaskRegularisationConfig(minRegionArea: 0, sliverFraction: 0.10))
+        XCTAssertEqual(
+            absorbed.predictedArgmax, [UInt8](repeating: 0, count: w * h),
+            "a 6.25 % pasta block is a sliver at 0.10 and joins the rice around it")
+
+        let kept = try SegBench.sample(
+            from: fx, palette: palette,
+            regularisation: MaskRegularisationConfig(minRegionArea: 0, sliverFraction: 0.05))
+        XCTAssertEqual(kept.predictedArgmax, labels, "6.25 % is above the 5 % threshold")
+    }
+
+    // Ground truth is the yardstick and must never be reshaped — regularising it
+    // too would score a cleaned prediction against a cleaned truth and hide the
+    // rule's real cost.
+    func testSampleLeavesGroundTruthUnregularised() throws {
+        let palette = makeTestPalette()
+        let w = 8, h = 8, c = 5
+        var labels = [UInt8](repeating: 0, count: w * h)
+        for y in 3..<5 { for x in 3..<5 { labels[y * w + x] = 1 } }
+        var probs = [Float16](repeating: 0.01, count: w * h * c)
+        for i in 0..<(w * h) { probs[i * c + Int(labels[i])] = 0.9 }
+
+        var fx = PbMealFixture()
+        fx.fixtureID = "gt_bundle"
+        fx.nadirIntrinsics.imageWidth = Int32(w)
+        fx.nadirIntrinsics.imageHeight = Int32(h)
+        fx.nadirProbs = probs.withUnsafeBytes { Data($0) }
+        fx.nadirArgmax = Data(labels)
+
+        let sample = try SegBench.sample(
+            from: fx, palette: palette,
+            regularisation: MaskRegularisationConfig(minRegionArea: 0, sliverFraction: 0.10))
+
+        XCTAssertEqual(sample.groundTruthArgmax, labels)
+        XCTAssertNotEqual(sample.predictedArgmax, sample.groundTruthArgmax)
     }
 
     private func makeTestPalette() -> ClassPalette {

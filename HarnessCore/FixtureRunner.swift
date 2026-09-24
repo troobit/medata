@@ -31,11 +31,19 @@ public enum FixtureRunner {
 
     // Run the volume + macros pipeline (β = 1) on one fixture.
     // Returns a MealCalibrationInput with per-class predicted and actual carbs.
+    // `regularisation` is the same pass `SegmenterPostProcessor.process` runs on
+    // device before the label map reaches the volume stage. Replay reads the
+    // argmax a fixture stored rather than deriving it from logits, so without
+    // this the harness would integrate volume over an UNregularised mask while
+    // the app integrates over a regularised one (unknown-food-nameable task 3).
+    // Defaults to `.standard` for that reason; pass `.disabled` for the
+    // raw-argmax behaviour.
     public static func run(
         fixture: PbMealFixture,
         palette: ClassPalette,
         database: any FoodDatabase,
-        voxelEdgeMm: Float = 3.0
+        voxelEdgeMm: Float = 3.0,
+        regularisation: MaskRegularisationConfig = .standard
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -57,7 +65,8 @@ public enum FixtureRunner {
         let nadirSeg = makeSegResult(
             probsData: fixture.nadirProbs,
             argmaxData: fixture.nadirArgmax,
-            width: W, height: H, classes: C, palette: palette
+            width: W, height: H, classes: C, palette: palette,
+            regularisation: regularisation
         )
 
         // Unity β correction (β = 1.0 for all classes).
@@ -99,11 +108,13 @@ public enum FixtureRunner {
             let obliqueIntrinsics = CameraIntrinsics(pb: fixture.obliqueIntrinsics)
             let obliqueW = obliqueIntrinsics.imageWidth
             let obliqueH = obliqueIntrinsics.imageHeight
+            // Req 10 applies to each view independently on the two-view path.
             let obliqueSeg = makeSegResult(
                 probsData: fixture.obliqueProbs,
                 argmaxData: fixture.obliqueArgmax,
                 width: obliqueW, height: obliqueH,
-                classes: C, palette: palette
+                classes: C, palette: palette,
+                regularisation: regularisation
             )
             // Nominal plane: gravity-aligned at -300 mm (typical table distance).
             let plane = nominalPlane(gravity: gravity)
@@ -181,10 +192,13 @@ public enum FixtureRunner {
 
     // The food-region mask on the argmax grid. `fitFoodSupportPlane` needs one and
     // this call site had none; argmax is the same source the device's segmenter
-    // produces, so the two paths see the same mask (Req 5.1).
+    // produces, so the two paths see the same mask (Req 5.1). The predicate is
+    // `isVolumetricClass`, matching `PipelineBridges.foodMask` — an all-unknown
+    // plate must reach the fitter on replay for the same reason it must on
+    // device (unknown-food-nameable Req 2).
     public static func foodRegionMask(argmax: ArgmaxMap, palette: ClassPalette) -> BinaryMask {
         BinaryMask(
-            pixels: argmax.pixels.map { palette.isFoodClass(Int($0)) ? UInt8(1) : UInt8(0) },
+            pixels: argmax.pixels.map { palette.isVolumetricClass(Int($0)) ? UInt8(1) : UInt8(0) },
             width: argmax.width,
             height: argmax.height
         )
@@ -311,13 +325,17 @@ public enum FixtureRunner {
         argmaxData: Data,
         width: Int, height: Int,
         classes: Int,
-        palette: ClassPalette
+        palette: ClassPalette,
+        regularisation: MaskRegularisationConfig
     ) -> SegmentationResult {
         let probs = ProbabilityTensor(
             bytes: probsData, height: height, width: width,
             classes: classes, palette: palette
         )
-        let argmax = ArgmaxMap(pixels: argmaxData, height: height, width: width)
+        let cleaned = SegmenterPostProcessor.regularise(
+            argmax: argmaxData, width: width, height: height,
+            palette: palette, config: regularisation)
+        let argmax = ArgmaxMap(pixels: cleaned, height: height, width: width)
         // sigmaSeg not critical for calibration; use 1.0.
         return SegmentationResult(
             probabilities: probs, argmax: argmax,
