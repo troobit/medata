@@ -235,6 +235,28 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     // plane refit from the grown mask returned. nil when the pass did not run
     // (two-view path, or a refusal before volume).
     public let regionGrowth: RegionGrowthMeasurements?
+    // Two-view poses (two-view-trust Req 1.1): the platform poses of both
+    // frames, their tracking-session generations, and the transform (mm, §6.0
+    // frame) the carve used, so a stored transform can be audited against the
+    // photos offline. nil on single-view.
+    public let twoViewPoses: TwoViewPoses?
+
+    public struct TwoViewPoses: Codable, Sendable, Equatable {
+        public let nadirSessionGeneration: Int
+        public let obliqueSessionGeneration: Int
+        public let nadirWorldFromCamera: [Float]     // 16, column-major, metres (ARKit)
+        public let obliqueWorldFromCamera: [Float]
+        public let transform1To2Mm: [Float]          // 16, column-major, mm, §6.0 frame
+        public init(nadirSessionGeneration: Int, obliqueSessionGeneration: Int,
+                    nadirWorldFromCamera: [Float], obliqueWorldFromCamera: [Float],
+                    transform1To2Mm: [Float]) {
+            self.nadirSessionGeneration = nadirSessionGeneration
+            self.obliqueSessionGeneration = obliqueSessionGeneration
+            self.nadirWorldFromCamera = nadirWorldFromCamera
+            self.obliqueWorldFromCamera = obliqueWorldFromCamera
+            self.transform1To2Mm = transform1To2Mm
+        }
+    }
 
     public struct RegionGrowthMeasurements: Codable, Sendable, Equatable {
         public let applied: Bool
@@ -283,7 +305,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 preShutterSegmentationErrorCount: Int? = nil,
                 decomposition: [ClassDecomposition]? = nil,
                 sigma: SigmaTerms? = nil,
-                regionGrowth: RegionGrowthMeasurements? = nil) {
+                regionGrowth: RegionGrowthMeasurements? = nil,
+                twoViewPoses: TwoViewPoses? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -311,6 +334,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.decomposition = decomposition
         self.sigma = sigma
         self.regionGrowth = regionGrowth
+        self.twoViewPoses = twoViewPoses
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -335,7 +359,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             volume: volume,
             preShutterSegmentationErrorCount: count,
             decomposition: decomposition, sigma: sigma,
-            regionGrowth: regionGrowth
+            regionGrowth: regionGrowth, twoViewPoses: twoViewPoses
         )
     }
 }
@@ -368,6 +392,7 @@ public final class PipelineDiagnostics {
     private var planeSupportingSectors: Int?
     private var foodRegionCoveragePercent: Float?
     private var regionGrowth: EstimationAttemptRecord.RegionGrowthMeasurements?
+    private var twoViewPoses: EstimationAttemptRecord.TwoViewPoses?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -434,6 +459,10 @@ public final class PipelineDiagnostics {
 
     public func recordRegionGrowth(_ m: EstimationAttemptRecord.RegionGrowthMeasurements) {
         regionGrowth = m
+    }
+
+    public func recordTwoViewPoses(_ p: EstimationAttemptRecord.TwoViewPoses) {
+        twoViewPoses = p
     }
 
     public func recordSegmentation(
@@ -512,7 +541,8 @@ public final class PipelineDiagnostics {
             preShutterSegmentationErrorCount: nil,
             decomposition: decomposition,
             sigma: sigma,
-            regionGrowth: regionGrowth
+            regionGrowth: regionGrowth,
+            twoViewPoses: twoViewPoses
         )
     }
 }

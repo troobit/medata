@@ -158,3 +158,15 @@ cause of the device symptom.
 - `specs/bugfixes/closeout-trail-mvp-cleanup/decision_log.md` Decision 1 — tightened the
   oblique arming window from ±30° to ±15° around 25° against the same mis-aimed-oblique →
   `noFoodVolumeRecovered` defect; complementary to the aim guide above.
+
+
+## Addendum 2026-09-25 — the carve was not exonerated
+
+The night audit for `specs/estimation/two-view-trust/` (`docs/agent-notes/two-view-geometry-audit.md`) found that no two-view capture had ever produced a carved volume, for four reasons inside the geometry chain, none of them aiming:
+
+1. `PipelineBridges.rigidInverse` did not transpose the rotation, so `transform1To2` composed R₂·R₁ instead of R₂ᵀ·R₁ — a near-180° "relative" rotation for two downward-looking cameras.
+2. The pose translation stayed in metres against millimetre geometry.
+3. ARKit's +y-up camera frame was applied to the carve's +y-down frame without conjugation.
+4. `VoxelGridSizer` built its vertical axis as `−gravity` while `RawFrame.gravity` carries world-up, so the grid sat under the support plane and every voxel was discarded (`VoxelCarvePlaneExclusionTests` had pinned "23,040 of 23,040 excluded" as expected).
+
+The characterisation tests in this report pass because they build the transform by hand in the carve's own frame and pass gravity as down; they never exercised `transform1To2` or the runtime gravity contract. All four are fixed and unit-tested (`TwoViewTransformTests`, `VoxelGridSizerAxisTests`); task 1's device trail remains the verification and is now Session 0 of the 2026-09-25 checklist.

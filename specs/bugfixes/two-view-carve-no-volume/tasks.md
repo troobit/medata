@@ -3,7 +3,9 @@
 ## Verification
 
 - [ ] 1. STOP — on-device verification of a well-aimed two-view trail
-  - Human-gated device pass on the iPhone 16 Pro; no agent may attempt it. The carve was exonerated — the root cause was a mis-aimed oblique because the tilt aim guide was unwired; TiltBubbleGuide has since been wired into CaptureFlowView (commits 96465d1 and 9f64576)
-  - Capture a two-view trail with the oblique aimed inside the 10-40 degree band using the on-screen guide; confirm it reaches event=estimate.end success=true and persists a meal rather than refusing noFoodVolumeRecovered
-  - Match the launch buildStamp before trusting any device output
-  - Report status: the report.md header stays Open until this passes
+  - Human-gated device pass on the iPhone 16 Pro; no agent may attempt it. 2026-09-25: the carve was NOT exonerated — four geometry defects (rigidInverse without transpose
+  - metre translation
+  - missing +y frame conjugation
+  - grid built under the plane) meant no two-view capture had ever carved; all fixed and unit-tested overnight (two-view-trust Decision 2). This trail is now the device verification of those fixes: expect event=two_view.poses with equal generations
+  - a carved bread row
+  - and a volume near the single-view 280 cm³ for the roll.

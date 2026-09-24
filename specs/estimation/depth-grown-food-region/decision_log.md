@@ -41,6 +41,15 @@ The roll capture grows from 0.49 % to 7.1 % of the frame at every setting — th
 
 **Shipped: cliff 3 mm, floor 3 mm, cap 0.35.** The Req 8 rule's "largest cliff" clause is set aside for the outlier above; the rule's other clauses hold at 3/3.
 
+**The carb-MAE half, measured overnight 2026-09-24/25 on Nutrition5k.** `tools/nutrition5k/ingest.py --checkpoint` re-ingested with the shipped checkpoint (after fixing its 513×513 tensor size), giving 236 `single_dominant` plates with probability tensors and weighed carbs (BACKLOG 23 closed for this purpose). `HarnessCLI accuracy` over them, sliver 0.05, growth 3/3/0.35:
+
+| growth | scored | carb MAE | MAPE | growth applied |
+|---|---|---|---|---|
+| off (cap 0) | 216 | 9.29 g | 92.0 % | 0 |
+| on | 217 | 9.47 g | 99.7 % | 202 of 217 |
+
+Growth raises carb MAE by 0.18 g and MAPE by 7.7 points, so the "carb MAE must not rise" clause **fails on this corpus**, narrowly. The reading: N5k plates are mixed dishes in which the model labels one dominant class; growth extends that class over neighbouring foods the model left as background, which is the adjacent-foods-without-a-cliff risk the smolspec names. The sesame-roll case (one food, mostly unrecognised) is the opposite regime. Options for the 2026-09-25 decision: gate growth on the plate's ungrown food-like area (apply only when the segmenter found little), cap the added area relative to the seed, or accept the N5k cost as the price of not reading 4 g for a roll. Not changed tonight; the shipped constants stand pending that call.
+
 ### Alternatives Considered
 
 - **Height above the first plane only, no continuity**: A pixel is food when it sits more than h_min above the fitted plane - Rejected because the first plane was the table on the motivating capture, so the whole plate qualifies.

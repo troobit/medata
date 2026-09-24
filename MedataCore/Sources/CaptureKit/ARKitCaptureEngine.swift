@@ -38,6 +38,8 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
     // `bindPreviewSession` ran the config without depending on
     // `ARSession.configuration` (which is unreliable in the iOS Simulator).
     internal var isRunning = false
+    // Incremented on every `session.run`; stamped onto each RawFrame.
+    public private(set) var sessionGeneration = 0
 
     private let motion = CMMotionManager()
     private var latestFrameContinuation: CheckedContinuation<ARFrame, Error>?
@@ -101,6 +103,9 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         config.worldAlignment = .gravity
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         isRunning = true
+        // New world origin: frames captured from here on cannot be related by
+        // pose to frames from before (two-view-trust Req 1.1).
+        sessionGeneration += 1
     }
 
     /// Live AR frames observed by the engine's ARSessionDelegate hook, fanned
@@ -266,7 +271,8 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             intrinsics: intrinsics,
             gravity: gravity,
             worldFromCamera: worldFromCamera,
-            depth: depth
+            depth: depth,
+            sessionGeneration: sessionGeneration
         )
     }
 

@@ -435,7 +435,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                 firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
                 inFlightMode = nil
             default:
-                break
+                // The session is stopped below and re-run with a fresh world
+                // origin on return, so a stashed nadir frame's pose can no
+                // longer be related to the oblique's (two-view-trust Req 1.1;
+                // the pipeline would refuse the pair anyway).
+                firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             }
             Task { [session] in try? await session.stop() }
             startTask = nil

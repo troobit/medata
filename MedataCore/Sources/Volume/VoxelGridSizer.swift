@@ -59,9 +59,16 @@ public enum VoxelGridSizer {
             cornerPoints.append(p)
         }
 
-        // Build gravity-aligned axes per §6.10 step 4.
-        let gravity = inputs.gravityCamera.normalised()
-        let axisZ = (-gravity).normalised()                            // points "up"
+        // Build gravity-aligned axes per §6.10 step 4. `gravityCamera` carries
+        // WORLD-UP in the §6.0 camera frame — that is what `RawFrame.gravity`
+        // holds since bugfix capture-no-flat-surface-gravity-frame
+        // (`CameraGravity.worldUpInCameraFrame`), and it is the vector the
+        // plane fitter's normal is aligned to (n̂ · gravity > 0). The grid's
+        // vertical axis is that vector itself. The earlier `-gravity` read the
+        // field as pointing down, which on every real capture put the whole
+        // grid below the support plane, where the carve discards it
+        // (two-view-trust, night audit 2026-09-24).
+        let axisZ = inputs.gravityCamera.normalised()                  // points "up"
         // axis_x: project camera +x onto plane (subtract its component along axis_z),
         // then normalise. The camera-1 +X axis in camera frame is (1, 0, 0).
         let cameraXRaw = Vec3(1, 0, 0)

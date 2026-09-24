@@ -23,7 +23,7 @@ final class TwoViewObliqueCarveDiagnosticTests: XCTestCase {
         fx: 500, fy: 500, cx: 50, cy: 50,
         distortion: [], imageWidth: 100, imageHeight: 100
     )
-    // n̂=(0,0,1), table at z=−400 mm. Gravity = (0,0,−1) so axisZ = (0,0,1).
+    // n̂=(0,0,1), table at z=−400 mm. `gravityCamera` is world-up (0,0,1) so axisZ = (0,0,1).
     let plane = SupportPlane(
         normal: Vec3(0, 0, 1), distanceMm: -400, residualMm: 0.5, convergedIterations: nil
     )
@@ -77,7 +77,7 @@ final class TwoViewObliqueCarveDiagnosticTests: XCTestCase {
             foodMask: centredEllipseMask(),
             nadirIntrinsics: intrinsics,
             supportPlane: plane,
-            gravityCamera: Vec3(0, 0, -1)
+            gravityCamera: Vec3(0, 0, 1)
         ))
         let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
             grid: grid,

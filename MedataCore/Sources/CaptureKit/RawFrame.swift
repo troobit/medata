@@ -72,11 +72,17 @@ public struct RawFrame: Sendable {
                                            // frame (pose-dependent — see CameraGravity)
     public let worldFromCamera: Mat4
     public let depth: DepthMap?            // nil when LiDAR unavailable
+    // Which run of the tracking session this frame's pose belongs to. Every
+    // `session.run(…, .resetTracking)` starts a new world origin, so two
+    // frames from different generations cannot be related by their poses
+    // (two-view-trust Req 1.1). 0 for engines that never reset.
+    public let sessionGeneration: Int
 
     public init(imageBytes: Data, pixelFormat: PixelFormat, colourSpace: ColourSpace,
                 orientation: Int, imageWidth: Int, imageHeight: Int,
                 timestampMonotonicNs: Int64, intrinsics: CameraIntrinsics,
-                gravity: Vec3, worldFromCamera: Mat4, depth: DepthMap?) {
+                gravity: Vec3, worldFromCamera: Mat4, depth: DepthMap?,
+                sessionGeneration: Int = 0) {
         self.imageBytes = imageBytes
         self.pixelFormat = pixelFormat
         self.colourSpace = colourSpace
@@ -88,6 +94,7 @@ public struct RawFrame: Sendable {
         self.gravity = gravity
         self.worldFromCamera = worldFromCamera
         self.depth = depth
+        self.sessionGeneration = sessionGeneration
     }
 }
 

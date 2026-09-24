@@ -155,8 +155,24 @@ public enum FixtureRunner {
                 classes: C, palette: palette,
                 regularisation: regularisation
             )
-            // Nominal plane: gravity-aligned at -300 mm (typical table distance).
-            let plane = nominalPlane(gravity: gravity)
+            // A device two-view bundle from a LiDAR phone carries nadir depth:
+            // fit the support plane exactly as the device did (stage D) so the
+            // replay's volume is the device's, not a nominal-plane approximation.
+            // Fixtures without depth (non-LiDAR captures, synthetic) keep the
+            // gravity-aligned nominal plane at -300 mm.
+            let plane: SupportPlane
+            if fixture.hasNadirDepth,
+               let fit = try? fitSupportPlane(
+                    depth: DepthMap(pb: fixture.nadirDepth), intrinsics: nadirIntrinsics,
+                    gravity: gravity,
+                    foodMask: foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
+                    fixtureID: fixture.fixtureID) {
+                plane = fit.plane
+                supportPlaneResidualMm = fit.plane.residualMm
+                supportPlaneReference = fit.reference
+            } else {
+                plane = nominalPlane(gravity: gravity)
+            }
             let t1to2 = Mat4(pb: fixture.t1To2)
             let est = try runVoxelCarve(
                 nadirSeg: nadirSeg, obliqueSeg: obliqueSeg,
@@ -409,10 +425,10 @@ public enum FixtureRunner {
 
     // Gravity-aligned nominal support plane at -300 mm from camera.
     private static func nominalPlane(gravity: Vec3) -> SupportPlane {
-        // Normal points opposite to gravity (upward).
-        let nx = -gravity.x; let ny = -gravity.y; let nz = -gravity.z
-        let len = (nx * nx + ny * ny + nz * nz).squareRoot()
-        let normal = Vec3(nx / len, ny / len, nz / len)
+        // `gravity` is world-up in the camera frame (RawFrame.gravity contract),
+        // so the plane normal IS that vector; negating it pointed the nominal
+        // plane down and put the carve grid under it.
+        let normal = gravity.normalised()
         return SupportPlane(normal: normal, distanceMm: -300, residualMm: 0, convergedIterations: nil)
     }
 

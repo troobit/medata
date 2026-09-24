@@ -502,6 +502,32 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.arWorldTrackingLost
             }
+            // Two-view geometry audit (two-view-trust Req 1.1): the poses that
+            // relate the views are only comparable within one tracking-session
+            // run. Record both poses and the transform the carve will use, and
+            // refuse a pair that straddles a session reset — its transform
+            // would relate two different world origins.
+            let t1to2 = PipelineBridges.transform1To2(nadir: nadir, oblique: oblique)
+            diagnostics.recordTwoViewPoses(.init(
+                nadirSessionGeneration: nadir.sessionGeneration,
+                obliqueSessionGeneration: oblique.sessionGeneration,
+                nadirWorldFromCamera: nadir.worldFromCamera.flatColumnMajor(),
+                obliqueWorldFromCamera: oblique.worldFromCamera.flatColumnMajor(),
+                transform1To2Mm: t1to2.flatColumnMajor()))
+            supportPlaneLog.info(
+                """
+                event=two_view.poses nadirGen=\(nadir.sessionGeneration, privacy: .public) \
+                obliqueGen=\(oblique.sessionGeneration, privacy: .public) \
+                t_mm=\(t1to2.columns[3][0], privacy: .public),\(t1to2.columns[3][1], privacy: .public),\(t1to2.columns[3][2], privacy: .public)
+                """
+            )
+            guard nadir.sessionGeneration == oblique.sessionGeneration else {
+                #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
+                throw EstimationFailure.arWorldTrackingLost
+            }
             let obliqueSeg: SegmentationResult
             do {
                 obliqueSeg = try await segmenter.segment(oblique)
@@ -519,7 +545,6 @@ public struct Pipeline: Sendable {
                 view2: obliqueSeg.argmax,
                 palette: palette
             )
-            let t1to2 = PipelineBridges.transform1To2(nadir: nadir, oblique: oblique)
             let foodMask = PipelineBridges.foodMask(from: nadirSeg.argmax, palette: palette)
             let grid: VoxelGrid
             do {

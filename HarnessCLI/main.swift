@@ -469,6 +469,71 @@ func reportRegionGrowth(_ inputs: [MealCalibrationInput], fixtures: [PbMealFixtu
     }
 }
 
+// MARK: - volumes (field replay: what the device would measure, no truth needed)
+
+// One JSON object per fixture with the per-class volumes the single- or
+// two-view replay produces, the plane it used, and what growth did. The
+// `accuracy` report needs ground-truth carbs; a field bundle has none, so this
+// is the way to read a replayed device capture — and to compare a bundle
+// against a modified copy of it (a user-drawn silhouette, a relabelled view).
+func runVolumes(args: Args) throws {
+    guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
+        fputs("volumes requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
+    }
+    let db = try GRDBFoodDatabase.bundled()
+    let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
+    let regularisation = regularisationConfig(args: args)
+    let growth = growthConfig(args: args)
+    struct Row: Encodable {
+        let fixtureID: String
+        let capturePath: String
+        let perClassVolumesCm3: [String: Float]
+        let predictedCarbsPerClass: [String: Float]
+        let planeReference: String?
+        let planeResidualMm: Float?
+        let growthApplied: Bool?
+        let foodPixelsBefore: Int?
+        let foodPixelsAfter: Int?
+        let refitReference: String?
+        let skipped: String?
+    }
+    var rows: [Row] = []
+    for fx in fixtures {
+        do {
+            let m = try FixtureRunner.run(
+                fixture: fx, palette: paletteForFixture(fx), database: db,
+                voxelEdgeMm: args.voxelEdgeMm, regularisation: regularisation, growth: growth)
+            rows.append(Row(
+                fixtureID: m.fixtureID, capturePath: m.capturePath.rawValue,
+                perClassVolumesCm3: m.perClassVolumesCm3,
+                predictedCarbsPerClass: m.predictedCarbsPerClass,
+                planeReference: m.supportPlaneReference?.rawValue,
+                planeResidualMm: m.supportPlaneResidualMm,
+                growthApplied: m.regionGrowth?.applied,
+                foodPixelsBefore: m.regionGrowth?.foodPixelsBefore,
+                foodPixelsAfter: m.regionGrowth?.foodPixelsAfter,
+                refitReference: m.regionGrowth?.refitReference?.rawValue,
+                skipped: nil))
+        } catch {
+            rows.append(Row(
+                fixtureID: fx.fixtureID, capturePath: fx.capturePathCanonical,
+                perClassVolumesCm3: [:], predictedCarbsPerClass: [:],
+                planeReference: nil, planeResidualMm: nil, growthApplied: nil,
+                foodPixelsBefore: nil, foodPixelsAfter: nil, refitReference: nil,
+                skipped: "\(error)"))
+        }
+    }
+    let enc = JSONEncoder()
+    enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+    let data = try enc.encode(rows)
+    if args.outputPath.isEmpty {
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write("\n".data(using: .utf8)!)
+    } else {
+        try data.write(to: URL(fileURLWithPath: args.outputPath))
+    }
+}
+
 // MARK: - accuracy (task 60)
 
 func runAccuracy(args: Args) throws {
@@ -1180,9 +1245,10 @@ do {
     case "calibrate-and-eval": try runCalibrateAndEval(args: args)
     case "seg-bench":          try runSegBench(args: args)
     case "diagnose":           try runDiagnose(args: args)
+    case "volumes":            try runVolumes(args: args)
     default:
         fputs("Unknown subcommand '\(args.subcommand)'\n", stderr)
-        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose\n", stderr)
+        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose, volumes\n", stderr)
         exit(1)
     }
 } catch {

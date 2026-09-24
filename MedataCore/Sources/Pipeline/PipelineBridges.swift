@@ -168,18 +168,28 @@ enum PipelineBridges {
     // MARK: - Mat4 operations for transform computation
 
     // Rigid-body inverse: if T = [R|t; 0|1] then T^{-1} = [R^T | -R^T·t; 0|1].
+    //
+    // `columns[c][r]` is column c, row r, so R(row i, col j) = columns[j][i] and
+    // R^T(i, j) = R(j, i) = columns[i][j]. Until 2026-09-25 this function read
+    // R^T(i, j) as columns[j][i] — that is R itself — and returned [R | −R·t],
+    // which is not an inverse. `transform1To2` therefore composed R₂·R₁ instead
+    // of R₂ᵀ·R₁: for two cameras both looking down, a near-180° "relative"
+    // rotation (163° and 73° on the 2026-09-24 bundles) in place of the real
+    // 25°, and the two silhouettes never met in the carve (two-view-trust,
+    // night audit). Pinned by TwoViewTransformTests.
     static func rigidInverse(_ m: Mat4) -> Mat4 {
-        let r = m.columns
-        // R^T (3×3 upper-left)
-        let rt00 = r[0][0]; let rt01 = r[1][0]; let rt02 = r[2][0]
-        let rt10 = r[0][1]; let rt11 = r[1][1]; let rt12 = r[2][1]
-        let rt20 = r[0][2]; let rt21 = r[1][2]; let rt22 = r[2][2]
+        let c = m.columns
+        // R^T(i, j) = R(j, i) = columns[i][j]
+        let rt00 = c[0][0]; let rt01 = c[0][1]; let rt02 = c[0][2]
+        let rt10 = c[1][0]; let rt11 = c[1][1]; let rt12 = c[1][2]
+        let rt20 = c[2][0]; let rt21 = c[2][1]; let rt22 = c[2][2]
         // t (column 3, rows 0–2)
-        let tx = r[3][0]; let ty = r[3][1]; let tz = r[3][2]
+        let tx = c[3][0]; let ty = c[3][1]; let tz = c[3][2]
         // -R^T · t
         let itx = -(rt00 * tx + rt01 * ty + rt02 * tz)
         let ity = -(rt10 * tx + rt11 * ty + rt12 * tz)
         let itz = -(rt20 * tx + rt21 * ty + rt22 * tz)
+        // Output column j holds R^T(0, j), R^T(1, j), R^T(2, j).
         return Mat4(columns: [
             [rt00, rt10, rt20, 0],
             [rt01, rt11, rt21, 0],
@@ -202,10 +212,35 @@ enum PipelineBridges {
         return Mat4(columns: c)
     }
 
-    // Compute T_{1→2}: p₂ = T · p₁  (design §6.0)
-    // T_{1→2} = (worldFromCamera₂)⁻¹ · worldFromCamera₁
+    // Compute T_{1→2}: p₂ = T · p₁  (design §6.0), in the frame and units the
+    // carve uses. `RawFrame.worldFromCamera` is the platform pose as ARKit
+    // gives it: translation in METRES, camera frame +x right, +y UP, −z
+    // forward. The carve's points are millimetres in the §6.0 frame (+y DOWN,
+    // the image row direction; `projectCamera1`, `CameraGravity`). So
+    //   T_img = F · (worldFromCamera₂)⁻¹ · worldFromCamera₁ · F,  F = diag(1, −1, 1, 1)
+    // with the translation scaled by 1000. Before 2026-09-25 neither happened,
+    // and the oblique camera sat 0.1 mm from the nadir one in a mirrored frame
+    // (two-view-trust, night audit).
+    static let millimetresPerMetre: Float = 1000
     static func transform1To2(nadir: RawFrame, oblique: RawFrame) -> Mat4 {
         let worldToOblique = rigidInverse(oblique.worldFromCamera)
-        return multiply(worldToOblique, nadir.worldFromCamera)
+        let arkit = multiply(worldToOblique, nadir.worldFromCamera)
+        return imageFrameMillimetres(fromARKitCameraTransform: arkit)
+    }
+
+    // Conjugate an ARKit camera→camera rigid transform (metres, +y up) into the
+    // §6.0 frame (millimetres, +y down): T' = F·T·F, translation × 1000.
+    static func imageFrameMillimetres(fromARKitCameraTransform t: Mat4) -> Mat4 {
+        let c = t.columns
+        // F·R·F negates the row-1 and column-1 off-diagonals of R; F·t flips t.y.
+        func sign(_ col: Int, _ row: Int) -> Float { ((col == 1) != (row == 1)) ? -1 : 1 }
+        var out = [[Float]](repeating: [Float](repeating: 0, count: 4), count: 4)
+        for col in 0..<3 {
+            for row in 0..<3 { out[col][row] = c[col][row] * sign(col, row) }
+        }
+        out[3] = [c[3][0] * millimetresPerMetre,
+                  -c[3][1] * millimetresPerMetre,
+                  c[3][2] * millimetresPerMetre, 1]
+        return Mat4(columns: out)
     }
 }
