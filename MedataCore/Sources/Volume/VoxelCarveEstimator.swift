@@ -173,10 +173,23 @@ public enum VoxelCarveEstimator {
 
         // Single-view-only fallback per §6.6: extrude silhouette to π_sup at a 30 mm
         // prior height for any class that appears only in one view.
+        //
+        // `unknown_food` is exempt from the OBLIQUE-only fallback (bugfix
+        // two-view-unknown-carve). The sentinel marks pixels the model cannot
+        // name; the nadir is the primary silhouette on both capture paths
+        // (Pipeline's coverage gate reads it), and an unknown region only the
+        // oblique view labels is not evidence of food on the plate — on
+        // 2026-09-24 it extruded the oblique frame's unknown pixels into
+        // 1148 cm³ and 317 cm³ rows beside a plate with no unknown pixels
+        // from above. Named classes keep the fallback from either view, and an
+        // unknown region the nadir sees alone still carries (unknown-food-
+        // nameable Req 3).
         var fallbackVolumesMm3: [Int: Double] = [:]
         var raySkipCount = 0
         let fallbackClasses1 = inputs.singleViewOnlyClassesView1.filter { palette.isCarvableClass($0) }
-        let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter { palette.isCarvableClass($0) }
+        let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter {
+            palette.isCarvableClass($0) && $0 != palette.unknownFood
+        }
         for c in fallbackClasses1 {
             let extruded = singleViewExtrudedVolumeMm3(
                 classId: c, view: inputs.view1,
