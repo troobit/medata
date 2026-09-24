@@ -5,6 +5,14 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-09-24 — the same sesame roll, no truth taken: the depth-grown food region measures it whole, model `coreml_ab812dc3aa9d`, builds `365aff0-20260924-130129` (morning) and `4feedd1-20260924-164906` (afternoon), both Release
+
+**Morning (build 365aff0, unknown-food-nameable tasks 1–7 on the phone).** Three captures, no refusals now that the shutter needs food-like pixels. The model labelled two specks of the roll as bread on a roll that fills 7 % of the frame (bundle `1790223818017-success`: bread_white 0.16 % + bread_wholemeal 0.33 % of the frame, no `unknown_food` at all), the plane fell back to `edgeBand` (ring median 19.7 mm), and the record read 4.2 g of carbohydrate (9.6 + 16.0 cm³). Outcome `72B75CD0`. The two-view capture (`1790223844719-success`, outcome `FE37458C`) read bread_white 286 cm³ plus an `unknown_food` row of 1148 cm³ from a nadir mask with no unknown pixels — BACKLOG 24. The LiDAR depth showed the whole roll as one raised slab (`bundle_view.py` overlay in the session scratchpad). That gap is what `specs/estimation/depth-grown-food-region` closes.
+
+**Afternoon (build 4feedd1, depth-grown-food-region tasks 1–5 on the phone).** Single-view capture `1790232681422-success`, outcome timestamp 1790232681422: the model now labels 5.3 % of the frame bread_wholemeal (the lighting or angle gave it the crust this time), growth adds 30,250 pixels (146,278 → 176,528, +21 %), the refit lands `foodSupport` (residual 0.95 mm, 7 supporting sectors, ring median −3.6 mm), and the record reads bread_wholemeal 280 cm³ → 112 g → 42.6 g carbohydrate. Developer's field notes on the review screen: "Estimate very good though", "Estimate speckles around edge of roll" (the grown region maps depth cells back as 7.5 × 7.5 px blocks, so the outline's edge is blocky — cosmetic, noted for the outline renderer), and "2 unknown food: not shown in UI. Why?" on the two-view capture `1790232615202-success`, whose record carries bread_wholemeal 383 cm³ + a phantom `unknown_food` 317 cm³ (BACKLOG 24 again; the review's handling of that row is unverified). No weight was taken; 112 g is heavy for a crusty roll and the bread_wholemeal density (0.4 g/cm³) is the suspect, not the geometry.
+
+**What the sitting settled.** `region.grow` is on the Release log channel; the outcome row's `regionGrowth` block carries applied / capTripped / before / after / refitReference. The corpus sweep behind the constants is in the spec's Decision 1.
+
 ## 2026-09-23 — sesame bread roll on a white plate: six `noFoodPixels` refusals, model `coreml_ab812dc3aa9d`, build `36b570e-dirty-20260923-145702` (Release; the dirty file is the deploy-script fix committed as 76ac807)
 
 One food, no truth taken. A dark, sesame-crusted bread roll on a white plate,

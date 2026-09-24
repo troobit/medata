@@ -51,7 +51,10 @@ references:
   - Stream: 2
 
 - [ ] 8. Release build on device estimates the sesame roll: outline shown, relabelled to bread, recorded; then the field note and prerequisites are updated <!-- id:tiv69rt -->
-  - make deploy-release; capture the roll single-view and two-view; expect estimate.end success=true and the review surface with an Unknown food row; relabel and record; pull the log and one bundle.
-  - Verify: log trail and the record row cited in docs/agent-notes/field-truth-sessions.md under the 2026-09-23 entry; make spell; both make test totals reported.
+  - 2026-09-24 sitting: the roll now reaches a record (depth-grown-food-region)
+  - but the model named it bread_wholemeal on every afternoon capture
+  - so the Unknown food row was not exercised on single-view; the two-view record carried a phantom unknown_food row (BACKLOG 24) the developer reports as not shown in review. Needs a capture the model cannot name at all
+  - or the BACKLOG 24 fix
+  - before this can close.
   - Blocked-by: tiv69rr (Review shows the Unknown food row with its outline, cm³ and no amount controls; relabel from the eligible list derives real mass and macros; reject ignores it; recording unnamed succeeds at 0 g with the accessory line; history relabel works Req 5–9), tiv69rs (The shutter stays disarmed while the live mask has no food-like pixels and the blocked-shutter chip reads No food in view Req 11)
   - Stream: 1
