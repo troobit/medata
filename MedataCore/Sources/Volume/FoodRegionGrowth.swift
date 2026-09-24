@@ -19,29 +19,32 @@ import SupportPlane
 //
 // 1. `grow`: seeds are the depth cells under food-like colour pixels (first
 //    food-like colour pixel in raster order labels the cell). A multi-source
-//    breadth-first fill, seeds enqueued in raster order, steps to a 4-neighbour
-//    when |Δz| ≤ cliffMm and the neighbour's confidence meets
-//    `HeightFieldEstimator.tauConfidence`. First arrival labels a cell, so two
-//    seed classes on one slab split it by distance; a class is only ever
-//    extended, never removed. Growth past `frameFractionCap` of the colour
-//    frame is discarded (the oversized-meal case), leaving the map unchanged.
-// 2. `prune`, against the support plane the volume will use — the plane refit
-//    from the grown mask when that fit succeeds, else the first plane: every
-//    added cell whose surface sits under floorMm above that plane is dropped.
+//    breadth-first fill, seeds enqueued in raster order, steps to a
+//    4-neighbour when |Δz| ≤ cliffMm, the neighbour's confidence meets
+//    `HeightFieldEstimator.tauConfidence`, and the neighbour's surface sits
+//    at least floorMm above the SUPPORT SURFACE: its height above the first
+//    plane minus `supportOffsetMm`. On a `foodSupport` fit that offset is 0;
+//    on an `edgeBand` fit (the table) it is the fitter's ring median, which is
+//    the plate top's height above the table (+18…+26 mm on the corpus). First
+//    arrival labels a cell, so two seed classes on one slab split it by
+//    distance; a class is only ever extended, never removed. Growth past
+//    `frameFractionCap` of the colour frame is discarded (the oversized-meal
+//    case), leaving the map unchanged.
+// 2. `prune`, against the plane the volume will use — the plane refit from the
+//    grown mask when that fit succeeds, else the first plane — with the same
+//    offset rule: every added cell under floorMm above that support surface is
+//    dropped.
 //
-// Why prune after the refit rather than test height while growing: the first
-// plane is fitted from the pre-shutter mask, and when that mask is a speck on a
-// flat-topped food the contact ring lies on the food and the plane IS the food
-// top. Measured against it nothing is raised, so a height test during growth
-// would leave the pass inert on exactly the capture it exists for. Continuity
-// finds the slab without a plane; the refit then puts the ring on the plate;
-// the prune removes what the fill reached that is not raised above that plate.
+// Why height above the support surface, not depth continuity alone: the
+// 2026-09-24 corpus sweep (Decision 1) showed the food-to-plate edge is a
+// gentle slope in the smoothed LiDAR depth, not a cliff — a continuity-only
+// fill leaked onto the plate and table on every capture at every cliff value
+// tried (3, 4, 6 mm). The plate top is the level the fill must not go below,
+// and the fitter already measures it as the ring median on an edge-band fit.
 //
-// Why the floor is 3 mm rather than 0: on a `foodSupport` plane the plate
-// surface sits above the plane by fit noise (1.5–1.8 mm residuals on the
-// motivating sitting), and a zero floor would keep a fill that leaked onto
-// it. On an `edgeBand` plane (the table) the plate is ~20 mm up and only the
-// cap bounds a leak.
+// Known limit: when the first plane sits on the food's own top (a flat food
+// with a speck seed, admitted as foodSupport), nothing is raised above it and
+// the pass is inert — the estimate is then exactly today's.
 
 public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// Largest depth step between 4-neighbours the fill may cross, mm.
@@ -58,9 +61,12 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
         self.frameFractionCap = frameFractionCap
     }
 
-    /// Starting constants; the corpus sweep (depth-grown-food-region task 5,
-    /// Decision 2) settles them before the merge to main.
-    public static let standard = FoodRegionGrowthConfig(cliffMm: 4, floorMm: 3, frameFractionCap: 0.35)
+    /// Set by the 2026-09-24 corpus sweep (depth-grown-food-region task 5,
+    /// Decision 1 table): floor 3 mm is the value that keeps the median added
+    /// area on well-segmented plates under the 20 % bar (+9 %; floor 2 mm reads
+    /// +40 %), and cliff 3 mm is the tightest cliff at which the roll capture
+    /// still grows to its full slab (7.1 % of the frame).
+    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 3, frameFractionCap: 0.35)
     public static let disabled = FoodRegionGrowthConfig(cliffMm: 0, floorMm: 0, frameFractionCap: 0)
 
     public var isDisabled: Bool { frameFractionCap <= 0 }
@@ -88,15 +94,14 @@ public struct FoodRegionGrowthResult: Sendable {
 public enum FoodRegionGrowth {
     static let unlabelled: UInt8 = 255
 
-    /// Step 1, continuity growth. With `supportPlane` given the result is
-    /// pruned against it at once (one-shot use); the pipeline passes nil,
-    /// refits from the grown mask, then calls `prune` with the plane it will
-    /// integrate against.
+    /// Step 1. `supportOffsetMm` is the support surface's height above
+    /// `supportPlane` (the ring median on an `edgeBand` fit, 0 otherwise).
     public static func grow(
         argmax: ArgmaxMap,
         depth: DepthMap,
         intrinsics: CameraIntrinsics,
-        supportPlane: SupportPlane? = nil,
+        supportPlane plane: SupportPlane,
+        supportOffsetMm: Float = 0,
         palette: ClassPalette,
         config: FoodRegionGrowthConfig = .standard
     ) -> FoodRegionGrowthResult {
@@ -124,7 +129,8 @@ public enum FoodRegionGrowth {
         let colX = (0..<w).map { x in min(dw - 1, max(0, Int((Float(x) + 0.5) * Float(dw) / Float(w)))) }
         let colY = (0..<h).map { y in min(dh - 1, max(0, Int((Float(y) + 0.5) * Float(dh) / Float(h)))) }
 
-        // Per-cell depth and admissibility (finite depth, confidence).
+        // Per-cell depth and admissibility: finite depth, confidence, and
+        // height above the support surface.
         var zMm = [Float](repeating: 0, count: cellCount)
         var admissible = [Bool](repeating: false, count: cellCount)
         let confFloor = HeightFieldEstimator.tauConfidence
@@ -134,7 +140,11 @@ public enum FoodRegionGrowth {
                 let z = readDepthMm(depth, x: dx, y: dy)
                 zMm[i] = z
                 guard z > 0, z.isFinite else { continue }
-                admissible[i] = Float(depth.confidenceBytes[i]) / 255 >= confFloor
+                guard Float(depth.confidenceBytes[i]) / 255 >= confFloor else { continue }
+                admissible[i] = cellClearsFloor(
+                    dx: dx, dy: dy, depthMm: z, width: w, height: h,
+                    depthWidth: dw, depthHeight: dh, intrinsics: intrinsics,
+                    plane: plane, offsetMm: supportOffsetMm, floorMm: config.floorMm)
             }
         }
 
@@ -189,18 +199,18 @@ public enum FoodRegionGrowth {
         if Float(result.foodPixelsAfter) > config.frameFractionCap * Float(w * h) {
             return unchanged(capTripped: true)
         }
-        guard let plane = supportPlane else { return result }
-        return prune(result, depth: depth, intrinsics: intrinsics,
-                     supportPlane: plane, palette: palette, config: config)
+        return result
     }
 
     /// Step 2: drop every added cell whose surface is under `floorMm` above
-    /// `supportPlane`. Returns the input untouched when nothing was added.
+    /// the support surface of `supportPlane` (see `grow` for the offset).
+    /// Returns the input untouched when nothing was added.
     public static func prune(
         _ grown: FoodRegionGrowthResult,
         depth: DepthMap,
         intrinsics: CameraIntrinsics,
         supportPlane plane: SupportPlane,
+        supportOffsetMm: Float = 0,
         palette: ClassPalette,
         config: FoodRegionGrowthConfig
     ) -> FoodRegionGrowthResult {
@@ -214,24 +224,33 @@ public enum FoodRegionGrowth {
             for dx in 0..<dw {
                 let i = dy * dw + dx
                 guard kept[i] else { continue }
-                // Height at the cell centre, on the colour grid, with the same
-                // ray–plane arithmetic the integrator uses.
-                let cxCol = (Float(dx) + 0.5) * Float(w) / Float(dw) - 0.5
-                let cyCol = (Float(dy) + 0.5) * Float(h) / Float(dh) - 0.5
-                let z = readDepthMm(depth, x: dx, y: dy)
-                guard let height = heightAboveSupportPlaneMm(
-                    colourX: cxCol, colourY: cyCol, depthMm: z,
-                    intrinsics: intrinsics, plane: plane),
-                      height >= config.floorMm else {
-                    kept[i] = false
-                    continue
-                }
+                kept[i] = cellClearsFloor(
+                    dx: dx, dy: dy, depthMm: readDepthMm(depth, x: dx, y: dy),
+                    width: w, height: h, depthWidth: dw, depthHeight: dh,
+                    intrinsics: intrinsics, plane: plane,
+                    offsetMm: supportOffsetMm, floorMm: config.floorMm)
             }
         }
         return toColourGrid(
             inputLabels: grown.inputLabels, added: kept, cellLabel: grown.cellLabel,
             before: grown.foodPixelsBefore, width: w, height: h,
             depthWidth: dw, depthHeight: dh, palette: palette)
+    }
+
+    // Height of the cell centre above the support surface, with the same
+    // ray–plane arithmetic the integrator uses, against the floor.
+    @inline(__always)
+    private static func cellClearsFloor(
+        dx: Int, dy: Int, depthMm z: Float, width w: Int, height h: Int,
+        depthWidth dw: Int, depthHeight dh: Int, intrinsics: CameraIntrinsics,
+        plane: SupportPlane, offsetMm: Float, floorMm: Float
+    ) -> Bool {
+        let cxCol = (Float(dx) + 0.5) * Float(w) / Float(dw) - 0.5
+        let cyCol = (Float(dy) + 0.5) * Float(h) / Float(dh) - 0.5
+        guard let height = heightAboveSupportPlaneMm(
+            colourX: cxCol, colourY: cyCol, depthMm: z,
+            intrinsics: intrinsics, plane: plane) else { return false }
+        return height - offsetMm >= floorMm
     }
 
     // Colour-grid rebuild from the cell decision: a colour pixel keeps its

@@ -69,12 +69,12 @@ struct FoodRegionGrowthTests {
         // Slab at 560 with a gentle ramp: every plate cell at 599 → 1 mm high.
         // Steps between neighbouring plate cells are 0 mm, so only the floor
         // keeps the fill off them; the slab edge is a cliff in any case. Make
-        // the slab edge gentle too: cell x = 12 at 562, x = 13 at 566 — both
-        // above the floor and within the cliff — then 599 beyond.
+        // the slab edge gentle too: cell x = 12 at 562, x = 13 at 565 — both
+        // above the floor and within the 3 mm cliff — then 599 beyond.
         let d = depth { dy, dx in
             if inSlab(dx, dy) { return 560 }
             if (3..<9).contains(dy) && dx == 12 { return 562 }
-            if (3..<9).contains(dy) && dx == 13 { return 566 }
+            if (3..<9).contains(dy) && dx == 13 { return 565 }
             return 599
         }
         let r = FoodRegionGrowth.grow(argmax: seedArgmax(cells: [(5, 4, 0)]), depth: d,
@@ -84,29 +84,43 @@ struct FoodRegionGrowthTests {
         #expect(r.foodPixelsAfter == 60 * 16)
     }
 
-    // The motivating order (Decision 1): growth is continuity only, and the
-    // height floor is applied by `prune` against the plane the volume uses.
-    // A first plane fitted on the food's own top prunes everything; the
-    // plate-top plane keeps the slab.
-    @Test("a plane on the food top prunes the slab away; the plate plane keeps it")
-    func pruneAgainstTheRightPlane() {
+    // Decision 1: on an edge-band (table) plane the plate sits at the ring
+    // median above the plane, and growth is gated on height above THAT. With
+    // the offset the fill stays on the slab; without it the plate (everything
+    // else in this scene) is "raised" and the fill runs past the cap.
+    @Test("the ring-median offset keeps the fill off a plate above a table plane")
+    func supportOffsetKeepsThePlateOut() {
+        // Real LiDAR: the slab's side is a slope, not a cliff. Two ramp columns
+        // (580, 596) join the slab (560) to the plate (599) in steps a 20 mm
+        // cliff allows, so only the height rule can stop the fill.
+        let ramped = depth { dy, dx in
+            if inSlab(dx, dy) { return 560 }
+            if (3..<9).contains(dy) && dx == 12 { return 580 }
+            if (3..<9).contains(dy) && dx == 13 { return 596 }
+            return 599
+        }
+        let sloped = FoodRegionGrowthConfig(cliffMm: 20, floorMm: 3, frameFractionCap: 0.35)
+        let table = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -620,
+                                 residualMm: 0.5, convergedIterations: nil)
         let a = seedArgmax(cells: [(5, 4, 0)])
-        let candidate = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
-                                              palette: palette)
-        #expect(candidate.applied)
-        #expect(candidate.foodPixelsAfter == 48 * 16)
+        let leaked = FoodRegionGrowth.grow(argmax: a, depth: ramped, intrinsics: k,
+                                           supportPlane: table, supportOffsetMm: 0,
+                                           palette: palette, config: sloped)
+        #expect(!leaked.applied && leaked.capTripped)
+        let held = FoodRegionGrowth.grow(argmax: a, depth: ramped, intrinsics: k,
+                                         supportPlane: table, supportOffsetMm: 21,
+                                         palette: palette, config: sloped)
+        #expect(held.applied)
+        // Slab (48 cells) plus both ramp columns (596 is 3 mm above the plate).
+        #expect(held.foodPixelsAfter == 60 * 16)
+        // Prune against a plane on the food top drops everything: the known
+        // inert case, which leaves the segmenter's map as it was.
         let foodTop = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -560,
                                    residualMm: 0.5, convergedIterations: nil)
-        let onFood = FoodRegionGrowth.prune(candidate, depth: slabDepth, intrinsics: k,
+        let onFood = FoodRegionGrowth.prune(held, depth: ramped, intrinsics: k,
                                             supportPlane: foodTop, palette: palette,
                                             config: .standard)
-        #expect(!onFood.applied)
-        #expect(onFood.argmax == a)
-        let onPlate = FoodRegionGrowth.prune(candidate, depth: slabDepth, intrinsics: k,
-                                             supportPlane: plane, palette: palette,
-                                             config: .standard)
-        #expect(onPlate.applied)
-        #expect(onPlate.argmax == candidate.argmax)
+        #expect(!onFood.applied && onFood.argmax == a)
     }
 
     @Test("growth past the frame cap returns the input unchanged and says so")
