@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test test-corpus food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -55,6 +55,7 @@ help:
 	@echo "                       (name=<dir> [branch=<branch>]; branch defaults to name, off HEAD)"
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
+	@echo "  test-corpus          the ~20 min support-plane corpus measurement pass, skipped by test"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
 	@echo "  food-db              regenerate the bundled food databases (CoFID + AFCD,"
 	@echo "                       loop overlay applied) and run the generator test suite"
@@ -126,6 +127,13 @@ test:
 	@# summary line per bundle; sum them (grep -a: a killed run leaves NUL bytes).
 	@echo "XCTest:        $$(grep -a -A1 -E "Test Suite 'All tests' (passed|failed)" $(TEST_LOG) | grep -a -oE 'Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?[0-9]+ failures?' | awk '{t+=$$2; f+=$$(NF-1)} END{printf "Executed %d tests, %d failures (summed over bundles)\n", t, f}')"
 	@echo "swift-testing: $$(grep -a -oE 'Test run with [0-9]+ tests? in [0-9]+ suites? (passed|failed)' $(TEST_LOG) | awk '{t+=$$4; s+=$$7; if ($$9=="failed") f++} END{printf "%d tests in %d suites, %d bundles failed (summed over bundles)\n", t, s, f}')"
+
+# The support-plane corpus measurement pass (SupportPlaneCorpusMeasurementTests)
+# is a ~20-minute beam search over the committed depth slices, so `make test`
+# skips it (the suite is gated on MEDATA_CORPUS=1). Run this when a support-plane
+# constant or a committed .depthslice changes.
+test-corpus:
+	MEDATA_CORPUS=1 swift test --filter SupportPlaneCorpusMeasurementTests
 
 spell:
 	bash tools/check_spelling.sh

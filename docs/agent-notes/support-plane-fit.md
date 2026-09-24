@@ -149,7 +149,9 @@ count. The scene does **not** have to move with it — Decision 43 measured the 
 these same eight scenes and it clears them all; see below.
 
 `SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the
-committed `.depthslice` fixtures. Adding a capture to it means cutting a slice with
+committed `.depthslice` fixtures. It takes ~20 minutes, so it is gated on
+`MEDATA_CORPUS=1` and skipped by `make test`; run `make test-corpus` (since 2026-09-24).
+Adding a capture to it means cutting a slice with
 `tools/fixture_slice.py` and appending the stem to its `captures` list. What it settled
 (Decision 29):
 

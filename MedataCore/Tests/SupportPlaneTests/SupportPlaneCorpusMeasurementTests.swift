@@ -27,7 +27,16 @@ import Volume
 // bowl, food at a small plate's edge) stay `[owed]`, and `decision_log.md` records
 // which and why. Fitting a bar to the pass side alone is the circularity Req 3.7
 // forbids.
-@Suite("Task 26 corpus measurement: the constants the design left unstated")
+//
+// Gated behind MEDATA_CORPUS=1 (`make test-corpus`): the pass is a beam search over
+// every committed slice and takes ~20 minutes of wall time, which is the whole cost
+// of `make test` and more than an agent's 600 s tool timeout. The default `make test`
+// skips it; run it when a support-plane constant or a committed slice changes.
+@Suite(
+    "Task 26 corpus measurement: the constants the design left unstated",
+    .enabled(
+        if: ProcessInfo.processInfo.environment["MEDATA_CORPUS"] == "1",
+        "corpus measurement pass (~20 min); run `make test-corpus`"))
 struct SupportPlaneCorpusMeasurementTests {
 
     // `1786439141215` (2026-08-11, weighed 58 g bread, single-view) is sliced and
