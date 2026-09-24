@@ -12,8 +12,22 @@ The repo-root `Makefile` is the one true way to run the loop (the same
 xcodebuild/devicectl commands were previously retyped ~50 times):
 
 - `make build` / `make test` — SwiftPM core. `make test` prints **both** test
-  totals (XCTest ~323 + swift-testing 16). Never report only one framework's
-  slice as "the" test count.
+  totals (2026-09-24: XCTest 694 + swift-testing 527). Never report only one
+  framework's slice as "the" test count.
+  - **Per-bundle summaries, summed since 2026-09-24.** `swift test` under
+    Xcode 26 runs each test bundle separately, so each framework prints one
+    summary line per bundle; the Makefile sums them. Before the fix the totals
+    read the *last* bundle only ("Executed 0 tests" / "32 tests") and looked
+    like a mostly-empty suite.
+  - **Wall time is ~20 minutes**, almost all of it
+    `SupportPlaneTests/SupportPlaneCorpusMeasurementTests` (a 15.7k-line
+    corpus beam search; single tests report 300–1100 s). That exceeds the 600 s
+    Bash tool timeout, which is how the 2026-09-24 orbit run on
+    unknown-food-nameable "hung": the agent's `make test` was backgrounded,
+    orbit killed the session, and an orphaned `swift test` kept spinning at
+    1200 % CPU until killed by hand. Run `make test` with
+    `run_in_background` (or a 20-minute timeout) and check for a leftover
+    `swiftpm-testing-helper` process before starting another.
   - **Concurrency of the totals: fixed 2026-08-13.** The totals are grepped from
     `$(CURDIR)/.build/medata-swift-test.log` (`TEST_LOG` in the Makefile), which
     is per-checkout, so parallel worktree runs no longer share it. Before the
