@@ -35,7 +35,7 @@ references:
 
 ## Device
 
-- [ ] 6. STOP — Release build on device measures the sesame roll whole: outline covers the roll, plane refit lands foodSupport, carb figure plausible for a ~60 g roll; field note updated <!-- id:7i9k8ja -->
+- [x] 6. STOP — Release build on device measures the sesame roll whole: outline covers the roll, plane refit lands foodSupport, carb figure plausible for a ~60 g roll; field note updated <!-- id:7i9k8ja -->
   - make deploy-release; capture the roll single-view; expect event=region.grow applied=true with after ≫ before, supportplane refit reference=foodSupport, review outline over the whole roll, and a bread row in the tens of grams of carbohydrate; pull the log and bundle.
   - Verify: log trail and outcome row cited in docs/agent-notes/field-truth-sessions.md under a 2026-09-24 entry; make spell.
   - Blocked-by: 7i9k8j7 (The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map Req 4–6)
