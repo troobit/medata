@@ -43,7 +43,8 @@ public enum FixtureRunner {
         palette: ClassPalette,
         database: any FoodDatabase,
         voxelEdgeMm: Float = 3.0,
-        regularisation: MaskRegularisationConfig = .standard
+        regularisation: MaskRegularisationConfig = .standard,
+        growth: FoodRegionGrowthConfig = .standard
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -75,6 +76,7 @@ public enum FixtureRunner {
         let perClassVolumesCm3: [String: Float]
         var supportPlaneResidualMm: Float?
         var supportPlaneReference: SupportPlaneReference?
+        var regionGrowth: MealCalibrationInput.RegionGrowth?
         switch capturePath {
         case .singleViewLidar:
             guard fixture.hasNadirDepth else {
@@ -86,17 +88,51 @@ public enum FixtureRunner {
             // branch — the estimator_path stamp no longer selects a fitter here. The
             // flood fill survives for the mixture path, which has no segmentation
             // output to derive a mask from (Decision 17).
-            let fit = try fitSupportPlane(
+            var fit = try fitSupportPlane(
                 depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
                 foodMask: foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
                 fixtureID: fixture.fixtureID)
+            // Depth-grown food region, exactly as Pipeline.estimate runs it
+            // (depth-grown-food-region Req 7): grow from the regularised map,
+            // refit from the grown mask, keep the first plane on a refusal.
+            let candidate = FoodRegionGrowth.grow(
+                argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
+                palette: palette, config: growth)
+            var grown = candidate
+            var refitReference: SupportPlaneReference?
+            var refitRefused = false
+            var measuredSeg = nadirSeg
+            if candidate.applied {
+                let refit = try? fitSupportPlane(
+                    depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
+                    foodMask: foodRegionMask(argmax: candidate.argmax, palette: palette),
+                    fixtureID: fixture.fixtureID)
+                refitRefused = refit == nil
+                grown = FoodRegionGrowth.prune(
+                    candidate, depth: depth, intrinsics: nadirIntrinsics,
+                    supportPlane: refit?.plane ?? fit.plane, palette: palette, config: growth)
+                if grown.applied {
+                    measuredSeg = SegmentationResult(
+                        probabilities: nadirSeg.probabilities, argmax: grown.argmax,
+                        perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
+                    if let refit {
+                        fit = refit
+                        refitReference = refit.reference
+                    }
+                }
+            }
+            regionGrowth = .init(
+                applied: grown.applied, capTripped: grown.capTripped,
+                foodPixelsBefore: grown.foodPixelsBefore, foodPixelsAfter: grown.foodPixelsAfter,
+                refitReference: refitReference, refitRefused: refitRefused)
             supportPlaneResidualMm = fit.plane.residualMm
             supportPlaneReference = fit.reference
             let est = try runHeightField(
-                seg: nadirSeg, depth: depth,
+                seg: measuredSeg, depth: depth,
                 intrinsics: nadirIntrinsics, plane: fit.plane,
                 beta: unityBeta, palette: palette,
-                fixtureID: fixture.fixtureID
+                fixtureID: fixture.fixtureID,
+                grownRegion: grown.grownRegion
             )
             perClassVolumesCm3 = est.perClassVolumesCm3
 
@@ -157,7 +193,8 @@ public enum FixtureRunner {
             groundTruthTotalCarbsG: fixture.groundTruthTotalCarbsG,
             perClassVolumesCm3: perClassVolumesCm3,
             supportPlaneResidualMm: supportPlaneResidualMm,
-            supportPlaneReference: supportPlaneReference
+            supportPlaneReference: supportPlaneReference,
+            regionGrowth: regionGrowth
         )
     }
 
@@ -359,7 +396,8 @@ public enum FixtureRunner {
         plane: SupportPlane,
         beta: BetaCorrection,
         palette: ClassPalette,
-        fixtureID: String
+        fixtureID: String,
+        grownRegion: BinaryMask? = nil
     ) throws -> HeightFieldEstimate {
         let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
             probabilities: seg.probabilities,
@@ -368,7 +406,8 @@ public enum FixtureRunner {
             intrinsics: intrinsics,
             supportPlane: plane,
             beta: beta,
-            palette: palette
+            palette: palette,
+            grownRegion: grownRegion
         ))
         guard let est = outcome.estimate else {
             throw Error.volumeEstimationFailed(

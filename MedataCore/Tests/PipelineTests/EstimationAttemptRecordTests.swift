@@ -51,7 +51,10 @@ final class EstimationAttemptRecordTests: XCTestCase {
                       densitySource: "cofid:13-456", coefficientSource: "cofid:13-456")
             ],
             sigma: .init(sigmaMeal: 0.62, sigmaScale: 0.85, sigmaSeg: 0.71,
-                         sigmaPlane: 0.53, sigmaView: 0.9, sigmaTilt: 0.99)
+                         sigmaPlane: 0.53, sigmaView: 0.9, sigmaTilt: 0.99),
+            regionGrowth: .init(applied: true, capTripped: false,
+                                foodPixelsBefore: 13_824, foodPixelsAfter: 193_536,
+                                refitReference: "foodSupport", refitRefused: false)
         )
     }
 

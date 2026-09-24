@@ -7,23 +7,23 @@ references:
 
 ## Pipeline
 
-- [ ] 1. A seed region on a raised slab grows to the slab's cliff and no further, deterministically, with the cap and floor as passthrough guards (Req 1–3) <!-- id:7i9k8j5 -->
+- [x] 1. A seed region on a raised slab grows to the slab's cliff and no further, deterministically, with the cap and floor as passthrough guards (Req 1–3) <!-- id:7i9k8j5 -->
   - FoodRegionGrowth.grow in the Volume module: depth-grid multi-source breadth-first fill from the food-like colour pixels, |Δz| ≤ cliffMm, confidence ≥ tauConfidence, height above the plane ≥ floorMm (ray–plane helper lifted from HeightFieldEstimator), first arrival labels, mapped back to the colour grid; returns the grown ArgmaxMap, the added-pixel BinaryMask, before/after counts and a capTripped flag. Constants on a GrowthConfig: cliff 4 mm, floor 3 mm, cap 0.35, plus .disabled.
   - Verify: VolumeTests on synthetic depth — a two-speck seed on a 30 mm slab with a one-cell cliff grows to the whole slab and stops at it; a plate-height ramp below the floor is not entered; growth past the cap returns the input unchanged with capTripped true; two seed classes on one slab split by distance; a run is byte-identical across two calls; .disabled returns the input; make test green (both totals).
 
-- [ ] 2. The height-field integrator measures every grown pixel and leaves ungrown estimates byte-identical (Req 5) <!-- id:7i9k8j6 -->
+- [x] 2. The height-field integrator measures every grown pixel and leaves ungrown estimates byte-identical (Req 5) <!-- id:7i9k8j6 -->
   - HeightFieldEstimator.Inputs gains grownRegion: BinaryMask? (default nil); a pixel the mask marks skips the (1 − qBg) < tauSilhouette test and nothing else changes.
   - Verify: VolumeTests — a grown pixel whose probabilities say background integrates volume when marked and none when unmarked; every existing HeightFieldEstimator test passes unchanged; make test green (both totals).
   - Blocked-by: 7i9k8j5 (A seed region on a raised slab grows to the slab's cliff and no further, deterministically, with the cap and floor as passthrough guards Req 1–3)
 
-- [ ] 3. The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map (Req 4–6) <!-- id:7i9k8j7 -->
+- [x] 3. The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map (Req 4–6) <!-- id:7i9k8j7 -->
   - Pipeline.estimate .singleViewLidar: growth after enforceMinimumFoodCoverage; on change, fitSupportPlane again with the grown food mask, take its plane and recompute lidarMmPerPx/MetricScale on success, keep the first plane on refusal; integrate with the grown argmax and grownRegion; mask artefact writer gets the grown map; CaptureBundleRecorder keeps nadirSeg.argmax; PipelineDiagnostics.recordRegionGrowth(applied:capTripped:before:after:refitReference:) lands in the outcome measurements; Release log line event=region.grow applied= before= after= refit=.
   - Verify: a Pipeline-level test with a stub segmenter and synthetic depth shows the record's volume covering the slab, the bundle argmax equal to the segmenter's, and the outcome measurements carrying the growth fields; Debug build warning-free via make build-app; make test green (both totals).
   - Blocked-by: 7i9k8j5 (A seed region on a raised slab grows to the slab's cliff and no further, deterministically, with the cap and floor as passthrough guards Req 1–3), 7i9k8j6 (The height-field integrator measures every grown pixel and leaves ungrown estimates byte-identical Req 5)
 
 ## Harness
 
-- [ ] 4. Harness single-view replay grows the same region as the device and sweeps the constants from the command line (Req 7) <!-- id:7i9k8j8 -->
+- [x] 4. Harness single-view replay grows the same region as the device and sweeps the constants from the command line (Req 7) <!-- id:7i9k8j8 -->
   - FixtureRunner.run applies FoodRegionGrowth before HeightFieldEstimator.integrate and repeats its fitter call with the grown mask; HarnessCLI accuracy takes --growth-cliff-mm, --growth-floor-mm, --growth-cap (0 disables) and reports per-capture before/after food-like fractions and capTripped.
   - Verify: HarnessCLITests — replay of a synthetic fixture matches the pipeline test's volume; --growth-cap 0 reproduces the pre-change number byte-for-byte; make test green (both totals).
   - Blocked-by: 7i9k8j7 (The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map Req 4–6)
