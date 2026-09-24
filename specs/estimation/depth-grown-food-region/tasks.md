@@ -28,7 +28,7 @@ references:
   - Verify: HarnessCLITests — replay of a synthetic fixture matches the pipeline test's volume; --growth-cap 0 reproduces the pre-change number byte-for-byte; make test green (both totals).
   - Blocked-by: 7i9k8j7 (The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map Req 4–6)
 
-- [ ] 5. The shipped constants are the ones the corpus sweep admits under the Req 8 pass rule, recorded in Decision 1 <!-- id:7i9k8j9 -->
+- [x] 5. The shipped constants are the ones the corpus sweep admits under the Req 8 pass rule, recorded in Decision 1 <!-- id:7i9k8j9 -->
   - Run HarnessCLI accuracy over the corpus captures with depth (/Users/r/repos/medata-corpus/captures, single-view bundles) at cliff {3, 4, 6} mm × floor {2, 3, 5} mm with cap 0.35; table per setting: median added area on captures with ≥ 5 % ungrown food-like area, cap-trip count, and the grown fraction on 1790223818017-success.
   - Verify: the table and the chosen constants appended to Decision 1; GrowthConfig.standard carries them; make test green (both totals). Gates the merge of research into main, not the device pass (Decision 2).
   - Blocked-by: 7i9k8j8 (Harness single-view replay grows the same region as the device and sweeps the constants from the command line Req 7)

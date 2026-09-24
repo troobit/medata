@@ -97,6 +97,7 @@ public enum FixtureRunner {
             // refit from the grown mask, keep the first plane on a refusal.
             let candidate = FoodRegionGrowth.grow(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
+                supportPlane: fit.plane, supportOffsetMm: fit.supportOffsetMm,
                 palette: palette, config: growth)
             var grown = candidate
             var refitReference: SupportPlaneReference?
@@ -108,9 +109,11 @@ public enum FixtureRunner {
                     foodMask: foodRegionMask(argmax: candidate.argmax, palette: palette),
                     fixtureID: fixture.fixtureID)
                 refitRefused = refit == nil
+                let pruneFit = refit ?? fit
                 grown = FoodRegionGrowth.prune(
                     candidate, depth: depth, intrinsics: nadirIntrinsics,
-                    supportPlane: refit?.plane ?? fit.plane, palette: palette, config: growth)
+                    supportPlane: pruneFit.plane, supportOffsetMm: pruneFit.supportOffsetMm,
+                    palette: palette, config: growth)
                 if grown.applied {
                     measuredSeg = SegmentationResult(
                         probabilities: nadirSeg.probabilities, argmax: grown.argmax,
@@ -206,6 +209,21 @@ public enum FixtureRunner {
         // is carried only because `SupportPlaneFitStats` must leave it absent on the
         // card-only path, where no depth-derived reference exists (Req 6.3).
         public let reference: SupportPlaneReference?
+        // Ring median above the plane (depth-grown-food-region): the plate top's
+        // height on an edge-band fit, ~0 on a foodSupport fit.
+        public let ringMedianMm: Float?
+
+        public init(plane: SupportPlane, reference: SupportPlaneReference?, ringMedianMm: Float? = nil) {
+            self.plane = plane
+            self.reference = reference
+            self.ringMedianMm = ringMedianMm
+        }
+
+        // The support surface's height above `plane`, the rule Pipeline uses.
+        public var supportOffsetMm: Float {
+            guard reference == .edgeBand, let m = ringMedianMm, m.isFinite, m > 0 else { return 0 }
+            return m
+        }
     }
 
     // The offline replay's support plane, derived by the SAME code the device runs
@@ -224,7 +242,8 @@ public enum FixtureRunner {
             throw Error.volumeEstimationFailed(
                 fixtureID, outcome.refusal ?? SupportPlaneError.noLidarPoints)
         }
-        return SingleViewPlaneFit(plane: plane, reference: outcome.stats.reference)
+        return SingleViewPlaneFit(plane: plane, reference: outcome.stats.reference,
+                                  ringMedianMm: outcome.stats.ring?.medianMm)
     }
 
     // The food-region mask on the argmax grid. `fitFoodSupportPlane` needs one and

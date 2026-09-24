@@ -257,8 +257,9 @@ public struct Pipeline: Sendable {
         #endif
         var plane: SupportPlane
         var planeReference: SupportPlaneReference?
+        var planeRingMedianMm: Float?
         do {
-            (plane, planeReference) = try fitSupportPlane(
+            (plane, planeReference, planeRingMedianMm) = try fitSupportPlane(
                 nadir: nadir,
                 cardPose: cardPose,
                 corners: corners,
@@ -388,8 +389,12 @@ public struct Pipeline: Sendable {
             // them, then refit the plane from the grown mask so the contact
             // ring sits on the plate rather than on the food. A refused refit
             // keeps the first plane; a tripped cap keeps the segmenter's map.
+            // The support surface sits at the ring median above an edge-band
+            // (table) plane and at the plane itself on a foodSupport fit.
             let candidate = FoodRegionGrowth.grow(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadir.intrinsics,
+                supportPlane: plane,
+                supportOffsetMm: Self.supportOffsetMm(reference: planeReference, ringMedianMm: planeRingMedianMm),
                 palette: palette, config: regionGrowth)
             var growth = candidate
             var refitReference: SupportPlaneReference?
@@ -398,11 +403,14 @@ public struct Pipeline: Sendable {
                 let refit = supportPlaneFitter.fitOutcome(
                     nadir: nadir, cardPose: cardPose, corners: corners,
                     preShutterFoodMask: PipelineBridges.foodMask(from: candidate.argmax, palette: palette))
-                let planeForPrune = refit.plane ?? plane
                 refitRefused = refit.plane == nil
+                let pruneOffset = refit.plane == nil
+                    ? Self.supportOffsetMm(reference: planeReference, ringMedianMm: planeRingMedianMm)
+                    : Self.supportOffsetMm(reference: refit.stats.reference, ringMedianMm: refit.stats.ring?.medianMm)
                 growth = FoodRegionGrowth.prune(
                     candidate, depth: depth, intrinsics: nadir.intrinsics,
-                    supportPlane: planeForPrune, palette: palette, config: regionGrowth)
+                    supportPlane: refit.plane ?? plane, supportOffsetMm: pruneOffset,
+                    palette: palette, config: regionGrowth)
                 // Adopt the refit plane only when the pruned region still
                 // stands; a region pruned to nothing means the refit's mask
                 // was not food, so its plane is not trusted either.
@@ -433,7 +441,9 @@ public struct Pipeline: Sendable {
                 foodPixelsBefore: growth.foodPixelsBefore, foodPixelsAfter: growth.foodPixelsAfter,
                 refitReference: refitReference?.rawValue, refitRefused: refitRefused))
             let refitLabel = refitReference?.rawValue ?? (refitRefused ? "refused" : "none")
-            pipelineStageLog.info(
+            // On the Release-emitted channel (pipelineStageLog is Debug-only):
+            // this line is the on-device window into what growth did.
+            supportPlaneLog.info(
                 """
                 event=region.grow applied=\(growth.applied, privacy: .public) \
                 capTripped=\(growth.capTripped, privacy: .public) \
@@ -729,7 +739,7 @@ public struct Pipeline: Sendable {
         corners: [PixelCorner]?,
         preShutterFoodMask: BinaryMask?,
         diagnostics: PipelineDiagnostics
-    ) throws -> (plane: SupportPlane, reference: SupportPlaneReference?) {
+    ) throws -> (plane: SupportPlane, reference: SupportPlaneReference?, ringMedianMm: Float?) {
         #if DEBUG
         supportPlaneLog.info(
             """
@@ -765,7 +775,7 @@ public struct Pipeline: Sendable {
                 """
             )
             #endif
-            return (plane, stats.reference)
+            return (plane, stats.reference, stats.ring?.medianMm)
         }
         let error = outcome.refusal ?? .noLidarPoints
         // Failure-path trace. `failure=` carries the EXACT SupportPlaneError
@@ -810,6 +820,14 @@ public struct Pipeline: Sendable {
 
     // Resolved-scale label for the outcome record (Req 3.1: "the resolved
     // scale source").
+    // depth-grown-food-region: the support surface's height above the fitted
+    // plane. An edge-band plane is the table and the fitter's ring median is
+    // the plate top above it; a foodSupport plane is the support surface.
+    static func supportOffsetMm(reference: SupportPlaneReference?, ringMedianMm: Float?) -> Float {
+        guard reference == .edgeBand, let median = ringMedianMm, median.isFinite, median > 0 else { return 0 }
+        return median
+    }
+
     private static func scaleSourceLabel(_ scale: MetricScale) -> String {
         switch (scale.cardScaleAvailable, scale.lidarScaleAvailable) {
         case (true, true): return "card+lidar"
