@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test test-corpus food-db build-app deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test test-corpus food-db build-app build-release-check deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -56,6 +56,7 @@ help:
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  test-corpus          the ~20 min support-plane corpus measurement pass, skipped by test"
+	@echo "  build-release-check  compile the app in Release with no device (Debug-only symbols break here)"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
 	@echo "  food-db              regenerate the bundled food databases (CoFID + AFCD,"
 	@echo "                       loop overlay applied) and run the generator test suite"
@@ -309,6 +310,17 @@ build-app:
 	$(XCODEBUILD) -configuration Debug -derivedDataPath $(DERIVED_DEBUG) \
 		MEDATA_BUILD_STAMP='$(BUILD_STAMP)' build
 	@echo "BUILD STAMP: $(BUILD_STAMP)"
+
+# Release compile check without a device or an install (BACKLOG 1). Debug-only
+# symbols (pipelineStageLog, HARNESS_ENABLED code, DEV_STUB_SEGMENTER paths)
+# compile fine in Debug and break only here; on 2026-09-24 a Release-channel
+# log line on a Debug-only logger reached research and cost a deploy. Run it
+# before committing anything that touches #if DEBUG boundaries.
+build-release-check:
+	$(XCODEBUILD) -configuration Release -derivedDataPath $(DERIVED_RELEASE) \
+		-destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
+		MEDATA_BUILD_STAMP='$(BUILD_STAMP)' build
+	@echo "release compile OK: $(BUILD_STAMP)"
 
 deploy-device: build-app
 	xcrun devicectl device install app --device $(DEVICE_UDID) \
