@@ -194,7 +194,8 @@ public enum FoodRegionGrowth {
         let result = toColourGrid(
             inputLabels: labels, added: added, cellLabel: cellLabel,
             before: before, width: w, height: h, depthWidth: dw, depthHeight: dh,
-            palette: palette)
+            palette: palette, depth: depth, intrinsics: intrinsics,
+            plane: plane, offsetMm: supportOffsetMm, floorMm: config.floorMm)
         guard result.applied else { return unchanged(capTripped: false) }
         if Float(result.foodPixelsAfter) > config.frameFractionCap * Float(w * h) {
             return unchanged(capTripped: true)
@@ -234,7 +235,9 @@ public enum FoodRegionGrowth {
         return toColourGrid(
             inputLabels: grown.inputLabels, added: kept, cellLabel: grown.cellLabel,
             before: grown.foodPixelsBefore, width: w, height: h,
-            depthWidth: dw, depthHeight: dh, palette: palette)
+            depthWidth: dw, depthHeight: dh, palette: palette,
+            depth: depth, intrinsics: intrinsics, plane: plane,
+            offsetMm: supportOffsetMm, floorMm: config.floorMm)
     }
 
     // Height of the cell centre above the support surface, with the same
@@ -253,15 +256,33 @@ public enum FoodRegionGrowth {
         return height - offsetMm >= floorMm
     }
 
-    // Colour-grid rebuild from the cell decision: a colour pixel keeps its
-    // existing food-like label; an added cell's block takes the cell label.
+    // Colour-grid rebuild from the cell decision. A colour pixel keeps its
+    // existing food-like label. Otherwise it is added when its own surface —
+    // the bilinear depth sample the integrator will read at that pixel —
+    // clears the floor above the support surface AND its nearest cell or one
+    // of that cell's 4-neighbours was filled. The per-pixel height test is
+    // what keeps the edge on the depth contour rather than on the 7.5 × 7.5 px
+    // cell blocks ("speckles around edge of roll", 2026-09-24 field note);
+    // the neighbour rule lets the contour run up to one cell past the fill.
     private static func toColourGrid(
         inputLabels labels: [UInt8], added: [Bool], cellLabel: [UInt8],
         before: Int, width w: Int, height h: Int, depthWidth dw: Int, depthHeight dh: Int,
-        palette: ClassPalette
+        palette: ClassPalette, depth: DepthMap, intrinsics: CameraIntrinsics,
+        plane: SupportPlane, offsetMm: Float, floorMm: Float
     ) -> FoodRegionGrowthResult {
         let colX = (0..<w).map { x in min(dw - 1, max(0, Int((Float(x) + 0.5) * Float(dw) / Float(w)))) }
         let colY = (0..<h).map { y in min(dh - 1, max(0, Int((Float(y) + 0.5) * Float(dh) / Float(h)))) }
+        // A pixel may be added when its cell, or a 4-neighbour of it, was filled;
+        // the filled cell nearest in raster order supplies the label.
+        func filledNear(_ i: Int) -> Int? {
+            if added[i] { return i }
+            let cx = i % dw, cy = i / dw
+            if cy > 0, added[i - dw] { return i - dw }
+            if cx > 0, added[i - 1] { return i - 1 }
+            if cx < dw - 1, added[i + 1] { return i + 1 }
+            if cy < dh - 1, added[i + dw] { return i + dw }
+            return nil
+        }
         var grown = labels
         var region = [UInt8](repeating: 0, count: w * h)
         var after = before
@@ -271,9 +292,15 @@ public enum FoodRegionGrowth {
             for x in 0..<w {
                 let p = y * w + x
                 guard !palette.isVolumetricClass(Int(labels[p])) else { continue }
-                let i = cy * dw + colX[x]
-                guard added[i] else { continue }
-                grown[p] = cellLabel[i]
+                guard let src = filledNear(cy * dw + colX[x]) else { continue }
+                guard let z = sampleDepthBilinearMm(
+                    depth: depth, colourX: Float(x), colourY: Float(y),
+                    colourWidth: w, colourHeight: h), z > 0,
+                      let height = heightAboveSupportPlaneMm(
+                        colourX: Float(x), colourY: Float(y), depthMm: z,
+                        intrinsics: intrinsics, plane: plane),
+                      height - offsetMm >= floorMm else { continue }
+                grown[p] = cellLabel[src]
                 region[p] = 1
                 after += 1
                 addedPixels += 1
