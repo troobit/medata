@@ -17,7 +17,7 @@ references:
   - Verify: unit tests — small named component on a larger unknown region absorbed; small unknown fringe on rice joins rice; a class large in total but split into many small pieces kept; two adjacent slivers with no other border unchanged; fraction 0 byte-identical to today; standard config unchanged for the existing speckle tests.
   - Stream: 2
 
-- [ ] 3. The shipped sliver fraction is the largest of 0, 0.05, 0.10 that keeps N5k mean food-class IoU from falling and carb MAE from rising, recorded in the decision log <!-- id:tiv69ro -->
+- [x] 3. The shipped sliver fraction is the largest of 0, 0.05, 0.10 that keeps N5k mean food-class IoU from falling and carb MAE from rising, recorded in the decision log <!-- id:tiv69ro -->
   - Confirm SegBench.sample and FixtureRunner run the regularisation pass on stored probabilities (route them through it if not, so the measurement exercises the rule). Run HarnessCLI seg-bench and make harness-accuracy over tmp/n5k_fixtures at each fraction; spot-check the five bundles in tmp/device_captures.
   - Verify: a table of mIoU and carb MAE per fraction appended to Decision 3; MaskRegularisationConfig.standard carries the chosen value; make test green.
   - Gates the merge of research into main, not the device pass (Decision 4).

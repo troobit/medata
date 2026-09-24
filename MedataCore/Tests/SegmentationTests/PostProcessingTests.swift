@@ -288,10 +288,11 @@ final class PostProcessingTests: XCTestCase {
             regulariseLabelMap(input, width: width, height: height, palette: palette, config: sliverConfig),
             input, "the fraction is what changes the map"
         )
-        // `.disabled` stays a full passthrough; `.standard` carries the default.
+        // `.disabled` stays a full passthrough; `.standard` carries the shipped
+        // fraction, measured at 0.05 (unknown-food-nameable Decision 3).
         XCTAssertTrue(MaskRegularisationConfig.disabled.isPassthrough)
         XCTAssertFalse(zero.isPassthrough)
-        XCTAssertEqual(MaskRegularisationConfig.standard.sliverFraction, 0.10)
+        XCTAssertEqual(MaskRegularisationConfig.standard.sliverFraction, 0.05)
     }
 
     // MARK: - σ_seg (Step 12, M8 pin)

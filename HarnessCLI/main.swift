@@ -49,6 +49,22 @@ struct Args {
     // side drops that pair from the attribution floor. Defaults to
     // `--checkpoint-sha256`, i.e. no skew claimed.
     var replayCheckpointSHA256: String = ""
+    // unknown-food-nameable task 3: sweep the Req 10 sliver-absorption fraction
+    // without a rebuild. Applies to every subcommand that replays a fixture
+    // through the segmenter's label map — seg-bench, accuracy, calibrate,
+    // diagnose — all of which otherwise regularise with
+    // `MaskRegularisationConfig.standard`, the config the app ships. The speckle
+    // strength is not swept; only the sliver rule is under measurement.
+    var sliverFraction: Double?
+}
+
+// The regularisation the harness applies to a replayed argmax: `.standard`
+// (what the device runs) with `--sliver-fraction` substituted when given.
+func regularisationConfig(args: Args) -> MaskRegularisationConfig {
+    let standard = MaskRegularisationConfig.standard
+    guard let fraction = args.sliverFraction else { return standard }
+    return MaskRegularisationConfig(
+        minRegionArea: standard.minRegionArea, sliverFraction: fraction)
 }
 
 func parseArgs() -> Args? {
@@ -79,6 +95,8 @@ func parseArgs() -> Args? {
         case "--mesh-truth":        result.meshTruthPath    = it.next() ?? ""
         case "--replay-checkpoint-sha256":
             result.replayCheckpointSHA256 = it.next() ?? ""
+        case "--sliver-fraction":
+            if let s = it.next(), let f = Double(s) { result.sliverFraction = f }
         default: break
         }
     }
@@ -369,6 +387,9 @@ func writeSnakeCaseJSON<T: Encodable>(_ value: T, to path: String) throws {
 
 struct SegBenchJSON: Encodable {
     let meanFoodClassIoU: Float; let passesBar: Bool
+    // The Req 10 sliver fraction the predicted argmax was regularised with, so a
+    // sweep's reports are self-describing rather than told apart by filename.
+    let sliverFraction: Double
     let perClassIoU: [String: Float]
 }
 
@@ -394,11 +415,13 @@ func paletteForFixture(_ fixture: PbMealFixture) -> ClassPalette {
 // drop (calibrate-silently-drops-unreadable-fixtures): the old `try?` +
 // `compactMap` here computed the accuracy report over an unstated subset.
 func buildCalInputs(
-    fixtures: [PbMealFixture], db: any FoodDatabase, edgeMm: Float
+    fixtures: [PbMealFixture], db: any FoodDatabase, edgeMm: Float,
+    regularisation: MaskRegularisationConfig = .standard
 ) -> (inputs: [MealCalibrationInput], skips: [FixtureBatch.Skip]) {
     let (results, skips) = FixtureBatch.partition(fixtures: fixtures) { fx in
         try FixtureRunner.run(
-            fixture: fx, palette: paletteForFixture(fx), database: db, voxelEdgeMm: edgeMm)
+            fixture: fx, palette: paletteForFixture(fx), database: db, voxelEdgeMm: edgeMm,
+            regularisation: regularisation)
     }
     return (results, skips)
 }
@@ -411,7 +434,10 @@ func runAccuracy(args: Args) throws {
     }
     let db = try GRDBFoodDatabase.bundled()
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
-    let (calInputs, skips) = buildCalInputs(fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm)
+    let regularisation = regularisationConfig(args: args)
+    let (calInputs, skips) = buildCalInputs(
+        fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm, regularisation: regularisation)
+    fputs("accuracy: sliver fraction \(regularisation.sliverFraction)\n", stderr)
     for skip in skips {
         fputs("accuracy: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
     }
@@ -538,7 +564,8 @@ func runCalibration(args: Args, db: any FoodDatabase,
     for fx in routed.singleDominant {
         do {
             let input = try FixtureRunner.run(fixture: fx, palette: palette,
-                                              database: db, voxelEdgeMm: args.voxelEdgeMm)
+                                              database: db, voxelEdgeMm: args.voxelEdgeMm,
+                                              regularisation: regularisationConfig(args: args))
             sdInputs.append(input)
             if fx.estimatorPath == "single_dominant" {
                 massDominant[fx.fixtureID] =
@@ -1035,7 +1062,8 @@ func runDiagnose(args: Args) throws {
         replayDatabaseEdition: db.version
     ) { fx in
         try FixtureRunner.run(fixture: fx, palette: paletteForFixture(fx),
-                              database: db, voxelEdgeMm: args.voxelEdgeMm)
+                              database: db, voxelEdgeMm: args.voxelEdgeMm,
+                              regularisation: regularisationConfig(args: args))
     }
 
     let data = try DiagnoseRun.encoder().encode(report)
@@ -1062,9 +1090,12 @@ func runSegBench(args: Args) throws {
     // Same per-fixture resolution as buildCalInputs, and the same rule
     // (seg-bench-silently-drops-mis-sized-fixtures): a fixture the bench
     // cannot decode is a reported skip, never a silent drop.
+    let regularisation = regularisationConfig(args: args)
     let (samples, skips) = FixtureBatch.partition(fixtures: fixtures) { fx in
-        try SegBench.sample(from: fx, palette: paletteForFixture(fx))
+        try SegBench.sample(
+            from: fx, palette: paletteForFixture(fx), regularisation: regularisation)
     }
+    fputs("seg-bench: sliver fraction \(regularisation.sliverFraction)\n", stderr)
     for skip in skips {
         fputs("seg-bench: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
     }
@@ -1083,6 +1114,7 @@ func runSegBench(args: Args) throws {
     try writeJSON(SegBenchJSON(
         meanFoodClassIoU: report.meanFoodClassIoU,
         passesBar: report.passesBar,
+        sliverFraction: regularisation.sliverFraction,
         perClassIoU: perClassIoU
     ), to: args.outputPath)
     if !report.passesBar {

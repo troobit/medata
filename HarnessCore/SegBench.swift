@@ -109,8 +109,17 @@ extension SegBench {
     // guarded the byte count inside a compactMap, so every mis-palletted
     // bundle vanished from the bench with no message. The batch driver
     // (FixtureBatch.partition) carries the throw as a reported skip.
+    // `regularisation` is applied to the PREDICTED argmax only, never to the
+    // ground truth, and is what makes the bench measure the mask the app ships
+    // rather than the raw argmax: on device `SegmenterPostProcessor.process`
+    // regularises before the label map reaches the overlay and the volume
+    // stage, so a bench that skipped the pass would score a mask that never
+    // leaves the segmenter (unknown-food-nameable task 3). Defaults to
+    // `.standard` for that reason; pass `.disabled` for the raw-argmax score.
     public static func sample(
-        from fixture: PbMealFixture, palette: ClassPalette
+        from fixture: PbMealFixture,
+        palette: ClassPalette,
+        regularisation: MaskRegularisationConfig = .standard
     ) throws -> SegBenchSample {
         let W = Int(fixture.nadirIntrinsics.imageWidth)
         let H = Int(fixture.nadirIntrinsics.imageHeight)
@@ -120,10 +129,14 @@ extension SegBench {
             throw FixtureRunner.Error.probsSizeMismatch(
                 fixture.fixtureID, expected: expected, got: fixture.nadirProbs.count)
         }
+        let rawArgmax = argmaxFromFP16Probs(
+            probsData: fixture.nadirProbs, width: W, height: H, classes: C)
+        let cleaned = SegmenterPostProcessor.regularise(
+            argmax: Data(rawArgmax), width: W, height: H,
+            palette: palette, config: regularisation)
         return SegBenchSample(
             fixtureID: fixture.fixtureID,
-            predictedArgmax: argmaxFromFP16Probs(
-                probsData: fixture.nadirProbs, width: W, height: H, classes: C),
+            predictedArgmax: [UInt8](cleaned),
             groundTruthArgmax: [UInt8](fixture.nadirArgmax),
             width: W, height: H)
     }

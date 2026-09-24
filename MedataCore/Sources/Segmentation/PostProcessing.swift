@@ -61,9 +61,11 @@ public struct MaskRegularisationConfig: Sendable, Equatable {
 
     /// Default cleanup strength. 12 pixels removes isolated speckle and thin
     /// stripes while leaving any coherent food silhouette (hundreds+ of pixels)
-    /// untouched. The sliver fraction starts at 0.10 and is fixed by the N5k
-    /// measurement in unknown-food-nameable task 3.
-    public static let standard = MaskRegularisationConfig(minRegionArea: 12, sliverFraction: 0.10)
+    /// untouched. The sliver fraction is 0.05, fixed by the seg-bench sweep in
+    /// unknown-food-nameable task 3 (Decision 3): over the 182-image leak-free
+    /// held-out split, 0.05 holds mean food-class IoU flat (+0.0011 on a fixed
+    /// denominator) while 0.10 costs -0.0083.
+    public static let standard = MaskRegularisationConfig(minRegionArea: 12, sliverFraction: 0.05)
 
     /// True when the pass would reassign nothing regardless of input.
     public var isPassthrough: Bool { minRegionArea <= 1 && sliverFraction <= 0 }
@@ -255,6 +257,28 @@ public enum SegmenterPostProcessor {
             sigmaSeg: sigmaSeg,
             candidateEvidence: candidateEvidence
         )
+    }
+
+    /// Run the regularisation pass on an already-decoded argmax label map.
+    ///
+    /// `process(...)` is the device path: it owns the logits and regularises the
+    /// argmax it derives from them. Replay has neither — a fixture carries the
+    /// argmax (or a probability tensor the harness argmaxes itself), so without
+    /// this entry point the offline bench measures an UNregularised label map
+    /// while the device measures a regularised one, and a rule tuned on the
+    /// bench would be tuned against a mask the app never produces
+    /// (unknown-food-nameable task 3).
+    ///
+    /// Returns `labels` unchanged for a passthrough config or a size mismatch.
+    public static func regularise(
+        argmax labels: Data,
+        width: Int,
+        height: Int,
+        palette: ClassPalette,
+        config: MaskRegularisationConfig
+    ) -> Data {
+        regulariseLabelMap(
+            labels, width: width, height: height, palette: palette, config: config)
     }
 }
 
