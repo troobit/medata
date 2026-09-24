@@ -68,8 +68,11 @@ the corpus; `1786450130307-success.fixture` is truncated at exactly
 
 - The bundle keeps the segmenter's (ungrown) argmax; replay re-grows. The
   mask artefact the review outline reads is the grown map.
-- Growth maps depth cells back as 7.5 × 7.5 px blocks, so the outline's edge
-  is blocky ("speckles around edge of roll" in the 2026-09-24 field notes).
+- The colour-grid edge follows the bilinear depth contour, not the 7.5 × 7.5
+  px cell blocks: a pixel is added when its own bilinear depth clears the
+  floor and its cell or a 4-neighbour cell was filled (evening 2026-09-24,
+  after the "speckles around edge of roll" field note). Counts in tests are
+  therefore ranges, not cell multiples.
 - `pipelineStageLog` is Debug-only; `event=region.grow` is on
   `supportPlaneLog` so it reaches the Release log.
 - Outcome rows carry `regionGrowth {applied, capTripped, foodPixelsBefore,

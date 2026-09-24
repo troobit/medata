@@ -51,16 +51,24 @@ struct FoodRegionGrowthTests {
         #expect(r.applied)
         #expect(!r.capTripped)
         #expect(r.foodPixelsBefore == 16)
-        #expect(r.foodPixelsAfter == 48 * 16)
+        // The colour-grid edge follows the bilinear depth contour, so the count
+        // runs up to half a cell past the 48-cell slab (768 px block area).
+        #expect(r.foodPixelsAfter > 700 && r.foodPixelsAfter < 1150, "after \(r.foodPixelsAfter)")
         let labels = [UInt8](r.argmax.pixels)
         for y in 0..<h {
             for x in 0..<w {
-                let expected = inSlab(x / 4, y / 4) ? 0 : palette.background
-                #expect(Int(labels[y * w + x]) == expected, "pixel \(x),\(y)")
+                // Interior of the slab (a cell in from the edge) is food_0; two
+                // cells out from the slab is background; the edge band is free.
+                let dx = x / 4, dy = y / 4
+                if (5..<11).contains(dx) && (4..<8).contains(dy) {
+                    #expect(Int(labels[y * w + x]) == 0, "pixel \(x),\(y)")
+                } else if !((3...12).contains(dx) && (2...9).contains(dy)) {
+                    #expect(Int(labels[y * w + x]) == palette.background, "pixel \(x),\(y)")
+                }
             }
         }
         let region = try #require(r.grownRegion)
-        #expect(region.pixels.filter { $0 != 0 }.count == 47 * 16)
+        #expect(region.pixels.filter { $0 != 0 }.count == r.foodPixelsAfter - 16)
         #expect(!region.isFood(x: 5 * 4, y: 4 * 4))   // the seed block is not "added"
     }
 
@@ -77,11 +85,15 @@ struct FoodRegionGrowthTests {
             if (3..<9).contains(dy) && dx == 13 { return 565 }
             return 599
         }
+        // Slab plus ramp is ~40 % of this small frame once the contour edge is
+        // counted, so the cap is lifted for the scene.
+        let roomy = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 3, frameFractionCap: 0.6)
         let r = FoodRegionGrowth.grow(argmax: seedArgmax(cells: [(5, 4, 0)]), depth: d,
-                                      intrinsics: k, supportPlane: plane, palette: palette)
+                                      intrinsics: k, supportPlane: plane, palette: palette,
+                                      config: roomy)
         #expect(r.applied)
-        // 48 slab cells + 2 ramp columns × 6 rows = 60 cells.
-        #expect(r.foodPixelsAfter == 60 * 16)
+        // 48 slab cells + 2 ramp columns × 6 rows = 60 cells (960 px), edge band free.
+        #expect(r.foodPixelsAfter > 800 && r.foodPixelsAfter < 1350, "after \(r.foodPixelsAfter)")
     }
 
     // Decision 1: on an edge-band (table) plane the plate sits at the ring
@@ -99,7 +111,8 @@ struct FoodRegionGrowthTests {
             if (3..<9).contains(dy) && dx == 13 { return 596 }
             return 599
         }
-        let sloped = FoodRegionGrowthConfig(cliffMm: 20, floorMm: 3, frameFractionCap: 0.35)
+        // Cap lifted for the small frame (the leak case still covers all of it).
+        let sloped = FoodRegionGrowthConfig(cliffMm: 20, floorMm: 3, frameFractionCap: 0.6)
         let table = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -620,
                                  residualMm: 0.5, convergedIterations: nil)
         let a = seedArgmax(cells: [(5, 4, 0)])
@@ -111,8 +124,8 @@ struct FoodRegionGrowthTests {
                                          supportPlane: table, supportOffsetMm: 21,
                                          palette: palette, config: sloped)
         #expect(held.applied)
-        // Slab (48 cells) plus both ramp columns (596 is 3 mm above the plate).
-        #expect(held.foodPixelsAfter == 60 * 16)
+        // Slab (48 cells) plus both ramp columns (596 is 3 mm above the plate): 960 px.
+        #expect(held.foodPixelsAfter > 800 && held.foodPixelsAfter < 1350, "after \(held.foodPixelsAfter)")
         // Prune against a plane on the food top drops everything: the known
         // inert case, which leaves the segmenter's map as it was.
         let foodTop = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -560,
@@ -145,8 +158,8 @@ struct FoodRegionGrowthTests {
         let labels = [UInt8](r.argmax.pixels)
         let count0 = labels.filter { $0 == 0 }.count
         let count1 = labels.filter { $0 == 1 }.count
-        #expect(count0 + count1 == 48 * 16)
-        #expect(count0 == count1)
+        #expect(count0 + count1 > 700 && count0 + count1 < 1150)
+        #expect(abs(count0 - count1) <= 64)
         #expect(Int(labels[(5 * 4) * w + 5 * 4]) == 0)    // near seed 0
         #expect(Int(labels[(5 * 4) * w + 10 * 4]) == 1)   // near seed 1
     }
@@ -158,7 +171,8 @@ struct FoodRegionGrowthTests {
                                       supportPlane: plane, palette: palette)
         #expect(r.applied)
         let labels = [UInt8](r.argmax.pixels)
-        #expect(labels.filter { Int($0) == palette.unknownFood }.count == 48 * 16)
+        let n = labels.filter { Int($0) == palette.unknownFood }.count
+        #expect(n > 700 && n < 1150, "unknown pixels \(n)")
     }
 
     @Test("low-confidence cells are not entered")
@@ -168,7 +182,8 @@ struct FoodRegionGrowthTests {
         let r = FoodRegionGrowth.grow(argmax: seedArgmax(cells: [(5, 4, 0)]), depth: d,
                                       intrinsics: k, supportPlane: plane, palette: palette)
         #expect(r.applied)
-        #expect(r.foodPixelsAfter == 4 * 6 * 16)   // slab columns 4..<8 only
+        // Slab columns 4..<8 only (384 px), edge band free.
+        #expect(r.foodPixelsAfter > 300 && r.foodPixelsAfter < 600, "after \(r.foodPixelsAfter)")
     }
 
     @Test("a disabled config and a background-only map are passthrough")
@@ -223,7 +238,7 @@ struct FoodRegionGrowthTests {
         // Unmarked: only the 16 seed pixels pass the silhouette test.
         let without = try #require(integrate(region: nil).estimate)
         #expect(without.perClassFoodPixelCount["food_0"] == 16)
-        #expect(with.perClassFoodPixelCount["food_0"] == 48 * 16)
+        #expect(with.perClassFoodPixelCount["food_0"] == grown.foodPixelsAfter)
         let withoutVol = try #require(without.perClassVolumesCm3["food_0"])
         #expect(withVol > withoutVol * 40)
     }
