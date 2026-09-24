@@ -122,8 +122,10 @@ test:
 	set -o pipefail; swift test 2>&1 | tee $(TEST_LOG)
 	@echo ""
 	@echo "---- Test totals (two frameworks — report BOTH) ----"
-	@echo "XCTest:        $$(grep -E 'Executed [0-9]+ tests' $(TEST_LOG) | tail -1 | sed 's/^[[:space:]]*//')"
-	@echo "swift-testing: $$(grep -E 'Test run with [0-9]+ test' $(TEST_LOG) | tail -1 | sed 's/^[^A-Za-z]*//')"
+	@# swift test runs every test bundle separately, so each framework prints one
+	@# summary line per bundle; sum them (grep -a: a killed run leaves NUL bytes).
+	@echo "XCTest:        $$(grep -a -A1 -E "Test Suite 'All tests' (passed|failed)" $(TEST_LOG) | grep -a -oE 'Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?[0-9]+ failures?' | awk '{t+=$$2; f+=$$(NF-1)} END{printf "Executed %d tests, %d failures (summed over bundles)\n", t, f}')"
+	@echo "swift-testing: $$(grep -a -oE 'Test run with [0-9]+ tests? in [0-9]+ suites? (passed|failed)' $(TEST_LOG) | awk '{t+=$$4; s+=$$7; if ($$9=="failed") f++} END{printf "%d tests in %d suites, %d bundles failed (summed over bundles)\n", t, s, f}')"
 
 spell:
 	bash tools/check_spelling.sh
