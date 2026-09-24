@@ -27,6 +27,28 @@ public struct MealCalibrationInput: Sendable {
     // nil on the two-view path, which derives no depth plane. β_c is fitted within
     // one reference, so this is what partitions the corpus.
     public let supportPlaneReference: SupportPlaneReference?
+    // Depth-grown food region on the single-view replay (depth-grown-food-region
+    // Req 7): what the pass did to this fixture, for the constant sweep.
+    public let regionGrowth: RegionGrowth?
+
+    public struct RegionGrowth: Sendable, Equatable {
+        public let applied: Bool
+        public let capTripped: Bool
+        public let foodPixelsBefore: Int
+        public let foodPixelsAfter: Int
+        public let refitReference: SupportPlaneReference?
+        public let refitRefused: Bool
+        public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
+                    foodPixelsAfter: Int, refitReference: SupportPlaneReference?,
+                    refitRefused: Bool) {
+            self.applied = applied
+            self.capTripped = capTripped
+            self.foodPixelsBefore = foodPixelsBefore
+            self.foodPixelsAfter = foodPixelsAfter
+            self.refitReference = refitReference
+            self.refitRefused = refitRefused
+        }
+    }
 
     public init(
         fixtureID: String,
@@ -37,7 +59,8 @@ public struct MealCalibrationInput: Sendable {
         groundTruthTotalCarbsG: Float,
         perClassVolumesCm3: [String: Float] = [:],
         supportPlaneResidualMm: Float? = nil,
-        supportPlaneReference: SupportPlaneReference? = nil
+        supportPlaneReference: SupportPlaneReference? = nil,
+        regionGrowth: RegionGrowth? = nil
     ) {
         self.fixtureID = fixtureID
         self.capturePath = capturePath
@@ -48,6 +71,7 @@ public struct MealCalibrationInput: Sendable {
         self.perClassVolumesCm3 = perClassVolumesCm3
         self.supportPlaneResidualMm = supportPlaneResidualMm
         self.supportPlaneReference = supportPlaneReference
+        self.regionGrowth = regionGrowth
     }
 }
 

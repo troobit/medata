@@ -230,6 +230,32 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     public let preShutterSegmentationErrorCount: Int?
     public let decomposition: [ClassDecomposition]?
     public let sigma: SigmaTerms?
+    // Depth-grown food region (depth-grown-food-region Req 3–4): whether the
+    // pass added pixels, the food-like count before and after, and what the
+    // plane refit from the grown mask returned. nil when the pass did not run
+    // (two-view path, or a refusal before volume).
+    public let regionGrowth: RegionGrowthMeasurements?
+
+    public struct RegionGrowthMeasurements: Codable, Sendable, Equatable {
+        public let applied: Bool
+        public let capTripped: Bool
+        public let foodPixelsBefore: Int
+        public let foodPixelsAfter: Int
+        // Reference of the refit plane when the refit succeeded; nil when it
+        // refused (the first plane was kept) or growth added nothing.
+        public let refitReference: String?
+        public let refitRefused: Bool
+
+        public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
+                    foodPixelsAfter: Int, refitReference: String?, refitRefused: Bool) {
+            self.applied = applied
+            self.capTripped = capTripped
+            self.foodPixelsBefore = foodPixelsBefore
+            self.foodPixelsAfter = foodPixelsAfter
+            self.refitReference = refitReference
+            self.refitRefused = refitRefused
+        }
+    }
 
     public init(v: Int,
                 timestampMs: Int64,
@@ -256,7 +282,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 volume: VolumeMeasurements? = nil,
                 preShutterSegmentationErrorCount: Int? = nil,
                 decomposition: [ClassDecomposition]? = nil,
-                sigma: SigmaTerms? = nil) {
+                sigma: SigmaTerms? = nil,
+                regionGrowth: RegionGrowthMeasurements? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -283,6 +310,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.preShutterSegmentationErrorCount = preShutterSegmentationErrorCount
         self.decomposition = decomposition
         self.sigma = sigma
+        self.regionGrowth = regionGrowth
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -306,7 +334,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             segmentationOblique: segmentationOblique,
             volume: volume,
             preShutterSegmentationErrorCount: count,
-            decomposition: decomposition, sigma: sigma
+            decomposition: decomposition, sigma: sigma,
+            regionGrowth: regionGrowth
         )
     }
 }
@@ -338,6 +367,7 @@ public final class PipelineDiagnostics {
     private var planeCandidatePlaneCount: Int?
     private var planeSupportingSectors: Int?
     private var foodRegionCoveragePercent: Float?
+    private var regionGrowth: EstimationAttemptRecord.RegionGrowthMeasurements?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -400,6 +430,10 @@ public final class PipelineDiagnostics {
 
     public func recordFoodRegionCoverage(percent: Float) {
         foodRegionCoveragePercent = percent
+    }
+
+    public func recordRegionGrowth(_ m: EstimationAttemptRecord.RegionGrowthMeasurements) {
+        regionGrowth = m
     }
 
     public func recordSegmentation(
@@ -477,7 +511,8 @@ public final class PipelineDiagnostics {
             volume: volume,
             preShutterSegmentationErrorCount: nil,
             decomposition: decomposition,
-            sigma: sigma
+            sigma: sigma,
+            regionGrowth: regionGrowth
         )
     }
 }

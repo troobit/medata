@@ -52,11 +52,16 @@ public enum HeightFieldEstimator {
         public let supportPlane: SupportPlane
         public let beta: BetaCorrection
         public let palette: ClassPalette
+        /// Colour-grid pixels added by `FoodRegionGrowth` (depth-grown-food-
+        /// region Req 5). A marked pixel is in the silhouette whatever the
+        /// probability tensor says about it; nil leaves every estimate
+        /// byte-identical to the ungrown path.
+        public let grownRegion: BinaryMask?
 
         public init(probabilities: ProbabilityTensor, argmax: ArgmaxMap,
                     depth: DepthMap, intrinsics: CameraIntrinsics,
                     supportPlane: SupportPlane, beta: BetaCorrection,
-                    palette: ClassPalette) {
+                    palette: ClassPalette, grownRegion: BinaryMask? = nil) {
             self.probabilities = probabilities
             self.argmax = argmax
             self.depth = depth
@@ -64,6 +69,7 @@ public enum HeightFieldEstimator {
             self.supportPlane = supportPlane
             self.beta = beta
             self.palette = palette
+            self.grownRegion = grownRegion
         }
     }
 
@@ -89,6 +95,7 @@ public enum HeightFieldEstimator {
         let plane = inputs.supportPlane
 
         let fMean = (k.fx + k.fy) / 2
+        let grown = inputs.grownRegion
 
         var vRawMm3: [Int: Double] = [:]
         var coveredPixels: [Int: Int] = [:]
@@ -106,7 +113,10 @@ public enum HeightFieldEstimator {
                     for x in 0..<w {
                         let off = (y * w + x) * probs.classes
                         let qBg = Float(buf[off + bgId])
-                        if (1 - qBg) < tauSilhouette { continue }   // not in silhouette
+                        // Not in silhouette — unless the depth-grown pass added
+                        // the pixel, in which case the label map is authoritative.
+                        if (1 - qBg) < tauSilhouette,
+                           !(grown?.isFood(x: x, y: y) ?? false) { continue }
                         let labelC = Int(labels[y * w + x])
                         // Solid food integrates as before; recognised liquid
                         // classes integrate surface-to-plane (Req 7.3) and

@@ -14,6 +14,7 @@ import PortableContracts
 import Segmentation
 import SupportPlane
 import SwiftProtobuf
+import Volume
 
 // MARK: - Argument Parsing
 
@@ -56,6 +57,23 @@ struct Args {
     // `MaskRegularisationConfig.standard`, the config the app ships. The speckle
     // strength is not swept; only the sliver rule is under measurement.
     var sliverFraction: Double?
+    // depth-grown-food-region task 4: sweep the growth constants without a
+    // rebuild. `--growth-cap 0` disables the pass and reproduces the ungrown
+    // single-view number. Only `accuracy` (and calibrate, through the same
+    // replay) reads them; seg-bench scores the label map before growth.
+    var growthCliffMm: Float?
+    var growthFloorMm: Float?
+    var growthCap: Float?
+}
+
+// The growth the harness applies on the single-view replay: `.standard` (what
+// the device runs) with any of the three constants substituted when given.
+func growthConfig(args: Args) -> FoodRegionGrowthConfig {
+    let standard = FoodRegionGrowthConfig.standard
+    return FoodRegionGrowthConfig(
+        cliffMm: args.growthCliffMm ?? standard.cliffMm,
+        floorMm: args.growthFloorMm ?? standard.floorMm,
+        frameFractionCap: args.growthCap ?? standard.frameFractionCap)
 }
 
 // The regularisation the harness applies to a replayed argmax: `.standard`
@@ -97,6 +115,12 @@ func parseArgs() -> Args? {
             result.replayCheckpointSHA256 = it.next() ?? ""
         case "--sliver-fraction":
             if let s = it.next(), let f = Double(s) { result.sliverFraction = f }
+        case "--growth-cliff-mm":
+            if let s = it.next(), let f = Float(s) { result.growthCliffMm = f }
+        case "--growth-floor-mm":
+            if let s = it.next(), let f = Float(s) { result.growthFloorMm = f }
+        case "--growth-cap":
+            if let s = it.next(), let f = Float(s) { result.growthCap = f }
         default: break
         }
     }
@@ -416,14 +440,33 @@ func paletteForFixture(_ fixture: PbMealFixture) -> ClassPalette {
 // `compactMap` here computed the accuracy report over an unstated subset.
 func buildCalInputs(
     fixtures: [PbMealFixture], db: any FoodDatabase, edgeMm: Float,
-    regularisation: MaskRegularisationConfig = .standard
+    regularisation: MaskRegularisationConfig = .standard,
+    growth: FoodRegionGrowthConfig = .standard
 ) -> (inputs: [MealCalibrationInput], skips: [FixtureBatch.Skip]) {
     let (results, skips) = FixtureBatch.partition(fixtures: fixtures) { fx in
         try FixtureRunner.run(
             fixture: fx, palette: paletteForFixture(fx), database: db, voxelEdgeMm: edgeMm,
-            regularisation: regularisation)
+            regularisation: regularisation, growth: growth)
     }
     return (results, skips)
+}
+
+// One line per single-view fixture for the depth-grown-food-region sweep
+// (task 5): the food-like fraction of the frame before and after growth,
+// whether the cap tripped, and what the refit returned.
+func reportRegionGrowth(_ inputs: [MealCalibrationInput], fixtures: [PbMealFixture]) {
+    let frame: [String: Int] = fixtures.reduce(into: [:]) { d, fx in
+        d[fx.fixtureID] = Int(fx.nadirIntrinsics.imageWidth) * Int(fx.nadirIntrinsics.imageHeight)
+    }
+    for m in inputs {
+        guard let g = m.regionGrowth, let px = frame[m.fixtureID], px > 0 else { continue }
+        let before = Float(g.foodPixelsBefore) / Float(px)
+        let after = Float(g.foodPixelsAfter) / Float(px)
+        let refit = g.refitReference?.rawValue ?? (g.refitRefused ? "refused" : "none")
+        fputs(String(format: "growth fixture=%@ before=%.4f after=%.4f applied=%d capTripped=%d refit=%@ plane=%@\n",
+                     m.fixtureID, before, after, g.applied ? 1 : 0, g.capTripped ? 1 : 0,
+                     refit, m.supportPlaneReference?.rawValue ?? "none"), stderr)
+    }
 }
 
 // MARK: - accuracy (task 60)
@@ -435,9 +478,13 @@ func runAccuracy(args: Args) throws {
     let db = try GRDBFoodDatabase.bundled()
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let regularisation = regularisationConfig(args: args)
+    let growth = growthConfig(args: args)
     let (calInputs, skips) = buildCalInputs(
-        fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm, regularisation: regularisation)
+        fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm,
+        regularisation: regularisation, growth: growth)
     fputs("accuracy: sliver fraction \(regularisation.sliverFraction)\n", stderr)
+    fputs("accuracy: growth cliff=\(growth.cliffMm) floor=\(growth.floorMm) cap=\(growth.frameFractionCap)\n", stderr)
+    reportRegionGrowth(calInputs, fixtures: fixtures)
     for skip in skips {
         fputs("accuracy: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
     }

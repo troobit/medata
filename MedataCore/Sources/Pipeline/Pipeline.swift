@@ -46,6 +46,9 @@ public struct Pipeline: Sendable {
     private let database: any FoodDatabase
     private let store: any PersistenceStore
     private let supportPlaneFitter: any SupportPlaneFitter
+    // Depth-grown food region constants (depth-grown-food-region Decision 2);
+    // `.disabled` reproduces the ungrown single-view estimate.
+    private let regionGrowth: FoodRegionGrowthConfig
     // Stamped onto every MealRecord this pipeline produces (Decision 42, Req §23.6):
     // "dev_stub" for Phase 1 device-MVP builds, "coreml_<modelVersion>" for Phase 3.
     // Public so the App layer can stamp the same lineage tag onto the slim
@@ -65,7 +68,8 @@ public struct Pipeline: Sendable {
         store: any PersistenceStore,
         supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
         segmenterSource: String = "",
-        bundleRecorder: CaptureBundleRecorder? = nil
+        bundleRecorder: CaptureBundleRecorder? = nil,
+        regionGrowth: FoodRegionGrowthConfig = .standard
     ) {
         self.cardDetector = cardDetector
         self.segmenter = segmenter
@@ -74,6 +78,7 @@ public struct Pipeline: Sendable {
         self.supportPlaneFitter = supportPlaneFitter
         self.segmenterSource = segmenterSource
         self.bundleRecorder = bundleRecorder
+        self.regionGrowth = regionGrowth
     }
 
     // Main entry point per design §2.4.
@@ -250,8 +255,8 @@ public struct Pipeline: Sendable {
         let planeStartedAt = ContinuousClock.now
         let planeInterval = pipelineSignposter.beginInterval("SupportPlane")
         #endif
-        let plane: SupportPlane
-        let planeReference: SupportPlaneReference?
+        var plane: SupportPlane
+        var planeReference: SupportPlaneReference?
         do {
             (plane, planeReference) = try fitSupportPlane(
                 nadir: nadir,
@@ -298,7 +303,7 @@ public struct Pipeline: Sendable {
         } else {
             lidarMmPerPx = nil
         }
-        let scale: MetricScale
+        var scale: MetricScale
         do {
             scale = try MetricScaleResolver.resolve(
                 cardScaleMmPerPx: cardPose?.scaleAtCardPlaneMmPerPx,
@@ -363,6 +368,11 @@ public struct Pipeline: Sendable {
         let pbVolumes: PbVolumeResult
         let interClassOcclusion: Bool
         var viewCoverage: ViewCoverage
+        // The label map the volume stage measured and the review outline
+        // shows: the depth-grown map on the single-view path when growth
+        // applied, the segmenter's own otherwise. The capture bundle always
+        // keeps `nadirSeg.argmax` (depth-grown-food-region Req 6).
+        var measuredArgmax = nadirSeg.argmax
 
         switch capturePath {
         case .singleViewLidar:
@@ -373,14 +383,75 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.lidarUnavailableMidCapture
             }
+            // Depth-grown food region (depth-grown-food-region Req 1–4): grow
+            // the segmenter's food-like regions into the raised slab around
+            // them, then refit the plane from the grown mask so the contact
+            // ring sits on the plate rather than on the food. A refused refit
+            // keeps the first plane; a tripped cap keeps the segmenter's map.
+            let candidate = FoodRegionGrowth.grow(
+                argmax: nadirSeg.argmax, depth: depth, intrinsics: nadir.intrinsics,
+                palette: palette, config: regionGrowth)
+            var growth = candidate
+            var refitReference: SupportPlaneReference?
+            var refitRefused = false
+            if candidate.applied {
+                let refit = supportPlaneFitter.fitOutcome(
+                    nadir: nadir, cardPose: cardPose, corners: corners,
+                    preShutterFoodMask: PipelineBridges.foodMask(from: candidate.argmax, palette: palette))
+                let planeForPrune = refit.plane ?? plane
+                refitRefused = refit.plane == nil
+                growth = FoodRegionGrowth.prune(
+                    candidate, depth: depth, intrinsics: nadir.intrinsics,
+                    supportPlane: planeForPrune, palette: palette, config: regionGrowth)
+                // Adopt the refit plane only when the pruned region still
+                // stands; a region pruned to nothing means the refit's mask
+                // was not food, so its plane is not trusted either.
+                if growth.applied, let refitPlane = refit.plane {
+                    plane = refitPlane
+                    planeReference = refit.stats.reference
+                    refitReference = refit.stats.reference
+                    diagnostics.recordSupportPlane(
+                        candidateCount: refit.stats.candidatePointCount,
+                        inlierCount: refit.stats.inlierCount,
+                        residualMm: refit.stats.residualMm,
+                        reference: refit.stats.reference,
+                        ring: refit.stats.ring,
+                        candidatePlaneCount: refit.stats.candidatePlaneCount)
+                    // The LiDAR scale is the plane distance over the focal
+                    // length (stage E); it follows the plane the volume uses.
+                    let fMean = (nadir.intrinsics.fx + nadir.intrinsics.fy) / 2
+                    if let rescaled = try? MetricScaleResolver.resolve(
+                        cardScaleMmPerPx: cardPose?.scaleAtCardPlaneMmPerPx,
+                        lidarScaleMmPerPx: abs(plane.distanceMm) / fMean) {
+                        scale = rescaled
+                    }
+                }
+                if growth.applied { measuredArgmax = growth.argmax }
+            }
+            diagnostics.recordRegionGrowth(.init(
+                applied: growth.applied, capTripped: growth.capTripped,
+                foodPixelsBefore: growth.foodPixelsBefore, foodPixelsAfter: growth.foodPixelsAfter,
+                refitReference: refitReference?.rawValue, refitRefused: refitRefused))
+            let refitLabel = refitReference?.rawValue ?? (refitRefused ? "refused" : "none")
+            pipelineStageLog.info(
+                """
+                event=region.grow applied=\(growth.applied, privacy: .public) \
+                capTripped=\(growth.capTripped, privacy: .public) \
+                before=\(growth.foodPixelsBefore, privacy: .public) \
+                after=\(growth.foodPixelsAfter, privacy: .public) \
+                refit=\(refitLabel, privacy: .public) \
+                residual_mm=\(plane.residualMm, privacy: .public)
+                """
+            )
             let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
                 probabilities: nadirSeg.probabilities,
-                argmax: nadirSeg.argmax,
+                argmax: measuredArgmax,
                 depth: depth,
                 intrinsics: nadir.intrinsics,
                 supportPlane: plane,
                 beta: beta,
-                palette: palette
+                palette: palette,
+                grownRegion: growth.grownRegion
             ))
             // Stats stamped BEFORE the refusal is mapped to a throw, so the
             // "no volume" record carries its causal measurements (Req 3.1).
@@ -576,7 +647,7 @@ public struct Pipeline: Sendable {
         // Failure is logged and swallowed inside persistMask — never fails the
         // meal save, which has already committed above.
         await MaskArtefactWriter.persistMask(
-            argmax: nadirSeg.argmax, mealId: record.id, store: store
+            argmax: measuredArgmax, mealId: record.id, store: store
         )
         #if DEBUG
         logStageEnd(name: "Persistence", startedAt: persistenceStartedAt)
