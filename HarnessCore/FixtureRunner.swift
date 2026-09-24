@@ -388,8 +388,16 @@ public enum FixtureRunner {
             bytes: probsData, height: height, width: width,
             classes: classes, palette: palette
         )
+        // A checkpoint-mode N5k fixture carries the model's probabilities and
+        // no argmax (N5k has no truth mask; ingest.py leaves nadir_argmax
+        // empty), so the label map is derived here exactly as the device
+        // derives it from the tensor. A recorded device bundle carries both.
+        let rawArgmax = argmaxData.count == width * height
+            ? argmaxData
+            : Data(SegBench.argmaxFromFP16Probs(
+                probsData: probsData, width: width, height: height, classes: classes))
         let cleaned = SegmenterPostProcessor.regularise(
-            argmax: argmaxData, width: width, height: height,
+            argmax: rawArgmax, width: width, height: height,
             palette: palette, config: regularisation)
         let argmax = ArgmaxMap(pixels: cleaned, height: height, width: width)
         // sigmaSeg not critical for calibration; use 1.0.
