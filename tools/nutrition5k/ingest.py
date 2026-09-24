@@ -181,16 +181,27 @@ def _load_segmenter(checkpoint_path: str, num_classes: int):
 
 
 def _run_segmenter(model, rgb_path: str, num_classes: int) -> np.ndarray:
-    """Softmax probabilities [H, W, C] float32 at SEGMENTER_TARGET_SIZE, via
-    the exact ImageNet transform export/make_fixtures use. Monkeypatchable
-    seam."""
+    """Softmax probabilities [H, W, C] float32 at the RGB image's own
+    resolution, via the exact ImageNet transform export/make_fixtures use.
+    The model runs at SEGMENTER_TARGET_SIZE (a plain resize, no letterbox —
+    see export.reference_input) and the probabilities are resampled back
+    bilinearly, because a fixture's tensor must match ``nadir_intrinsics``:
+    ``FixtureRunner`` sizes it as image_width × image_height × classes and
+    skips the fixture on a mismatch (2026-09-24: every checkpoint-mode
+    fixture skipped with probsSizeMismatch expected 22118400 got 18948168,
+    i.e. 513 × 513 against 640 × 480). Monkeypatchable seam."""
     export = _import_export_module()
     torch, _ = export._import_torch()
+    from PIL import Image, ImageOps
+    with Image.open(rgb_path) as img:
+        width, height = ImageOps.exif_transpose(img).size
     x = export.reference_input(SEGMENTER_TARGET_SIZE, rgb_path)  # [1,3,H,W]
     with torch.no_grad():
         out = model(torch.from_numpy(x))
         logits = out["out"] if isinstance(out, dict) else out
-        probs = torch.softmax(logits, dim=1)[0]  # [C, H, W]
+        probs = torch.softmax(logits, dim=1)  # [1, C, H, W] at target size
+        probs = torch.nn.functional.interpolate(
+            probs, size=(height, width), mode="bilinear", align_corners=False)[0]
     probs_chw = probs.cpu().numpy().astype(np.float32)
     if probs_chw.shape[0] != num_classes:
         raise SystemExit(
