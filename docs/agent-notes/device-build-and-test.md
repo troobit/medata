@@ -19,15 +19,18 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
     summary line per bundle; the Makefile sums them. Before the fix the totals
     read the *last* bundle only ("Executed 0 tests" / "32 tests") and looked
     like a mostly-empty suite.
-  - **Wall time is ~20 minutes**, almost all of it
+  - **Wall time is ~1.5 minutes; the corpus pass is separate.**
     `SupportPlaneTests/SupportPlaneCorpusMeasurementTests` (a 15.7k-line
-    corpus beam search; single tests report 300–1100 s). That exceeds the 600 s
-    Bash tool timeout, which is how the 2026-09-24 orbit run on
-    unknown-food-nameable "hung": the agent's `make test` was backgrounded,
-    orbit killed the session, and an orphaned `swift test` kept spinning at
-    1200 % CPU until killed by hand. Run `make test` with
-    `run_in_background` (or a 20-minute timeout) and check for a leftover
-    `swiftpm-testing-helper` process before starting another.
+    corpus beam search, ~20 min) is gated on `MEDATA_CORPUS=1` and skipped by
+    `make test`; run `make test-corpus` when a support-plane constant or a
+    committed `.depthslice` changes. The swift-testing total still counts the
+    skipped suite's tests. Before the gate (2026-09-24) the pass made `make
+    test` a 20-minute run, past the 600 s Bash tool timeout, which is how the
+    orbit run on unknown-food-nameable "hung": the agent's `make test` was
+    backgrounded, orbit killed the session, and an orphaned `swift test` kept
+    spinning at 1200 % CPU until killed by hand. If a run is ever killed,
+    check for a leftover `swiftpm-testing-helper` process before starting
+    another.
   - **Concurrency of the totals: fixed 2026-08-13.** The totals are grepped from
     `$(CURDIR)/.build/medata-swift-test.log` (`TEST_LOG` in the Makefile), which
     is per-checkout, so parallel worktree runs no longer share it. Before the
