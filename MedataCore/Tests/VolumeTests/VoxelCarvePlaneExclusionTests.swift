@@ -94,14 +94,15 @@ final class VoxelCarvePlaneExclusionTests: XCTestCase {
             VoxelGridSizer no longer origins on the plane.
             """
         )
-        // The absolute figure, pinned because it is more alarming than the delta
-        // Req 1.6 asked for: under the convention `Pipeline` passes, EVERY voxel
-        // is excluded — 23,040 of 23,040 — so the two-view carve recovers no
-        // volume at all on a LiDAR device whose depth-derived plane reaches it.
-        // That is the `bugfixes/two-view-carve-no-volume` defect, not a change
-        // this feature introduces: it reads the same before and after.
-        XCTAssertEqual(before.excluded, before.total)
-        XCTAssertEqual(after.excluded, after.total)
+        // The absolute figure. Until 2026-09-25 this test pinned the opposite:
+        // under the convention `Pipeline` passes (world-up), EVERY voxel was
+        // excluded — 23,040 of 23,040 — because VoxelGridSizer read the field
+        // as pointing down and built the grid under the plane. That was the
+        // reason the two-view carve never recovered a volume on a real device
+        // (two-view-trust, night audit). The grid now extends up from the
+        // plane, so no voxel is excluded.
+        XCTAssertEqual(before.excluded, 0)
+        XCTAssertEqual(after.excluded, 0)
         // The translation that DOES happen, and is the whole of the effect.
         XCTAssertEqual(after.origin.z - before.origin.z, plateRiseMm, accuracy: 0.1,
                        "the grid must rise with the plane")
@@ -115,10 +116,11 @@ final class VoxelCarvePlaneExclusionTests: XCTestCase {
         let after = try excludedVoxels(planeDepthMm: tableDepthMm - plateRiseMm, gravity: down)
 
         XCTAssertEqual(after.excluded - before.excluded, 0)
-        // The mirror image of the world-up case: the grid extends above the plane,
-        // so NO voxel is excluded — again identically before and after.
-        XCTAssertEqual(before.excluded, 0)
-        XCTAssertEqual(after.excluded, 0)
+        // The mirror image of the world-up case: a caller that passes DOWN
+        // gets a grid under the plane and every voxel excluded — again
+        // identically before and after. Nothing in Pipeline passes down.
+        XCTAssertEqual(before.excluded, before.total)
+        XCTAssertEqual(after.excluded, after.total)
         XCTAssertEqual(after.origin.z - before.origin.z, plateRiseMm, accuracy: 0.1)
     }
 

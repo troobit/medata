@@ -9,7 +9,7 @@ import XCTest
 //
 // Geometry: camera at origin, −Z forward. Support plane at z = −400 mm (facing camera).
 // Gravity = (0, 0, −1) in camera frame (nadir camera, looking straight down).
-//   axisZ = −gravity = (0, 0, 1).
+//   axisZ = +gravity (world-up) = (0, 0, 1).
 //   axisX = (1,0,0) − axisZ * 0 = (1,0,0) (already ⊥ gravity).
 //   axisY = axisZ × axisX = (0,0,1)×(1,0,0) = (0·0−1·0, 1·1−0·0, 0·0−0·1) = (0,1,0).
 //
@@ -30,8 +30,8 @@ final class VoxelGridSizerTests: XCTestCase {
     let plane = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -400,
                              residualMm: 0.5, convergedIterations: nil)
 
-    // gravity = (0,0,−1) for a nadir camera.
-    let gravity = Vec3(0, 0, -1)
+    // gravityCamera is world-up in the camera frame: (0,0,1) for a nadir camera.
+    let gravity = Vec3(0, 0, 1)
 
     // Food mask: 20×20 rectangle centred in 100×100 image.
     func centredMask(fw: Int = 20, fh: Int = 20) -> BinaryMask {
@@ -75,8 +75,9 @@ final class VoxelGridSizerTests: XCTestCase {
 
     func testGravityAlignedAxes() throws {
         let grid = try VoxelGridSizer.size(makeInputs())
-        // axisZ = −gravity = (0,0,1).
-        let expectedAxisZ = (-gravity).normalised()
+        // axisZ = +gravity: `gravityCamera` is world-up in the camera frame
+        // (RawFrame.gravity contract), so the grid rises along it.
+        let expectedAxisZ = gravity.normalised()
         XCTAssertEqual(grid.axisZ.x, expectedAxisZ.x, accuracy: 1e-5)
         XCTAssertEqual(grid.axisZ.y, expectedAxisZ.y, accuracy: 1e-5)
         XCTAssertEqual(grid.axisZ.z, expectedAxisZ.z, accuracy: 1e-5)

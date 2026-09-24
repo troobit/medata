@@ -15,7 +15,7 @@ public struct VoxelGrid: Sendable, Equatable {
     public let originCamera1: Vec3     // mm, food-silhouette centroid projected onto π_sup
     public let axisX: Vec3             // unit, perpendicular to gravity
     public let axisY: Vec3             // unit, perpendicular to gravity
-    public let axisZ: Vec3             // unit, opposite to gravity (axis_z = −gravity)
+    public let axisZ: Vec3             // unit, world-up (axis_z = +gravity; RawFrame.gravity is world-up)
 
     public init(edgeMm: Float, dimsX: Int, dimsY: Int, dimsZ: Int,
                 originCamera1: Vec3, axisX: Vec3, axisY: Vec3, axisZ: Vec3) {
