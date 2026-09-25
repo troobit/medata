@@ -146,3 +146,49 @@ The integrator has no offset term, so an adopted plane must be the food's suppor
 - A capture whose first fit is `edgeBand` and whose refit would have been a correct `foodSupport` plane is unaffected; one whose refit is `edgeBand` keeps a first plane that may itself be wrong. The guard removes a wrong adoption, it does not add a right one.
 
 ---
+
+## Decision 4: Added cells must reach the seed cells' median height minus a 10 mm band
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+With Decision 3 shipped, two more single-view captures of the roll on the same plate (`1790315900185`, no card; `1790315865030`, card cleared) still grew onto the plate at floor 5 mm: 88,513 → 241,743 and 168,334 → 283,421 pixels, with the plate's far half highlighted as food and 410 and 434 cm³ against roughly 220–300 for the roll on the earlier captures. The added cells all carry full depth confidence and are contiguous with the roll; they are not noise. On `1790315900185` the first plane is an `edgeBand` fit tilted 4.2° from the flat-in-z table (raw depth 394–403 mm across the frame, plane height −36 → −3 mm left to right), threading the plate top beside the food (ring median 1.05 mm) and leaving the plate's far half 6–16 mm above it while the food sits 30 mm above it. On `1790315865030` the first plane matches gravity but the table's depth field is itself non-planar (2.1° on the left column, 4.9° on the right), so the plate's near half reads 3–12 mm above the ring-median support. Both refits are `foodSupport` but 4–5° off the first plane and 3–4 mm below the plate top, so the prune bounds nothing. No fixed floor separates a plate at 6–16 mm from a food at 30 mm.
+
+### Decision
+
+`FoodRegionGrowthConfig` gains `seedBandMm` (`.standard` = 10 mm, 0 = no band). `prune` drops an added cell whose height above the adopted support surface (plane + offset, the floor's own measure) is below the seed cells' median height minus the band; the seed cells are the segmenter's own, measured against the same surface. The floor test stays. `HarnessCLI` takes `--growth-band-mm`.
+
+### Rationale
+
+The band is food-relative: seeds and added cells are measured against the same surface, so a plane tilt or a warped depth field shifts both and cancels. On the seven single-view bundles it cuts both leaks (410 → 299, 434 → 317 cm³) and trims the three roll captures by 5–18 cm³ (crust foot below the band), and it leaves the founding case (`1790223818017`, seed 0.5 % of the frame) and the mixed plate untouched. Replay on the device path (pre-shutter first plane, table refit never adopted), cm³ total and pixels after growth:
+
+| bundle | ungrown | before (band 0) | shipped (band 10) |
+|---|---|---|---|
+| 1790315900185 | 171 (88,513) | 410 (241,743) | **299** (141,758) |
+| 1790315865030 | 393 (168,334) | 434 (283,421) | **317** (187,762) |
+| 1790310107431 | 177 | 224 (163,504) | 219 (155,916) |
+| 1790232681422 | 262 | 302 (176,971) | 284 (152,460) |
+| 1790313330330 | 253 | 284 (231,796) | 275 (206,481) |
+| 1790223818017 | 26 | 231 (205,945) | 231 (205,945) |
+| 1790242780378 | 254 | 309 (423,548) | 309 (423,548) |
+
+### Alternatives Considered
+
+- **Floor 8 or 12 mm**: The plate reaches +16 mm above a tilted plane, so floor 8 leaves `1790315900185` at 351 cm³ and floor 12 at 260 with the crust foot gone; floor 8 also flips `1790315865030`'s refit back to the table (447 cm³) and floor 12 flips `1790223818017` to the table (421 cm³). Rejected.
+- **Cap the added area relative to the seed (≤ 1.5×)**: Kills the founding case (`1790223818017` grows 15×, 231 → 26 cm³) and misses `1790315865030` (0.68×). Rejected.
+- **Reject a refit or first plane whose ring median is below −0.5 mm**: Good `foodSupport` refits read −1 to −2 mm; the check rejected them on `1790223818017` (231 → 438), `1790315865030` (434 → 580) and `1790310107431` (224 → 239) and passed the −0.36 refit it was meant to catch. Rejected.
+
+### Consequences
+
+**Positive:**
+- Both 2026-09-25 afternoon captures replay with the outline on the roll and the volume in the range of the earlier captures.
+- The band is one constant on the existing config; `prune`'s signature and every call site are unchanged.
+
+**Negative:**
+- The real defect stays open: the first plane can sit 4–5° off the table (`edgeBand` threading plate top and table on `1790315900185`) or match gravity over a depth field that is not planar (`1790315865030`). The band hides the plate from growth; the integrator still measures every pixel against that plane.
+- A food whose crust foot is more than 10 mm below its median height loses that foot (5–18 cm³ on the roll captures here).
+- The band needs seed cells with depth; a seed with no finite depth leaves the band inert and the floor alone applies.
+
+---

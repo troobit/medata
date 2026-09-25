@@ -24,7 +24,8 @@ Order matters and is the whole design: **grow → refit → prune.**
    fitOutcome`), and adopts it (plus recomputes the LiDAR metric scale) only
    when step 3 leaves added pixels.
 3. `FoodRegionGrowth.prune` — the same height test against the plane the
-   volume will use.
+   volume will use, plus the seed band (Decision 4): height above that
+   surface ≥ the seed cells' median height − `seedBandMm`.
 
 Grown pixels bypass the integrator's probability silhouette test through
 `HeightFieldEstimator.Inputs.grownRegion`; nothing else in the integrator
@@ -52,7 +53,7 @@ nothing, and the estimate is today's.
 
 ## Constants (Decision 1 table, 2026-09-24)
 
-`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35 (floor was 3 mm until 2026-09-25, Decision 3). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
+`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm (floor was 3 mm until 2026-09-25, Decision 3; the band is Decision 4). The band is a second prune test: an added cell whose height above the support surface is more than 10 mm below the seed cells' median height is dropped. It exists because the first plane can sit 4–5° off the table — on `1790315900185` the plate read 6–16 mm above it with the food at 30 mm, so no fixed floor separates them, while a food-relative band does and the tilt cancels out of it (`HarnessCLI ... --growth-band-mm N`, 0 = no band). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
 Floor 2 mm let plate noise in (median added area on well-segmented plates
 +40 %, one plate 2.5×); floor 3 mm reads +9 %; floor 5 mm dropped the roll's
 refit back to `edgeBand`. Cliff made no difference to the median; 3 was

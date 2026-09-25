@@ -54,11 +54,19 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// Growth leaving more than this fraction of the colour frame food-like is
     /// discarded. 0 disables the pass.
     public let frameFractionCap: Float
+    /// `prune` drops an added cell whose height above the support surface is
+    /// below the seed cells' median height minus this, mm. 0 means no band.
+    /// Why (Decision 4): the first plane can sit 4–5° off the table, which put
+    /// the plate 6–16 mm above it on `1790315900185` with the food at 30 mm —
+    /// a fixed floor cannot separate them, a food-relative band can, and the
+    /// tilt cancels because seeds and added cells are measured the same way.
+    public let seedBandMm: Float
 
-    public init(cliffMm: Float, floorMm: Float, frameFractionCap: Float) {
+    public init(cliffMm: Float, floorMm: Float, frameFractionCap: Float, seedBandMm: Float = 0) {
         self.cliffMm = cliffMm
         self.floorMm = floorMm
         self.frameFractionCap = frameFractionCap
+        self.seedBandMm = seedBandMm
     }
 
     /// Set by the 2026-09-24 corpus sweep (depth-grown-food-region task 5,
@@ -70,8 +78,8 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// plane fitted from the pre-shutter mask, as the device does, a plate
     /// that sits 3–5 mm above the fitted plane (dish, tilt) leaked a blob
     /// out to the rim on both roll captures at 3 mm and not at 5 mm.
-    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 5, frameFractionCap: 0.35)
-    public static let disabled = FoodRegionGrowthConfig(cliffMm: 0, floorMm: 0, frameFractionCap: 0)
+    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 5, frameFractionCap: 0.35, seedBandMm: 10)
+    public static let disabled = FoodRegionGrowthConfig(cliffMm: 0, floorMm: 0, frameFractionCap: 0, seedBandMm: 0)
 
     public var isDisabled: Bool { frameFractionCap <= 0 }
 }
@@ -226,16 +234,40 @@ public enum FoodRegionGrowth {
         let h = grown.argmax.height
         let dw = depth.width
         let dh = depth.height
+        func height(_ dx: Int, _ dy: Int) -> Float? {
+            cellHeightAboveSupportMm(
+                dx: dx, dy: dy, depthMm: readDepthMm(depth, x: dx, y: dy),
+                width: w, height: h, depthWidth: dw, depthHeight: dh,
+                intrinsics: intrinsics, plane: plane, offsetMm: supportOffsetMm)
+        }
+        // The seed band (Decision 4): the segmenter's own cells, measured
+        // against the same surface, set a floor the added cells must reach.
+        var bandFloor = -Float.infinity
+        if config.seedBandMm > 0 {
+            let colX = (0..<w).map { x in min(dw - 1, max(0, Int((Float(x) + 0.5) * Float(dw) / Float(w)))) }
+            let colY = (0..<h).map { y in min(dh - 1, max(0, Int((Float(y) + 0.5) * Float(dh) / Float(h)))) }
+            var isSeed = [Bool](repeating: false, count: dw * dh)
+            for y in 0..<h {
+                for x in 0..<w where palette.isVolumetricClass(Int(grown.inputLabels[y * w + x])) {
+                    isSeed[colY[y] * dw + colX[x]] = true
+                }
+            }
+            var seedHeights: [Float] = []
+            for i in 0..<(dw * dh) where isSeed[i] {
+                if let hgt = height(i % dw, i / dw) { seedHeights.append(hgt) }
+            }
+            if !seedHeights.isEmpty {
+                seedHeights.sort()
+                bandFloor = seedHeights[seedHeights.count / 2] - config.seedBandMm
+            }
+        }
         var kept = grown.addedCells
         for dy in 0..<dh {
             for dx in 0..<dw {
                 let i = dy * dw + dx
                 guard kept[i] else { continue }
-                kept[i] = cellClearsFloor(
-                    dx: dx, dy: dy, depthMm: readDepthMm(depth, x: dx, y: dy),
-                    width: w, height: h, depthWidth: dw, depthHeight: dh,
-                    intrinsics: intrinsics, plane: plane,
-                    offsetMm: supportOffsetMm, floorMm: config.floorMm)
+                guard let hgt = height(dx, dy) else { kept[i] = false; continue }
+                kept[i] = hgt >= config.floorMm && hgt >= bandFloor
             }
         }
         return toColourGrid(
@@ -254,12 +286,27 @@ public enum FoodRegionGrowth {
         depthWidth dw: Int, depthHeight dh: Int, intrinsics: CameraIntrinsics,
         plane: SupportPlane, offsetMm: Float, floorMm: Float
     ) -> Bool {
+        guard let height = cellHeightAboveSupportMm(
+            dx: dx, dy: dy, depthMm: z, width: w, height: h, depthWidth: dw,
+            depthHeight: dh, intrinsics: intrinsics, plane: plane, offsetMm: offsetMm)
+        else { return false }
+        return height >= floorMm
+    }
+
+    // Height of the cell centre above the support surface (plane + offset), mm;
+    // nil on a degenerate ray.
+    @inline(__always)
+    private static func cellHeightAboveSupportMm(
+        dx: Int, dy: Int, depthMm z: Float, width w: Int, height h: Int,
+        depthWidth dw: Int, depthHeight dh: Int, intrinsics: CameraIntrinsics,
+        plane: SupportPlane, offsetMm: Float
+    ) -> Float? {
         let cxCol = (Float(dx) + 0.5) * Float(w) / Float(dw) - 0.5
         let cyCol = (Float(dy) + 0.5) * Float(h) / Float(dh) - 0.5
         guard let height = heightAboveSupportPlaneMm(
             colourX: cxCol, colourY: cyCol, depthMm: z,
-            intrinsics: intrinsics, plane: plane) else { return false }
-        return height - offsetMm >= floorMm
+            intrinsics: intrinsics, plane: plane) else { return nil }
+        return height - offsetMm
     }
 
     // Colour-grid rebuild from the cell decision. A colour pixel keeps its
