@@ -57,14 +57,14 @@ struct MealReviewView: View {
     // uses (Req 8.2).
     @State private var presetDraft: QuickPreset?
     @State private var presetName = ""
-    #if DEBUG
-    // Review-photo attempt switch (Settings › Developer). DEBUG-only, like
-    // every other `DeveloperFlags` mirror, so Release compiles attempt 1 with
-    // no flag to read.
+    #if FIELD_LOOP
+    // Review-photo attempt switch (Settings › Developer). FIELD_LOOP-only, like
+    // every other `DeveloperFlags` mirror, so ProductRelease compiles attempt 1
+    // with no flag to read.
     @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
     #endif
 
-    // Attempt 1 is the shipped treatment; attempt 2 only exists in Debug.
+    // Attempt 1 is the shipped treatment; attempt 2 only exists in field builds.
     private var photoFillsWidth: Bool {
         #if DEBUG
         return reviewPhotoFillsWidth

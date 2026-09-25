@@ -1,11 +1,16 @@
-#if DEBUG
+#if FIELD_LOOP
 import CaptureKit
 import Foundation
 
 // Developer-phase runtime switches (two-view-trust Req 4.5 and the oblique-band
-// measurement below). The WHOLE file is `#if DEBUG`, and so is every call site,
-// so a Release build compiles exactly what it compiled before this file
-// existed — there is no flag to read and no branch to fold away.
+// measurement below). The WHOLE file is `#if FIELD_LOOP`, and so is every call
+// site, so the ProductRelease build compiles exactly what it compiled before
+// this file existed — there is no flag to read and no branch to fold away.
+//
+// FIELD_LOOP and not DEBUG: these switches exist to be flipped between two
+// captures on the phone, and the phone runs a Release build — Debug substitutes
+// the stub segmenter (`DEV_STUB_SEGMENTER`) and cannot recognise food at all.
+// Gating them on DEBUG put them in the one build that could not use them.
 //
 // Why a runtime switch and not a compile-time flag: `HARNESS_ENABLED` and
 // `DEV_STUB_SEGMENTER` gate code that must never be *compiled* into the
