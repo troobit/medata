@@ -78,9 +78,18 @@ count=0
 profile=$(mktemp -d)
 trap 'rm -rf "$profile"' EXIT
 
+# Chrome 154 writes the PNG and then does not exit: measured on 2026-09-26, the
+# file was complete one second after launch and the process was still alive 91
+# seconds later. Waiting on it hangs the run after the first render, with the
+# file you asked for already on disk. So the render is backgrounded and reaped:
+# poll until the PNG exists and has stopped growing, then kill the browser.
+# TIMEOUT is the ceiling in seconds for one render, after which it is a failure.
+TIMEOUT="${TIMEOUT:-60}"
+
 for f in $FILES; do
   base=$(basename "$f" .html)
   png="$OUT_DIR/$SURFACE/$base.png"
+  rm -f "$png"
   "$CHROME" \
     --headless \
     --disable-gpu \
@@ -92,9 +101,30 @@ for f in $FILES; do
     --window-size="$SHOT_W,$SHOT_H" \
     --force-device-scale-factor="$SCALE" \
     --screenshot="$png" \
-    "file://$(pwd)/$f" >/dev/null 2>&1
-  if [ ! -f "$png" ]; then
-    echo "wireshot: failed to render $f" >&2
+    "file://$(pwd)/$f" >/dev/null 2>&1 &
+  chrome_pid=$!
+
+  waited=0
+  settled=0
+  last_size=-1
+  while [ "$waited" -lt "$TIMEOUT" ]; do
+    if [ -f "$png" ]; then
+      size=$(wc -c < "$png" | tr -d ' ')
+      if [ "$size" = "$last_size" ] && [ "$size" != "0" ]; then
+        settled=1
+        break
+      fi
+      last_size="$size"
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  kill "$chrome_pid" 2>/dev/null
+  wait "$chrome_pid" 2>/dev/null
+
+  if [ ! -f "$png" ] || [ "$settled" != "1" ]; then
+    echo "wireshot: failed to render $f within ${TIMEOUT}s" >&2
     exit 1
   fi
   echo "wireshot surface=$SURFACE attempt=$base out=$png window=${SHOT_W}x${SHOT_H}@${SCALE}x device=402x874"

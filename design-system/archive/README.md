@@ -2,8 +2,15 @@
 
 Frozen captures of how the app looked at one moment. Two rules, and they are the whole point:
 
-1. **Write-once.** Nothing under `archive/` is ever edited in place. A file nobody may edit cannot drift;
-   it is a record of a moment, not a description of the present.
+1. **Write-once.** No *capture* is ever edited in place — not a PNG, not an HTML snapshot, not a file under
+   `_assets/`. A file nobody may edit cannot drift; it is a record of a moment, not a description of the
+   present.
+
+   This README is the exception, and deliberately so. It is not a capture; it is the index that says what
+   the captures are, and an index that may never be corrected is one guaranteed to end up lying about them.
+   It was already doing so: it said "97 of the catalogue's 101 rows" when the catalogue had grown to 109,
+   and a verifier read the rule as written and would not touch it. Correcting a count here does not weaken
+   the invariant, because the invariant is about the frames.
 2. **Superseded only by a new generation.** When the app changes enough to be worth re-photographing, a new
    `-vN` directory is added beside the old one. The old one stays.
 
@@ -71,9 +78,16 @@ because `app-shell` and `root-layout` have their own rows and their own frames.
 
 ### Coverage
 
-97 of the catalogue's 101 `web-v0` rows are captured. The other four describe states that **cannot render
-on `main`** — in each case a flag exists in the script block but never reaches the template, so the state
-was reachable in the author's intent and never on screen:
+97 of the catalogue's 109 `web-v0` rows carry a frame. Of the other twelve, seven are the archived build
+inputs in `_assets/` and one is `n/a`.
+
+(101 was the row count when the capture was planned. The capture itself added the eight rows for the build
+inputs and the double-mount bug, so 101 is now the count of rows that *could* carry a frame — the 97 here
+plus the four below — rather than the size of the web half.)
+
+The remaining four describe states that **cannot render on `main`** — in each case a flag exists in the
+script block but never reaches the template, so the state was reachable in the author's intent and never
+on screen:
 
 | Row | Why it cannot render |
 | --- | --- |

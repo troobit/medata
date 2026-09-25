@@ -12,8 +12,9 @@
   This page holds no copy of any option's markup. Each column is an <iframe> pointed
   at the option's own file, so what you are looking at is the option, not a
   transcription of it that can drift from it. A `file://` parent does render a
-  sibling `file://` page in a frame; what it cannot do is reach inside one, because
-  `contentDocument` throws cross-origin on an opaque origin. So this page drives the
+  sibling `file://` page in a frame; what it cannot do is reach inside one, because a
+  local file is an opaque origin: `contentDocument` comes back null and
+  `contentWindow.document` throws SecurityError. So this page drives the
   child pages through the URL fragment instead — `#frame`, `#frame,zones`,
   `#frame,zone=total` — which each option reads with the classic inline script at the
   end of its body. `../view-mode.css` documents the tokens.
@@ -138,8 +139,10 @@
     .option { display: flex; flex-direction: column; gap: var(--space-2); flex: 0 0 auto; }
     /* Fixed so the frames start at the same y. Options that do not line up are
      * options you compare by scrolling, which is the thing this page exists to
-     * stop. */
-    .option .cap { width: var(--device-w); min-height: 108px; }
+     * stop. The number is the tallest caption in this folder — attempt 3's, at
+     * four lines — measured at 124px; 108px let that one column's frame sit 16px
+     * low. Raise it when a caption grows, and check by rendering the page. */
+    .option .cap { width: var(--device-w); min-height: 124px; }
     .option .cap b { color: #e6e6ea; font-size: var(--type-footnote); font-weight: 600; }
     .option .cap p {
       margin: 4px 0 0;
@@ -365,9 +368,10 @@
   }
 
   // An option page is the only thing that knows how tall it ended up, so it
-  // says so. `contentDocument` would throw; `postMessage` from an opaque origin
-  // arrives with `origin` "null", which is why the source is matched by window
-  // identity rather than by origin.
+  // says so. Measuring it from here is not an option: `contentDocument` on a
+  // `file://` child is null. `contentWindow` is not — it is a usable
+  // WindowProxy — and `postMessage` from an opaque origin arrives with `origin`
+  // "null", so the source is matched by window identity rather than by origin.
   addEventListener('message', function (event) {
     var height = event.data && event.data.wireframeHeight;
     if (!height) { return; }

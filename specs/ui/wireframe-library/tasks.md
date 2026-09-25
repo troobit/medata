@@ -10,10 +10,10 @@ references:
 ## Phase 1 — The catalogue
 
 - [x] 1. Populate design-system/surfaces.md, one row per surface x state
-  - 418 state rows across 67 distinct surfaces, grouped as Shell / Home / Capture / Review / Records / Trends / Entry / Settings / Shared chrome / Notifications / Widgets
+  - 421 state rows across 67 distinct surfaces, grouped as Shell / Home / Capture / Review / Records / Trends / Entry / Settings / Shared chrome / Notifications / Widgets
   - Row schema per design.md "Row schema": id, surface, file, kind, state, state source, view-model, data, direction, archive, status
   - Seven rows (every dose-notification/*) are keyed on the construction site — App/DoseScheduleModel.swift and App/LocalReminderScheduler.swift — because a local notification has no renderable type
-  - Scope is the iOS app on research: App/ and MeData/MeDataWidgets/ — 418 rows. This bullet used to say the SvelteKit screens on main were "preserved by capture, not as live rows"; the file contradicts that by 101 rows. The web-v0 half is catalogued too, and task 37 carries it
+  - Scope is the iOS app on research: App/ and MeData/MeDataWidgets/ — 421 rows. This bullet used to say the SvelteKit screens on main were "preserved by capture, not as live rows"; the file contradicts that by 109 rows. The web-v0 half is catalogued too, and task 37 carries it
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.7](requirements.md#1.7), [1.8](requirements.md#1.8), [1.11](requirements.md#1.11)
 
 - [x] 2. Record the UI-to-data join in the view-model, data and direction columns
@@ -56,8 +56,8 @@ references:
   - Requirements: [1.9](requirements.md#1.9), [7.2](requirements.md#7.2)
 
 - [x] 9. Verify id uniqueness and reconcile the Coverage figures with what the check prints <!-- id:d18pyx3 -->
-  - All 418 ids are unique and match `<surface>/<state>` in kebab-case, checked mechanically over the file
-  - "renderable types with a row … 62 of 62" was wrong in both halves: the true figure is 63 of 63 — 61 structs under the six protocols the check scans, plus MedataApp: App and MeDataWidgetBundle: WidgetBundle, which the check does not scan
+  - All 421 iOS ids are unique and match `<surface>/<state>` in kebab-case, checked mechanically over the file; all 530 ids across both halves are unique
+  - "renderable types with a row … 62 of 62" was wrong in both halves: the true figure is 63 of 63 — 61 structs under the six protocols the check scanned at the time, plus MedataApp: App and MeDataWidgetBundle: WidgetBundle, which it did not. Task 41's widening to fifteen protocols brought both inside the scan, so the check now reports covered=63 itself
   - No row describes an intention, so rows at status planned stays 0
   - Requirements: [1.3](requirements.md#1.3), [1.12](requirements.md#1.12), [1.13](requirements.md#1.13)
 
@@ -65,7 +65,7 @@ references:
   - 23 surfaces declare zones, across 19 distinct lists — the five row-* record rows share one. Most surfaces declare none, which is correct: a 76 pt shutter button, a confidence pill, a widget family variant and a notification action have nothing to point at that a state row does not already name
   - Declared as prose under the section heading that owns the surface, not as a twelfth table column: zones are per surface, the table is per surface x state
   - Names are harvested, not invented — MealReviewView's photoSection / totalRow / primaryAction / scaleControl / accessoryLine / foodRow, the "Layout zones" blocks in design-system/pages/meal-review.md and design-system/pages/capture.md, and the order specs/data/insulin-dosing/design-direction.md §2 fixes: "photo (40%) / totalRow / primaryAction / scale control / 1px divider / scrolling rows"
-  - The canonical list is meal-review — `photo` · `total-row` · `primary-action` · `scale-control` · `accessory-line` · `food-rows` — and it is the list every option under design-system/wireframes/insulin-dose/ marks with data-zone
+  - The canonical list is meal-review — `photo` · `total` · `primary-action` · `scale-control` · `accessory` · `foods` — and it is the list every option under design-system/wireframes/insulin-dose/ marks with data-zone. Three of those six were renamed by Decision 17 on 2026-09-25: total-row → total, accessory-line → accessory, food-rows → foods
   - The web-v0 half declares none: zones exist so options can be pointed at, and no options are being generated for a frozen app
   - Zones generate no code and tools/check_surfaces.sh does not read them
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.4](requirements.md#8.4), [8.10](requirements.md#8.10)
@@ -80,18 +80,18 @@ references:
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5)
 
 - [x] 12. FLAG: EXPIRING — capture the SvelteKit screens on main as archive/web-v0/ before research merges to main
-  - Captured 2026-09-25 from `origin/main` (adc3b56, committed 2026-03-18) and committed at design-system/archive/web-v0/: 97 PNG and 97 static HTML across 28 surface directories, plus `_assets/` — 202 files
+  - Captured 2026-09-25 from `origin/main` (adc3b56, committed 2026-03-18) and committed at design-system/archive/web-v0/: 97 PNG and 97 static HTML across 28 surface directories, plus 7 files under `_assets/` — 201 files
   - 402x874 CSS px at deviceScaleFactor 3, i.e. 1206x2622 device pixels: the frame an iPhone 16 Pro screenshot produces, so a distance measured in the archive and divided by 3 is the value to write in Swift
   - HTML beside every PNG, because a PNG records what a screen looked like and cannot be measured, and a hex value cannot be recovered from one. Scripts stripped and same-origin images inlined as data URIs, so each opens by double-clicking with no server and no requests
   - No Azure credentials were needed. The app's API calls were intercepted in the browser and fulfilled from fixtures before the request left, and anything unstubbed was failed with a 500 so a missing fixture shows as an error state rather than silently reaching a real service. The clock was frozen at 2026-03-18T12:10:00Z
   - The Node toolchain lived in a /tmp `git archive` extract of main and went with it: no Node, no node_modules, no build step reaches research. Four of the 28 surfaces are routes; the other 24 are components no URL reaches, rendered through a throwaway harness that went the same way
   - Also archived under `_assets/`, because a screenshot cannot recover a hex value: app.css — whose `@theme` block carries `--color-brand-accent: #63ff00`, `--color-brand-background: #064e3b` and `--color-primary-background: #0a0a0a`, and #064e3b exists nowhere else in the repo — plus icon.svg, manifest.json and four favicon files (favicon.ico and three .svg variants, two of them unreferenced alternates on main)
-  - 4 of the 101 rows are not captured because they cannot render on main: in each case a flag exists in the script block and never reaches the template. design-system/archive/README.md names each one with its file:line and records it as unrenderable rather than pending, because a pending row implies a frame somebody still owes
+  - 4 of the 109 rows are not captured because they cannot render on main: in each case a flag exists in the script block and never reaches the template. design-system/archive/README.md names each one with its file:line and records it as unrenderable rather than pending, because a pending row implies a frame somebody still owes. The other 8 uncaptured rows are the 7 `archived` `_assets/` files and `web/toast-container/double-mounted` at `n/a`
   - Two things the frames are not evidence about, written into the README rather than left to be assumed: they were rendered in Chromium, not in Safari on a real iPhone, which is where the web app actually ran; and a component photographed on its own is photographed without AppShell
   - Requirements: [3.2](requirements.md#3.2), [1.11](requirements.md#1.11), [3.4](requirements.md#3.4)
 
 - [ ] 13. Capture the shipped iOS surfaces as archive/ios-v0/<id>.png
-  - 378 rows carry `archive: pending` and 40 carry n/a; no PNG exists yet
+  - 380 rows carry `archive: pending` and 41 carry n/a; no PNG exists yet
   - Filename is the catalogue id with the slash flattened — capture/tracking-lost becomes archive/ios-v0/capture-tracking-lost.png — so a screenshot and a row are found by the same key
   - make deploy-device for non-capture UI, make deploy-release-stub for anything in the capture flow: a Debug build cannot arm the shutter. Match the launch buildStamp before trusting a frame (docs/agent-notes/device-build-and-test.md)
   - Frames are taken at the phone and copied off by hand. No scripted capture path exists and none is being built
@@ -156,15 +156,15 @@ references:
   - Requirements: [5.7](requirements.md#5.7), [5.2](requirements.md#5.2)
 
 - [x] 22. design-system/wireframes/insulin-dose/compare.html — every option for one surface in one page <!-- id:d18pyx8 -->
-  - 538 lines of self-contained HTML that opens by double-clicking. No server, no build step, no framework — this is the artifact that answers the complaint, because before it the options could only be seen one at a time, across a git checkout and a make deploy-device each
+  - 425 lines of HTML that opens by double-clicking. No server, no build step, no framework — this is the artifact that answers the complaint, because before it the options could only be seen one at a time, across a git checkout and a make deploy-device each. It was 538 lines carrying its own copy of every option until Decision 18 replaced the copies with three `<iframe>`s pointed at the real files
   - Whole screens first: all three options in one strip at 402x874, unscaled
-  - Per-zone view: one button per declared zone, putting that region of every option beside itself. Each button carries the question that zone decides — for total-row, "Attempt 1 appends one segment to the line that already ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none"
+  - Per-zone view: one button per declared zone, putting that region of every option beside itself. Each button carries the question that zone decides — for total, "Attempt 1 appends one segment to the line that already ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none"
   - Outline zones (z) draws each data-zone boundary with its name; fit to window (f) scales the strip to 0.72x and is labelled "not true metrics", because a scaled screen is no longer evidence about size
-  - It carries its own copy of each option's screen markup, because a file:// page cannot read its siblings. That duplication is unchecked and is the known cost — the folder is deleted whole, so it lives for days
+  - It carried its own copy of each option's screen markup on the premise that a file:// page cannot read its siblings. Decision 18 corrected that: a file:// parent renders a sibling file:// page in an iframe, and only reading its DOM is blocked — `contentDocument` returns null, `contentWindow.document` throws SecurityError. The copies are gone and each option now exists once
   - Requirements: [8.5](requirements.md#8.5), [8.6](requirements.md#8.6), [4.2](requirements.md#4.2), [4.4](requirements.md#4.4)
 
 - [x] 23. design-system/wireframes/insulin-dose/composition.md — the zone-choice record <!-- id:d18pyx9 -->
-  - 89 lines. A six-row table — zone, taken from, reason — over the three real options: photo, primary-action, scale-control and accessory-line from attempt 1, total-row from attempt 2, food-rows from attempt 3
+  - 89 lines. A six-row table — zone, taken from, reason — over the three real options: photo, primary-action, scale-control and accessory from attempt 1, total from attempt 2, foods from attempt 3
   - That table is the description of what you want to see next: short, unambiguous, and directly buildable as attempt-4.html or as the SwiftUI. A composed option is an ordinary option — it takes the next attempt number and goes back into compare.html and then onto the phone
   - It writes down what the table deliberately cannot say and where each goes instead: a change to the set of surfaces belongs in the surface-delta table, and decomposition (inline versus extracted) belongs in the decision
   - It is a worked example of the record, not a ruling on the insulin-dosing readout. That decision is the developer's
@@ -266,15 +266,17 @@ references:
 
 ## Phase 7 — The research pass, applied
 
-- [x] 37. Catalogue the SvelteKit web-v0 half — 101 rows, 28 surfaces, and the successor mapping
-  - Phase 1 work the ledger never carried. design-system/surfaces.md lines 766–1021 hold 101 `web/` state rows across 28 surfaces over 22 files of `main:src/**` — 4 route files, 1 layout, 1 document template and 16 components — every row at `status: web-v0`, under a section with its own Coverage block and its own freeze rule: "Nothing here is ratcheted, and no number moves unless the freeze is corrected against `main`"
-  - The Successor mapping subsection carries one entry per web surface, 28 of them, 8 of which have no iOS successor at all. That mapping is what decides which dropped capability gets taken back into iOS, so an over-claim in it mis-prices a future feature, and a citation in it that resolves to nothing is invisible: `grep web tools/check_surfaces.sh` returns nothing, so the web half is validated by nothing at all (task 41)
-  - Task 1's bullet said the SvelteKit screens were "preserved by capture, not as live rows". 101 rows say otherwise. The bullet is corrected rather than the rows removed: a frozen row and a live row differ by `status`, not by existing
-  - Requirement 1.11 still reads the way that bullet did — a web row "only where that surface is being taken forward as a design input". Widening it to authorise the 101 rows that exist is the requirements document's edit, not this task's
+- [x] 37. Catalogue the SvelteKit web-v0 half — 109 rows, 29 surfaces, and the successor mapping
+  - Phase 1 work the ledger never carried. design-system/surfaces.md lines 890–998 hold 109 `web/` state rows across 29 surfaces over 29 files — 23 under `main:src/**` (4 route files, 1 layout, 1 document template, 16 components, 1 stylesheet) and 6 under `main:static/**` — every row at `status: web-v0`, under a section with its own Coverage block and its own freeze rule: "Nothing here is ratcheted, and no number moves unless the freeze is corrected against `main`"
+  - The section was first written as 101 rows over 28 surfaces. The 2026-09-25 capture corrected the freeze against `main` and added 8: the seven `web/web-assets/*` asset rows and `web/toast-container/double-mounted`
+  - The Successor mapping subsection carries one entry per web surface, 29 of them, 9 of which have no iOS successor at all — 8 `none — dropped` plus the build inputs, which changed mechanism. That mapping is what decides which dropped capability gets taken back into iOS, so an over-claim in it mis-prices a future feature, and a citation in it that resolves to nothing is invisible: `grep web tools/check_surfaces.sh` returned nothing until task 41 added check 5, which now resolves every backticked id in that column
+  - Task 1's bullet said the SvelteKit screens were "preserved by capture, not as live rows". 109 rows say otherwise. The bullet is corrected rather than the rows removed: a frozen row and a live row differ by `status`, not by existing
+  - Requirement 1.11 still reads the way that bullet did — a web row "only where that surface is being taken forward as a design input". Widening it to authorise the 109 rows that exist is the requirements document's edit, not this task's
   - Requirements: [1.11](requirements.md#1.11), [1.12](requirements.md#1.12), [3.2](requirements.md#3.2)
 
 - [x] 38. make wireshot — render an option to a PNG without a device build
-  - tools/wireshot.sh, 104 lines of bash written for system bash 3.2.57, driving Google Chrome `--headless --window-size --force-device-scale-factor=3 --screenshot`. No Node, no npm, and Chrome is checked for before it runs
+  - tools/wireshot.sh, 134 lines of bash written for system bash 3.2.57, driving Google Chrome `--headless --window-size --force-device-scale-factor=3 --screenshot`. No Node, no npm, and Chrome is checked for before it runs
+  - Chrome 154.0.8037.58 writes the PNG and then does not exit — measured 2026-09-26, the file complete one second after launch and the process still alive ninety seconds later. Waiting on it hung the run after the first render. Each render is now backgrounded and reaped: poll until the PNG exists and stops growing, then kill the browser, with `TIMEOUT` (default 60s) as the per-render ceiling. `make wireshot SURFACE=insulin-dose` completes unattended in 6.2s, exit 0, rendered=3
   - `make wireshot SURFACE=insulin-dose [ATTEMPT=2] [OUT_DIR=tmp/wireshot]` renders every attempt-*.html for a surface, or one of them
   - The window is sized to the page; the `.device` inside it stays at 402x874 CSS px, which at scale 3 is 1206x2622 device pixels — the frame an iPhone 16 Pro screenshot produces. A distance measured on the device frame and divided by 3 is the value to write in Swift
   - The gap it closes: moving option-making from Swift to HTML made options roughly four times cheaper to write and did nothing to make them cheaper to look at, while "costly to compare" is one of the three costs this spec exists to remove. Nothing in the spec previously gave the *author* of an option any way to see it
@@ -293,16 +295,17 @@ references:
   - --check writes nothing and exits non-zero, so the target reports drift rather than quietly repairing it
   - Requirements: [5.4](requirements.md#5.4), [7.1](requirements.md#7.1)
 
-- [ ] 41. Strengthen tools/check_surfaces.sh so more than 61 of 418 rows are load-bearing
-  - The measured hole: the ratchet counts *structs*, and tools/surfaces_baseline.txt holds only `covered_min=61`. Deleting all 7 dose-notification/* rows, or 29 of the 30 meal-review/* rows, leaves the run green at `covered=61 total=61 baseline=61`. 357 of the 418 rows are unprotected
-  - Accept `struct|enum|class|actor` at the declaration scan (tools/check_surfaces.sh:125 gates on `kind == "struct"`, so the 194-line extension-declared Settings section in App/DoseScheduleSettingsSection.swift:14-79 and its 8 dose-schedule-settings/* rows have no mechanical protection)
-  - Extend CONFORMANCES (line 36) with `ViewModifier|App|Scene|WidgetBundle` and the style protocols. `App` and `Scene` are live misses — MedataApp and MeDataWidgetBundle are the two types task 9 had to count by hand; `ViewModifier` is latent, there are none in the tree yet
-  - Add `rows_min` to tools/surfaces_baseline.txt beside `covered_min`, so deleting rows fails the check rather than moving a number nobody reads
-  - Restrict the coverage match to the `surface` and `file` columns. Check 1 (line 199) matches a name anywhere in a row, so share-sheet/activity-items is deletable purely because `ShareSheet` appears in two other rows' prose
-  - Parse the state-enum list from the catalogue's own closed-enum coverage table rather than the STATE_ENUMS shell variable: the variable names 10 enums, the table names 25, so 15 are checked by eye only
-  - Add a check that every catalogue id in the successor mapping's `catalogue id` column resolves to a real row id. Nothing validates the web half today, which is how eight broken citations across four surface keys survived
-  - Add the zone-pointer check — collect every `data-zone` in design-system/wireframes/**/*.html and every zone named in a composition.md, and fail on a name design-system/surfaces.md does not declare. This contradicts requirement 7.11 and Decision 4, which list "the checker does not read them" as a virtue on the same page as "nothing checks for the dangling reference" as a cost; those are one fact with two signs. The requirement and the decision have to move first, and neither is this task's to move
-  - Requirements: [7.2](requirements.md#7.2), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [1.3](requirements.md#1.3)
+- [x] 41. Strengthen tools/check_surfaces.sh so more than 61 of 421 rows are load-bearing
+  - The measured hole, before the fix: the ratchet counted *structs*, and tools/surfaces_baseline.txt held only `covered_min=61`. Deleting all 7 dose-notification/* rows, or 26 of the 30 meal-review/* rows (the four PlateFraction rows are load-bearing for check 2), or all 7 web/web-assets/* rows, or the share-sheet/system row, left the run green. All five now fail
+  - Accept `struct|enum|class|actor` at the declaration scan. Done, and it changes nothing today — all 63 scanned declarations are structs. It does NOT protect App/DoseScheduleSettingsSection.swift: that file declares no type at all, only `extension SettingsView` with no conformance clause, so its 8 dose-schedule-settings/* rows are protected by rows_min and by nothing else. A file-existence check on the `file` column would be the real fix
+  - CONFORMANCES widened from 6 protocols to 15, adding App, Scene, WidgetBundle, ViewModifier, ButtonStyle, LabelStyle, ToggleStyle, ProgressViewStyle and InsettableShape. Two live misses picked up — App/App.swift:11 `MedataApp: App` and MeData/MeDataWidgets/MeDataWidgets.swift:13 `MeDataWidgetBundle: WidgetBundle`, the two types task 9 had to count by hand. covered rose 61 → 63 with no new Swift; the other seven protocols have no conformer in the tree yet
+  - `rows_min=530` added to tools/surfaces_baseline.txt beside `covered_min=63`, counting the eleven-column data rows only, so deleting rows fails the check rather than moving a number nobody reads
+  - Check 1's coverage match restricted to the `surface` and `file` columns. It previously matched a name anywhere in a row, which is why share-sheet/system was deletable — "ShareSheet" appears in the `state` cells of settings/export-succeeded and estimation-log/export-share. The exemption search still reads every pipe row, because the Exemptions table is three columns wide
+  - The state-enum list is now parsed from the catalogue's own closed-enum coverage table — name and file — rather than the STATE_ENUMS shell variable: 25 enums, 96 cases, against the variable's 10. A declared file that does not exist is now `enum_not_found` rather than a silent skip. Cases are still parsed from Swift, never from the table
+  - Check 5 added: every backticked id in the successor mapping's `catalogue id` column must resolve, with `x/*` resolving when any row id starts `x/`. `grep web tools/check_surfaces.sh` now returns lines
+  - Check 4 added, the zone-pointer check — every `data-zone` in design-system/wireframes/**/*.html and every zone named in a composition.md table, against the union of the catalogue's Zones lists. A value containing a quote or a `+` is skipped as a JavaScript-assembled selector. The comparison is global rather than per surface, because design-system/wireframes/insulin-dose/ renders the meal-review surface — a folder is named after the decision, not the surface. Decision 17 mandated this and requirement 7.11, which forbade it, was rewritten to match
+  - `uncited_cases=` added to the baseline for the 17 enum cases with no `<Enum>.<case>` citation in a `state source` cell, each line naming its enum with the reason above it; two are labelled as real gaps rather than legitimate collective coverage. Removing a line makes the check red
+  - Requirements: [7.2](requirements.md#7.2), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [7.11](requirements.md#7.11), [1.3](requirements.md#1.3)
 
 - [ ] 42. Extend make spell's reach to the prose, or stop claiming it covers it <!-- id:d18pyxa -->
   - tools/check_spelling.sh's SCAN_TARGETS are MedataCore/Sources, HarnessCore, HarnessCLI and App, matched with `--include="*.swift"`, plus `App/*.xcstrings`. No `.md` file is scanned by any target

@@ -1,11 +1,65 @@
-# Coverage ratchet baseline for tools/check_surfaces.sh.
+# Ratchet baselines for tools/check_surfaces.sh.
 #
-# covered_min is the number of UI structs that have a catalogue row with status
-# `shipped` in design-system/surfaces.md. The check fails when the live number
-# drops below it, and prints a `ratchet_raise` line when it climbs above — bump
-# this value in the same commit that adds the rows.
+# Three numbers and one list. All four only ever move in the direction that
+# records more of the app; none of them is ever lowered to make a red check
+# green. The check prints `ratchet_raise` when the live figure has climbed past
+# a baseline — bump it in the same commit that earned it.
+
+# ---------------------------------------------------------------- covered_min
 #
-# Locked in at 61 — every struct the check scans has a `shipped` row, which is
-# what the first pass of the catalogue earned. Raise it again only when a real
-# row raises `covered`; never to make a red check green.
-covered_min=61
+# The number of UI declarations (View / Shape / Layout / UIViewRepresentable /
+# UIViewControllerRepresentable / Widget / WidgetBundle / App / Scene /
+# ViewModifier / the style protocols) that have a catalogue row at status
+# `shipped`, counted over App/ and MeData/MeDataWidgets/.
+#
+# 63 on 2026-09-26, up from 61. The two new ones are not new code: widening the
+# scan to `App` and `WidgetBundle` brought in App/App.swift:11 `MedataApp: App`
+# and MeData/MeDataWidgets/MeDataWidgets.swift:13 `MeDataWidgetBundle:
+# WidgetBundle`, which had rows all along and no mechanical protection.
+covered_min=63
+
+# ------------------------------------------------------------------- rows_min
+#
+# Catalogue rows in design-system/surfaces.md — the 11-column tables only, not
+# the Exemptions, Successor mapping or Coverage tables. 530 on 2026-09-26: 421
+# iOS plus 109 web-v0, the figures the catalogue's own Coverage section reports.
+#
+# This exists because covered_min is satisfied by one row per type. Before it,
+# 26 of the 30 `meal-review/*` rows could be deleted, or all 7
+# `dose-notification/*` rows, or all 7 `web/web-assets/*` rows, with the check
+# still printing OK.
+rows_min=530
+
+# -------------------------------------------------------------- uncited_cases
+#
+# Every case of every enum in the catalogue's Coverage table must appear in a
+# `state source` cell as `<Enum>.<case>`. The cases below do not, and are
+# allowed by name until they do. Grammar: uncited_cases=<Enum>:<case> <case> …
+#
+# Two shapes are mixed here on purpose, because the check cannot tell them
+# apart and a reader must be able to:
+#
+#   * covered collectively — the catalogue gives the enum one or two rows for
+#     the whole set rather than a row per case, and says so in its Coverage
+#     table. Legitimate; the row is the record.
+#   * a real gap — the case has rows, but no row names it in `state source`.
+#     Worth closing in design-system/surfaces.md, which this file does not own.
+
+# Collective. 7 kinds, 2 rows: `row-activity/kind-glyphs` and
+# `activity/kind-grid`, both sourced on `ActivityKind.allCases` — the states
+# are the glyph set and the tile grid, not seven screens.
+uncited_cases=ActivityKind:swim waterpolo cycle run walk gym other
+
+# Collective. The Coverage table reads "16 cases → 12 chips": these six fold
+# into chips that other cases already name, so no row is theirs alone.
+uncited_cases=EstimationFailure:arWorldTrackingLost lidarUnavailableMidCapture degenerateCardPose cardTooOblique iterationDiverged noScaleAvailable
+
+# A real gap. `telemetry/lidar-with-distance` and `telemetry/non-lidar` are the
+# rows for these two elements, but both cite `LiveIndicatorBadgeState` helpers
+# in `state source` rather than the element cases themselves.
+uncited_cases=LiveIndicatorBadgeElement:distance coverage
+
+# A real gap. `RecordRow.meal`, `.glucose` and `.intake` are each cited by their
+# row; `row-insulin/*` cites `InsulinKind` instead and `row-activity/*` cites
+# `ActivityEvent`, so two of the five cases of the routing enum are uncited.
+uncited_cases=RecordRow:insulin activity

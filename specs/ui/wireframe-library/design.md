@@ -89,10 +89,10 @@ declares it.
 
 ## 2. The catalogue — `design-system/surfaces.md`
 
-One markdown table per functional area, one row per **surface x state**. As built it is 1,021 lines
-carrying **418 iOS state rows across 67 distinct surfaces**, plus the frozen web generation (101 rows
-across 28 surfaces at `status: web-v0`, with its successor mapping), a 33-entry exemptions table and a
-coverage section. Alongside the tables it declares the **zone vocabulary** for the surfaces that have one
+One markdown table per functional area, one row per **surface x state**. As built it is 1,135 lines
+carrying **421 iOS state rows across 67 distinct surfaces**, plus the frozen web generation (109 rows
+across 29 surfaces at `status: web-v0`, with its 29-entry successor mapping), a 33-entry exemptions table
+and a coverage section. Alongside the tables it declares the **zone vocabulary** for the surfaces that have one
 — 23 surfaces across 19 distinct lists — which is §3.
 
 ### 2.1 Row schema
@@ -102,14 +102,14 @@ coverage section. Alongside the tables it declares the **zone vocabulary** for t
 | `id` | `<surface>/<state>`, kebab-case | The citation key. Unique. Renaming one is a breaking change to every spec that cites it |
 | `surface` | The Swift type that renders it, or the construction site where no type exists | Matched by the check against declarations in `App/` and `MeData/MeDataWidgets/` |
 | `file` | Repository-relative path | — |
-| `kind` | `screen` \| `cover` \| `sheet` \| `overlay` \| `component` \| `control` \| `row` \| `shape` \| `layout` \| `representable` \| `widget` \| `bundle` \| `notification` | Closed list |
+| `kind` | `screen` \| `cover` \| `sheet` \| `overlay` \| `component` \| `control` \| `row` \| `shape` \| `layout` \| `representable` \| `widget` \| `bundle` \| `notification` \| `model` \| `asset` | Closed list. `model` and `asset` occur only in the `web-v0` half |
 | `state` | The distinguishable visual state, phrased as what you would see on the phone | Prose, not code |
 | `state source` | The thing in code that produces it — an enum case, a predicate, a stored flag | Written `<Enum>.<case>` where an enum produces it; this is what makes the row machine-checkable |
 | `view-model` | The `App/<X>Model.swift` that owns the surface, or `—` | Records what is **actually** there |
 | `data` | MedataCore product and type, `Product · Type` | **Names only.** Records the **intended** binding |
 | `direction` | `read` \| `write` \| `read-write` \| `none` | — |
-| `archive` | `pending` (screenshot owed) or `n/a` (nothing photographable in isolation, or retired) | On the iOS half the path is `archive/ios-v0/<id>.png` by construction, so the cell never carries one. The frozen `web-v0` rows spell theirs out (`archive/web-v0/<id>.png · pending`), because they land in a different generation directory and their ids already carry the `web/` prefix |
-| `status` | `shipped` \| `planned` \| `retired` \| `web-v0` | Only `shipped` counts towards the coverage ratchet, and only the iOS half is ratcheted at all; the 101 `web-v0` rows are frozen record (§5) |
+| `archive` | `pending` (screenshot owed) or `n/a` (nothing photographable in isolation, or retired) | On the iOS half the path is `archive/ios-v0/<id>.png` by construction, so the cell never carries one. The frozen `web-v0` rows spell theirs out (`archive/web-v0/<id>.png · captured`), because they land in a different generation directory and their ids already carry the `web/` prefix; a `web-v0` cell never reads `pending` and may instead read `archived`, `unrenderable` or `n/a` |
+| `status` | `shipped` \| `planned` \| `retired` \| `web-v0` | Only `shipped` counts towards the coverage ratchet, and only the iOS half is ratcheted at all; the 109 `web-v0` rows are frozen record (§5) |
 
 ### 2.2 A worked row
 
@@ -139,7 +139,7 @@ this state reads nothing from it, hence `direction: none`. Its screenshot is owe
 - the archive filename — `design-system/archive/ios-v0/<id>.png`, with the id's slash flattened to a
   hyphen because a filename cannot carry one: `capture/tracking-lost` becomes
   `archive/ios-v0/capture-tracking-lost.png`. Flattening is only safe while it stays injective; it is
-  today, across all 418 iOS ids, and a collision is a reason to rename one of the two ids.
+  today, across all 421 iOS ids, and a collision is a reason to rename one of the two ids.
 
 The reason to insist on one key is the failure it prevents. The records screen is `RecordsView.swift` in
 `App/`, and `design-system/pages/` carries three pages that all claim some part of it —
@@ -169,8 +169,8 @@ helpers. The grammar is `exempt: <Name>`, backticks optional and several names c
 reason in the same row; a marker with no reason fails the check rather than excusing anything. Silence is
 not permitted: the check treats an unexplained conforming type as a missing row.
 
-33 entries cover the current tree, and **none of them conforms to one of the six scanned protocols**, so
-the check reports `exempt=0` and every one of the 61 scanned structs is carried by a real row rather than
+33 entries cover the current tree, and **none of them conforms to one of the fifteen scanned protocols**,
+so the check reports `exempt=0` and every one of the 63 scanned declarations is carried by a real row rather than
 by an excuse. The entries are written down anyway, because the question they answer — why is this type not
 a surface — otherwise has to be re-derived by each reader.
 
@@ -185,16 +185,17 @@ affordable.
 ### 3.1 A zone is a named region, declared once per surface
 
 A **zone** is a region of a surface that a person points at when comparing two versions of the same
-screen: `total-row`, `scale-control`, `food-rows`. The names are declared **once per surface in
+screen: `total`, `scale-control`, `foods`. The names are declared **once per surface in
 `design-system/surfaces.md`** and reused by every option for that surface, so the vocabulary is shared
 rather than reinvented by each wireframe. For `meal-review` the list is:
 
 ```
-photo · total-row · primary-action · scale-control · accessory-line · food-rows
+photo · total · primary-action · scale-control · accessory · foods
 ```
 
-Nothing there is invented. It matches `App/MealReviewView.swift` member for member (`photoSection`,
-`totalRow`, `primaryAction`, `scaleControl`, `accessoryLine`, `foodRow`), it matches the "Layout zones"
+The regions are not invented — they are harvested from `App/MealReviewView.swift` member for member
+(`photoSection`, `totalRow`, `primaryAction`, `scaleControl`, `accessoryLine`, `foodRow`); the names drop
+the members' geometry suffixes, per Decision 17. The list matches the "Layout zones"
 block in `design-system/pages/meal-review.md`, and it is the order
 `specs/data/insulin-dosing/design-direction.md` §2 fixes: "Layout order is fixed and must not change:
 photo (40%) / totalRow / primaryAction / scale control / 1px divider / scrolling rows". The vocabulary is
@@ -216,7 +217,7 @@ state row does not already name. Declaring zones nobody will use is how a conven
 **In a wireframe** the zone is marked in the markup and nowhere else:
 
 ```html
-<section data-zone="total-row"> … </section>
+<section data-zone="total"> … </section>
 ```
 
 `design-system/wireframe.css` styles `:root.zones [data-zone]` with an outline and an `::after` carrying
@@ -235,11 +236,11 @@ to say becomes a table they can write. This is the worked one from
 | zone | taken from | reason |
 | --- | --- | --- |
 | `photo` | attempt-1 | Identical in all three; taken from the option that changed nothing |
-| `total-row` | attempt-2 | The extracted middle-dot line. The divisor is the parameter the feature exists to measure, and it sheds first, so at any width where it does not fit the line is byte-identical to attempt 1's |
+| `total` | attempt-2 | The extracted middle-dot line. The divisor is the parameter the feature exists to measure, and it sheds first, so at any width where it does not fit the line is byte-identical to attempt 1's |
 | `primary-action` | attempt-1 | Unchanged `Record 60 g`. No option proposed anything else, and the screen's single accent budget is spent here |
 | `scale-control` | attempt-1 | 44x34 capsules kept where they are, because `specs/ui/meal-review/requirements.md` says "The scale control SHALL be visible without scrolling when the surface first appears." |
-| `accessory-line` | attempt-1 | One expandable line, unchanged; nothing in the three options touched it |
-| `food-rows` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` at `insulin-dosing-ui-attempt-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" |
+| `accessory` | attempt-1 | One expandable line, unchanged; nothing in the three options touched it |
+| `foods` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` at `insulin-dosing-ui-attempt-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" |
 
 Six lines, and the next artifact is unambiguous. **That table is the description of what you want to see
 next** — writable in a minute, buildable directly as the next wireframe or as the SwiftUI, and reviewable
@@ -262,8 +263,9 @@ Two things the table deliberately cannot say, and where each goes instead:
 ### 3.3 The compare page — options seen at once
 
 `design-system/wireframes/<surface>/compare.html` puts **every option for one surface in one page, at true
-device metrics, adjacent**. For `meal-review/dose-suggestion` that is 538 lines of self-contained HTML
-that opens by double-clicking the file: no server, no build step, no framework.
+device metrics, adjacent**. For `meal-review/dose-suggestion` that is 425 lines of HTML that opens by
+double-clicking the file: no server, no build step, no framework. Each column is an `<iframe>` pointed at
+the real `attempt-N.html` beside it (Decision 18), so the page holds no copy of any option.
 
 This is the highest-value artifact in the design, and the reason is the complaint it answers. The three
 options existed before this page did; what did not exist was any way to look at them together.
@@ -282,16 +284,18 @@ What the page provides, all of it in three small behaviours and no dependencies:
 | Fit to window (`f`) | Scales the strip to 0.72x, **labelled "not true metrics"** | An honest escape hatch on a narrow display; the label is there because a scaled screen is no longer evidence about size |
 
 Each zone button carries **the question that zone decides**, written where the decision is made rather
-than in a document beside it — for `total-row`: "Attempt 1 appends one segment to the line that already
+than in a document beside it — for `total`: "Attempt 1 appends one segment to the line that already
 ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none." Two renderings
 with no stated difference are a mood board; two renderings with a stated question are a decision with an
 answer.
 
-One deliberate ugliness: the compare page carries its own copy of each option's screen markup, because a
-`file://` page cannot read its siblings — no `fetch`, no cross-frame scripting — and adding a server or a
-build step to a disposable artifact would cost more than the duplication does. The whole folder, options
-and compare page together, is deleted when the implementation lands, so the duplication lives for days,
-not months.
+What a `file://` parent can and cannot do with a sibling, measured against Chrome 154.0.8037.58 rather
+than reasoned about: it **renders** the sibling in an `<iframe>` perfectly well, and it cannot **read**
+it — `iframe.contentDocument` returns `null` (it does not throw) and `iframe.contentWindow.document`
+throws `SecurityError`. So the page drives each frame through the one channel that survives an opaque
+origin: the frame's URL fragment, which each option reads on load. Decision 18 records the correction;
+Decision 5's "a `file://` page cannot read its siblings" was true of reading and wrongly generalised to
+displaying, and cost 538 lines holding a third copy of every option.
 
 ### 3.4 A composed option is an ordinary option
 
@@ -436,13 +440,15 @@ are (requirement 3.7). Continuing to maintain them would recreate the bill §1.2
 would leave two live descriptions of one app to disagree with each other.
 
 **`web-v0/` was the expiring option, and it has been taken.** The SvelteKit app on `main` is catalogued
-as **28 surfaces / 101 state rows across 22 source files**, every row at `status: web-v0`, with a
+as **29 surfaces / 109 state rows across 29 source files** (23 under `main:src/**`, 6 under
+`main:static/**`), every row at `status: web-v0`, with a
 **Successor mapping** subsection naming what each web surface became on iOS — or that it was dropped, as
 for the Apply Preset sheet and the toast system. Cataloguing it cost nothing extra once the rows existed;
 *photographing* it had a deadline, because the Node toolchain that renders those screens is not
 maintained on `research`.
 
-**Captured 2026-09-25** from `origin/main` (`adc3b56`), as **97 of the 101 rows**, each as a PNG at
+**Captured 2026-09-25** from `origin/main` (`adc3b56`), as **97 frames** — the 109 rows less the 7
+`archived` asset rows, the 4 `unrenderable` states and the 1 `n/a` — each as a PNG at
 402x874 CSS px / `deviceScaleFactor: 3` and as a measurable static HTML snapshot beside it, plus the
 `_assets/` a screenshot cannot recover. No Azure credentials were involved and none were needed: every
 `+page.svelte` on `main` fetches client-side, so the API calls were intercepted in the browser before the
@@ -493,7 +499,7 @@ vocabulary it marks — as the three committed files do:
   attempt:      3  (branch `insulin-dosing-ui-3-on-research`)
   testing:      whether the readout belongs on meal review at all — attempt 3 leaves that
                 surface untouched and puts the dose where a dose is logged …
-  zones:        photo · total-row · primary-action · scale-control · accessory-line · food-rows
+  zones:        photo · total · primary-action · scale-control · accessory · foods
                 (declared for `meal-review` in design-system/surfaces.md).
 -->
 ```
@@ -564,8 +570,10 @@ and the tags are what survive):
 | `insulin-dosing-ui-attempt-3-on-research` | 14 | 1,015 |
 
 The same three options in this design's medium — `design-system/wireframes/insulin-dose/attempt-{1,2,3}.html`
-— are **104, 100 and 160 lines**, the third being longer because it renders two surfaces to make its
-argument. Add `compare.html` (538 lines — one page per surface, however many options it holds) and
+— were **104, 100 and 160 lines** as first written, the third being longer because it renders two
+surfaces to make its argument. They are **160, 156 and 216** today: Decision 18 added the same 56-line
+inline view-mode script to each, which is the compare page's cost pushed into the options. Add
+`compare.html` (425 lines — one page per surface, however many options it holds) and
 `composition.md` (89 lines).
 
 The point is not that HTML is a cheaper way to be precise. **The point is what happens to the cost of a
@@ -714,7 +722,7 @@ Checked against each attempt branch's actual surface set:
    deletions in that file), incidental to the work and mentioned nowhere. The
    `—` row makes the omission explicit rather than assumed. What §9 adds is thinner than it reads: there
    is no catalogue-to-code pass that names a deleted surface, so the removal shows up only as the
-   coverage ratchet dropping — `ratchet_regression covered=60 baseline=61` — a count with no struct, no
+   coverage ratchet dropping — `ratchet_regression covered=62 covered_min=63` — a count with no struct, no
    file and no line. That is enough to stop the deletion landing silently, and not enough to say what was
    deleted. The `—` row is what turns the number back into a name.
 
@@ -783,8 +791,10 @@ Coverage is deliberately **stricter than stage 1**: a struct counts as covered o
 has status `shipped`. A row alone is not coverage. This is the design's answer to its own worst failure
 mode — a green boolean over a table of `planned` rows is worse than today's visibly absent file, because
 it converts "we have not done this" into "the check passes". The baseline is raised only in the commit
-that earns it: it starts at `covered_min=0`, and `tools/surfaces_baseline.txt` now reads `covered_min=61`
-because the first pass of the catalogue gave every scanned struct a `shipped` row.
+that earns it: it starts at `covered_min=0`, and `tools/surfaces_baseline.txt` now reads `covered_min=63`
+because the first pass of the catalogue gave every scanned declaration a `shipped` row. It carries a
+second floor beside it, `rows_min=530`, so that deleting rows from a surface that keeps one row standing
+is caught too.
 
 ### Stage 4 — layer report (REPORT-ONLY)
 
@@ -807,25 +817,28 @@ useful outcome — a check that passed immediately would have told us nothing:
 All four were catalogue-side and are fixed. The same pass found one script-side gap that nothing was
 failing on yet — the exemption grammar did not read the backticked, comma-separated form the catalogue
 actually writes — and that is fixed in `tools/check_surfaces.sh` rather than by rewriting 33 readable
-rows into the parser's convenience. As of 2026-08-17 `make surfaces` reports:
+rows into the parser's convenience. As of 2026-09-26 `make surfaces` reports:
 
 ```
-catalogue=design-system/surfaces.md rows=647
-structs=61 missing=0 exempt=0
+catalogue=design-system/surfaces.md rows=530
+structs=63 missing=0 exempt=0
 enum=TiltGuideState cases=0 note=namespace-enum
-enum_cases=30 missing=0 enums_not_found=0
-covered=61 total=61 baseline=61
+state_enums=25 enum_cases=96 missing=0 enums_not_found=0 uncited=17 uncited_allowed=17
+covered=63 total=63 covered_min=63 rows_min=530
+zones_declared=70 zone_uses=30 undeclared=0
+successor_ids=25 unresolved=0
 … 19 layer lines …
 layer_violations=19 (report-only)
-OK: every surface and state enum case has a catalogue row.
+OK: every surface, state enum case, zone pointer and successor id checks out.
 ```
 
-`rows=647` is every non-separator table row after the first: the 418 iOS state rows, the 101 `web-v0`
-rows and their 28 successor-mapping entries, the repeated per-section headers, the 33 exemptions and the
-coverage tables. It is a parse figure, not a claim about surfaces — the surface numbers live in the
+`rows=530` is the eleven-column data rows only — the 421 iOS state rows plus the 109 `web-v0` rows — with
+the repeated per-section headers skipped and the narrower Exemptions, Successor mapping and Coverage
+tables excluded. It is both a parse figure and the `rows_min` floor the baseline ratchets, which is what
+makes a row deletion visible even when one row per surface survives. The surface numbers live in the
 catalogue's own Coverage section, counted per half because only the iOS half is ratcheted. `exempt=0` is the
 correct answer rather than a miss: all 33 written exemptions name types that
-conform to nothing the scan looks for, so none of the 61 scanned structs is excused by one (§2.5).
+conform to nothing the scan looks for, so none of the 63 scanned declarations is excused by one (§2.5).
 
 ---
 

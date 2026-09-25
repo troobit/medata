@@ -40,8 +40,24 @@ options. For `meal-review` they are `photo`, `total`, `primary-action`, `scale-c
 - **A zone names a region by its role, never by its present geometry.** `total`, not `total-row`:
   the moment an option makes the total something other than a row — and `insulin-dose/attempt-3.html`
   is already close — a name that says "row" is a name that lies. This is the rule ARIA landmark
-  regions and Drupal theme regions have both settled on, and the reason the seven geometry-shaped
-  names in this library were renamed while exactly one composition table existed.
+  regions and Drupal theme regions have both settled on, and the reason seven geometry-shaped names
+  across the catalogue were renamed on 2026-09-25, while exactly one composition table existed:
+
+  | was | is | surface |
+  |---|---|---|
+  | `total-row` | `total` | `meal-review`, `meal-overview` |
+  | `accessory-line` | `accessory` | `meal-review` |
+  | `food-rows` | `foods` | `meal-review`, `meal-overview` |
+  | `bottom-row` | `bottom` | `capture` |
+  | `value-line` | `value` | the five shared `row-*` surfaces |
+  | `time-line` | `time` | the five shared `row-*` surfaces |
+  | `row-list` | `rows` | `records` |
+
+  Three of the seven — `total`, `accessory`, `foods` — are `meal-review`'s, so they are the three
+  this folder's files carry. The other four are elsewhere in `design-system/surfaces.md`, which is
+  the register: it holds the renames with the reasoning, and it is where an eighth one gets written
+  down. Renaming a zone is a breaking change to every wireframe and composition table citing it,
+  which is why doing it while one table existed was the cheap moment.
 - In the markup a zone is one attribute: `<section data-zone="total"> … </section>`.
 - `compare.html` outlines and labels them on demand, so the parts being compared are visible **as
   parts**.
@@ -76,16 +92,24 @@ option's markup, so nothing on it can disagree with an option. Adding a fourth o
 
 ### What `file://` does and does not allow
 
-The three facts this page is built on, all checked by experiment in Google Chrome 154 rather than
-assumed:
+The three facts this page is built on, each run as an experiment against Google Chrome 154.0.8037.58
+on 2026-09-26 — a `file://` parent with a sibling `file://` child — rather than assumed:
 
 - **An `<iframe>` displays a sibling `file://` page.** The parent renders it normally, at the size
   the parent gives it.
-- **`contentDocument` throws.** A local file is an opaque origin, so the parent cannot read or script
-  the document inside the frame. Displaying and reading are different permissions, and only the
-  second one is denied.
-- **ES module scripts do not load from `file://` at all.** Every script in this folder is therefore a
-  classic inline `<script>` — no `type="module"`, no `import`.
+- **The parent cannot read the child.** A local file is an opaque origin, so displaying and reading
+  are different permissions and only the second is denied. Two accessors, two different failures, and
+  the difference matters:
+  - `frame.contentDocument` returns **`null`**. It does *not* throw, so a bare `if (doc)` passes
+    silently and the bug shows up as nothing happening.
+  - `frame.contentWindow.document` throws **`SecurityError`**.
+  - `frame.contentWindow` itself is a usable `WindowProxy`. That is what makes `compare.html`'s
+    height listener work: it matches the message's `event.source` against each frame's
+    `contentWindow` by identity, because an opaque origin posts with `origin` `"null"` and there is
+    nothing else to match on.
+- **ES module scripts do not load from `file://` at all.** A `<script type="module" src="…">` beside
+  the page never runs. Every script in this folder is therefore a classic inline `<script>` — no
+  `type="module"`, no `import`, in the options or in `compare.html`.
 
 Those three together decide the design. Because the parent cannot reach in, it drives each option
 through the **URL fragment**, which the option reads with the 43-line classic script at the end of
@@ -95,9 +119,9 @@ CSS each one turns on. Traffic the other way is one `postMessage` per option, ca
 ended up at, because the parent cannot measure a document it cannot read.
 
 Opening an option directly is unaffected: with no fragment none of the modes are on, and the file is
-the page it always was. That is what the 55 extra lines per option buy — 104, 100 and 160 lines as
-first written, 159, 155 and 215 now, the difference being one stylesheet link and the shared
-view-mode block. `compare.html` went from 538 lines to 421 over the same change, because it stopped
+the page it always was. That is what the 56 extra lines per option buy — 104, 100 and 160 lines as
+first written, 160, 156 and 216 now, the difference being one stylesheet link and the shared
+view-mode block. `compare.html` went from 538 lines to 425 over the same change, because it stopped
 carrying three transcriptions of screens that already existed.
 
 **Safari is untested.** Its `file://` subresource policy is stricter than Chrome's and nothing here
@@ -126,6 +150,14 @@ handing it over, which is the difference between "I wrote some HTML" and "I look
 of an iPhone 16 Pro, and a PNG from headless Chrome says nothing about Dynamic Type, safe-area insets
 or `ViewThatFits`. It says only that the layout and the hierarchy are what you meant. Treat every
 metric in it as a starting position to check on the phone.
+
+**Why it reaps the browser rather than waiting for it.** Measured 2026-09-26 against Google Chrome
+154.0.8037.58: the PNG is complete on disk one second after launch, and the browser process is still
+alive ninety seconds later. Waiting on it hung the whole run after the first render, with the file
+already written. `tools/wireshot.sh` now backgrounds each render, polls until the PNG exists and has
+stopped growing, then kills the browser; `TIMEOUT` (default 60s) is the per-render ceiling and a
+render that never settles is a failure, not a stall. `make wireshot SURFACE=insulin-dose` completes
+unattended in about six seconds for all three options.
 
 ## `composition.md` — the part that survives
 

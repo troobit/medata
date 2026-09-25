@@ -79,9 +79,9 @@ option does to the set of surfaces, so options can be combined at that level too
   in `docs/agent-notes/device-build-and-test.md`, "Comparing UI attempts on the phone", where `N` is "only
   the order the attempts were tried in — not a ranking, not a version".
 - **Zone** — a named region of a surface: the part a person points at when comparing two options for the same
-  screen — `total-row`, `scale-control`, `food-rows`. Zone names are declared once per surface in the
+  screen — `total`, `scale-control`, `foods`. Zone names are declared once per surface in the
   catalogue and reused by every option for that surface. A zone is a naming convention for a region, not a
-  code construct.
+  code construct. A zone name says the region's **role** and never its present geometry (Decision 17).
 - **Composition** — an option expressed as a table of zone choices: which option each zone is taken from, and
   why. A composed option is an ordinary option.
 - **Surface delta** — the set of surfaces a spec or an option adds, modifies, deletes or consolidates.
@@ -391,10 +391,12 @@ code, so that its authority survives contact with a month of commits.
 1. <a name="7.1"></a>The system SHALL provide a single command, invoked through the repository `Makefile`,
    that reports the catalogue's state against the code and exits non-zero when a failing condition below
    holds.
-2. <a name="7.2"></a>The check SHALL fail WHEN a struct in `App/` or `MeData/MeDataWidgets/` conforming to
-   `View`, `Shape`, `Layout`, `UIViewRepresentable`, `UIViewControllerRepresentable` or `Widget` has neither
-   a catalogue row nor an exemption with a reason. The conformance set SHALL be wider than `View`, because
-   `ChipFlow: Layout` — the component attempt 3 removed — is invisible to a `View`-only search.
+2. <a name="7.2"></a>The check SHALL fail WHEN a declaration in `App/` or `MeData/MeDataWidgets/` conforming
+   to a renderable protocol has neither a catalogue row nor an exemption with a reason. The conformance set
+   SHALL be wider than `View`, because `ChipFlow: Layout` — the component attempt 3 removed — is invisible
+   to a `View`-only search; it SHALL at minimum cover `View`, `Shape`, `Layout`, `UIViewRepresentable`,
+   `UIViewControllerRepresentable`, `Widget`, `WidgetBundle`, `App` and `Scene`. The scan SHALL accept a
+   `struct`, `enum`, `class` or `actor`, because the protocol decides what renders and the keyword does not.
 3. <a name="7.3"></a>The check SHALL fail WHEN a case of a named state enum does not appear as a state row
    for its surface. The set of enum *names* is an editorial choice; their *cases* SHALL be read from the
    Swift source at check time, so that adding or renaming a case surfaces as a catalogue miss rather than
@@ -416,9 +418,12 @@ code, so that its authority survives contact with a month of commits.
 10. <a name="7.10"></a>WHEN the check fails, its output SHALL name the offending struct, enum case or count
     together with the file and line where it was found, so that a failure is actionable without a second
     investigation.
-11. <a name="7.11"></a>The check SHALL NOT verify anything about zones. Nothing about a zone is mechanically
-    checkable ([L3](#L3)); a check that pretended otherwise would be reporting on a naming convention as
-    though it were a build artifact.
+11. <a name="7.11"></a>The check SHALL verify that a cited zone resolves, and SHALL verify nothing else about
+    zones. A zone name used in a wireframe's `data-zone` attribute or in a composition table SHALL match a
+    name the catalogue declares; a citation that resolves to nothing SHALL fail the check. What a zone
+    *means* stays unverifiable ([L3](#L3)) — no check can say that an implementation respected the boundary
+    its wireframe drew, and the resolution check SHALL NOT be described as though it could. This clause
+    replaces an earlier one forbidding any zone check at all; Decision 17 records why.
 
 ### 8. <a name="8"></a>Options, Zones and Composition
 

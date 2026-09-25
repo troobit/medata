@@ -51,11 +51,13 @@ help:
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
 	@echo "  surfaces             Surface catalogue lint (tools/check_surfaces.sh):"
-	@echo "                       design-system/surfaces.md vs the structs and state"
-	@echo "                       enums in App/ + MeData/MeDataWidgets/. Prints"
-	@echo "                       covered=N total=M and a report-only layer listing."
-	@echo "                       Also checks design-system/tokens.css is not stale"
-	@echo "                       against App/Colors.swift"
+	@echo "                       design-system/surfaces.md vs the renderable"
+	@echo "                       declarations and state enums in App/ +"
+	@echo "                       MeData/MeDataWidgets/, plus zone pointers and"
+	@echo "                       successor ids. Prints covered=N total=M rows=N"
+	@echo "                       and a report-only layer listing. Also checks"
+	@echo "                       design-system/tokens.css is not stale against"
+	@echo "                       App/Colors.swift"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
 	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
@@ -102,12 +104,16 @@ spell:
 	bash tools/check_spelling.sh
 
 # Surface catalogue lint. Checks design-system/surfaces.md against App/ and
-# MeData/MeDataWidgets/: every View/Shape/Layout/*Representable/Widget struct
-# has a row (or an `exempt: <Name>` marker with its reason in the same row),
-# every case of the named
-# state enums has a `state source` row, and the shipped-row count has not
-# regressed against tools/surfaces_baseline.txt. The layer report at the end is
-# advisory — it prints today's UI↔data imports and never fails the target.
+# MeData/MeDataWidgets/. Five checks fail the target: every declaration
+# conforming to one of the fifteen renderable protocols has a row (or an
+# `exempt: <Name>` marker with its reason in the same row); every case of every
+# state enum named in the catalogue's own coverage table has a `state source`
+# citation, bar the ones tools/surfaces_baseline.txt allows by name; the shipped
+# count and the row count have not regressed against that baseline; every
+# `data-zone` and composition-table zone resolves to a declared name; and every
+# backticked id in the successor mapping resolves to a real row. The layer
+# report at the end is advisory — it prints today's UI↔data imports and never
+# fails the target.
 surfaces:
 	bash tools/check_surfaces.sh
 	python3 tools/design_tokens/tokens_to_css.py --check

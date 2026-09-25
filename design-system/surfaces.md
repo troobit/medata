@@ -61,6 +61,14 @@ comparing them. Named-region schemes that have lasted decades name by role for t
 regions (`banner`, `main`, `complementary`), Drupal's theme regions, and Nathan Curtis's component anatomy
 (`root` / `content` / `label` / `leadingVisual`) all say what a part is for, never where it sits.
 
+**The rename was not exhaustive, and the rest is owed.** Those seven were the names an option folder was
+already citing, where the cost of leaving them was immediate. Other lists below still carry names of the
+same shape and were left alone: `action-row` (`result`, `meal-overview`), `metadata-line`
+(`meal-overview`), `time-row` (`carb-entry`, `insulin-dose`, `activity`), `schedule-rows`
+(`dose-schedule-settings`) and `edit-bottom-bar` (`records`). Renaming a zone is a breaking change to
+every wireframe and composition table citing it, so each of those waits until an option for that surface
+makes it worth paying — and is renamed then, not quietly widened.
+
 **Three rules the lists are held to.** They are rules for the next list as much as an audit of the ones
 below; where an existing list does not meet one, that is said here rather than left to be discovered.
 
@@ -1064,7 +1072,7 @@ The numbers `tools/check_surfaces.sh` ratchets against.
 | state rows | 421 |
 | files covered — `App/*.swift` | 42 of 65 |
 | files covered — `MeData/MeDataWidgets/*.swift` | 2 of 2 |
-| renderable types with a row (`View` / `Shape` / `Layout` / `UIViewRepresentable` / `UIViewControllerRepresentable` / `Widget` / `WidgetBundle` / `App`) | 63 of 63 — 61 under the six protocols `tools/check_surfaces.sh` scans, plus `MedataApp: App` and `MeDataWidgetBundle: WidgetBundle` |
+| renderable types with a row (`View` / `Shape` / `Layout` / `UIViewRepresentable` / `UIViewControllerRepresentable` / `Widget` / `WidgetBundle` / `App`) | 63 of 63 — all of them under the fifteen protocols `tools/check_surfaces.sh` scans, which is what it reports as `covered=63 total=63`. Until 2026-09-26 it scanned six, and `MedataApp: App` and `MeDataWidgetBundle: WidgetBundle` had to be counted by hand |
 | types with an explicit `exempt:` reason | 33 entries — none of them conforms to a scanned protocol, so the check reports `exempt=0` |
 | rows keyed on a construction site rather than a type | 9 — the 7 `dose-notification/*` rows, plus `capture/photo-permission-prompt` and `capture/photo-save-silent-failure` |
 | rows at `status: shipped` | 418 |

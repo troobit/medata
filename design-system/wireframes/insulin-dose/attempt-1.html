@@ -103,7 +103,8 @@
 
 <!--
   View mode. `compare.html` shows this file by pointing an <iframe> at it, and it
-  cannot reach inside: `contentDocument` throws cross-origin on a `file://` page.
+  cannot reach inside: on a `file://` page `contentDocument` comes back null and
+  `contentWindow.document` throws SecurityError.
   The URL fragment is the whole channel — `#frame`, `#frame,zones`,
   `#frame,zone=total`. See `../view-mode.css` for what each token does.
 

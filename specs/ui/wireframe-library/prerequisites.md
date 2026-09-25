@@ -31,8 +31,9 @@ This was a **dated risk that disappears silently**: `CLAUDE.md` says the cycle "
 SvelteKit toolchain is no longer what `main` builds. The Svelte source survives in git at `adc3b56` either
 way; what expired was the ability to **run** it and photograph the screens.
 
-**That capture has been taken.** `design-system/archive/web-v0/` holds 97 of the 101 catalogued `web-v0`
-rows, captured 2026-09-25 from `origin/main` (`adc3b56`, committed 2026-03-18) on node 26.10.0 /
+**That capture has been taken.** `design-system/archive/web-v0/` holds a frame for 97 of the 109
+catalogued `web-v0` rows — the other 12 being the 7 `archived` asset files, the 4 `unrenderable` states
+and the 1 `n/a`. Captured 2026-09-25 from `origin/main` (`adc3b56`, committed 2026-03-18) on node 26.10.0 /
 pnpm 12.6.0 with `@sveltejs/kit` 2.50.2, `vite` 6.4.1 and `svelte` 5.49.2 — each row as a PNG at
 402x874 CSS px / `deviceScaleFactor: 3` and as a measurable static HTML snapshot, plus the `_assets/` a
 screenshot cannot recover. `design-system/archive/README.md` is the record of how and what.
@@ -70,7 +71,7 @@ cannot be photographed on a normal install; those rows carry `n/a`, not `pending
 ## Inputs that already exist
 
 - `design-system/surfaces.md` — the catalogue, populated from the iOS surface inventory of `research` and
-  from the whole frozen SvelteKit app on `main`. The web surfaces are **both**: 101 rows at status
+  from the whole frozen SvelteKit app on `main`. The web surfaces are **both**: 109 rows at status
   `web-v0` recording what those screens could do, and the input to the `web-v0` capture recording how they
   looked (requirement 1.11). The rows are the half a screenshot cannot hold.
 - `design-system/MASTER.md` and the **14** prose page files in `design-system/pages/`, frozen

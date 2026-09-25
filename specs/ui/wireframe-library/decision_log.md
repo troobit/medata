@@ -915,6 +915,22 @@ surface that would carry it.
   unarchivable rather than leaving `pending` rows that never resolve. All 101 are `pending` today.
 - More binary blobs in the repository, for screens that will never ship.
 
+### Errata — 2026-09-26
+
+The text above is left as written; three of its figures have since moved, and one of its negatives no
+longer holds. The window did not close: the capture ran on 2026-09-25 (Decision 20).
+
+- **101 rows over 28 surfaces in a 1,021-line file** is now **109 rows over 29 surfaces in a 1,135-line
+  file**. The capture corrected the freeze against `main` and added the seven `web/web-assets/*` asset
+  rows and `web/toast-container/double-mounted`.
+- **"All 101 are `pending` today"** is false now and was true then. No `web-v0` cell reads `pending`: 97
+  read `captured`, 7 `archived`, 4 `unrenderable` and 1 `n/a`. Requirement 3.8 is where that vocabulary
+  is fixed.
+- **"Nothing in this worktree can check them"** is narrower than it was. Decision 17's zone check and
+  check 5 of `tools/check_surfaces.sh` — every backticked id in the Successor mapping must resolve —
+  cover the pointers. What still cannot be checked here is any claim a row makes about `main`'s
+  behaviour, which needs `git show main:src/...`.
+
 ---
 
 ## Decision 12: Tokens generate one-directionally from `App/Colors.swift`
@@ -1095,7 +1111,7 @@ description, in the same spirit as the zone table: `consolidate` naming
 `carb-entry`, `insulin-dose` and `activity` into one id is exactly what attempt 3 proposed, written
 in four cells instead of inferred from a diff. Two options can then be compared at this level as
 readily as at the zone level, and a composed option can take attempt 3's consolidation while taking
-attempt 2's `total-row` — a combination that is currently unsayable in any medium.
+attempt 2's `total` — a combination that is currently unsayable in any medium.
 
 Catching an unintended omission is a useful side effect and not the purpose. It happens to fall out:
 if a table says `add` for the activity surfaces and a branch has none, the gap is visible against a
@@ -1392,7 +1408,11 @@ to the cost of doing it later.
 - Role names are shorter and more abstract. `total` and `value` need the surface's context to be
   unambiguous in a way `total-row` did not, and the preamble has to carry that context.
 - The rename is a breaking edit to every file citing the old names, landed in one commit; git is the only
-  record that `total-row` and `total` are the same region.
+  record that `total-row` and `total` are the same region. Two classes of file are deliberately exempt and
+  still read `total-row`: the passages that *document* the rename (here, in `design-system/surfaces.md` and
+  in the wireframes README), and the superseded Decisions 4 and 5, which are the record of what was decided
+  when the old vocabulary was the live one. Rewriting a superseded entry to use names that did not exist
+  when it was written would falsify the record to tidy a grep.
 - Exhaustive partition is taken from the precedents as guidance and not enforced, so a zone list can still
   leave part of a screen unnamed and nothing will say so.
 
@@ -1410,8 +1430,11 @@ says the page carries its own copy of each option's markup "deliberately: a `fil
 siblings, and the alternative is a server or a build step in a repo that has neither".
 
 That conflates reading with displaying. A `file://` parent **does** render a sibling `file://` page inside
-an `<iframe>`; what throws is `contentDocument` — reading the child's DOM. The research pass verified the
-distinction by experiment rather than by reasoning about it. The cost of the mistake is in the tree:
+an `<iframe>`; what it cannot do is read the child's DOM. Measured against Chrome 154.0.8037.58, parent and
+child both `file://`: `iframe.contentDocument` returns `null` and does **not** throw,
+`iframe.contentWindow.document` throws `SecurityError`, and `iframe.contentWindow` is a usable
+`WindowProxy`. The null-not-throw distinction matters because a bare `if (doc)` guard passes silently
+rather than announcing itself. The cost of the mistake is in the tree:
 `design-system/wireframes/insulin-dose/compare.html` is 538 lines holding a third copy of each of the
 three attempts, and each copy can diverge silently from the file it copies.
 
@@ -1450,12 +1473,15 @@ went stale six days after it was written — and stops needing the duplication a
   unchanged from Decision 5: Decision 2 keeps Node out of this repo, and a build step for a page that
   lives a fortnight is more machinery than the duplication it removes. Iframes need neither.
 - **Script the child's DOM from the parent to drive the per-zone view**: The obvious way to do it -
-  Rejected: this is the part that genuinely does not work. `contentDocument` on a `file://` child throws,
-  which is the true half of the sentence Decision 5 generalised from.
-- **`postMessage` between the parent and the frames**: A real cross-document channel - Rejected: a
-  `file://` document's origin is opaque, so the sender's `targetOrigin` can only be `"*"` and the receiver
-  cannot check who sent it — and it buys nothing a fragment does not already give, at the cost of a
-  handshake on both sides.
+  Rejected: this is the part that genuinely does not work. `contentDocument` on a `file://` child returns
+  `null` and `contentWindow.document` throws `SecurityError`, which is the true half of the sentence
+  Decision 5 generalised from.
+- **`postMessage` as the channel that drives the per-zone view**: A real cross-document channel - Rejected
+  for that job: a `file://` document's origin is opaque, so the sender's `targetOrigin` can only be `"*"`
+  and the receiver cannot check who sent it — and it buys nothing a fragment does not already give, at the
+  cost of a handshake on both sides. The fragment drives every view. `postMessage` is used in one place
+  the fragment cannot reach: each option reports its own rendered height to the parent, which is a number
+  only the child can know, and the parent sizes the `<iframe>` to it.
 - **`<object>` or `<embed>` instead of `<iframe>`**: Same effect, different tag - Rejected: identical
   origin rules, no advantage, and `<iframe>` is the well-trodden path whose sizing behaves predictably.
 
@@ -1573,8 +1599,10 @@ question at the point an option is being written, and not the question the phone
 ### Context
 
 Requirement 3.1 asks for "a rendered screenshot". Decision 11 committed to capturing the SvelteKit screens
-before `main` stops being able to build them, and that capture has now run: **97 of the 101 `web-v0`
-rows**, from `origin/main` at `adc3b56`, on 2026-09-25, at 402x874 CSS px and `deviceScaleFactor: 3`.
+before `main` stops being able to build them, and that capture has now run: **97 frames**, from
+`origin/main` at `adc3b56`, on 2026-09-25, at 402x874 CSS px and `deviceScaleFactor: 3`. Running it also
+corrected the freeze, taking the `web-v0` half from 101 rows to 109; the 12 rows with no frame are the 7
+`archived` asset files, the 4 `unrenderable` states and the 1 `n/a`.
 
 Running it forced the question of what a captured frame is. A PNG is what a person flips through, and it
 is also the one artifact from which a hex value, a line height or a 44 pt tap target cannot be recovered —

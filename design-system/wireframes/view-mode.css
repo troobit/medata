@@ -2,10 +2,11 @@
  *
  * `compare.html` shows each option by pointing an `<iframe>` at the option's
  * own file. A `file://` parent does render a sibling `file://` page in a frame;
- * what it cannot do is reach inside one, because `contentDocument` throws
- * cross-origin on an opaque origin. So the parent drives the child through the
- * URL fragment, and the child reads it with the classic inline script every
- * option page carries at the end of its body.
+ * what it cannot do is reach inside one, because a local file is an opaque
+ * origin: `contentDocument` comes back null and `contentWindow.document` throws
+ * SecurityError. So the parent drives the child through the URL fragment, and
+ * the child reads it with the classic inline script every option page carries
+ * at the end of its body.
  *
  * Fragment tokens, comma-separated:
  *
