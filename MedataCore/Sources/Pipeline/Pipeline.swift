@@ -597,6 +597,12 @@ public struct Pipeline: Sendable {
             Self.logReconciliation(reconciled.reconciliation, diagnostics: diagnostics)
             let nadirSeg = reconciled.nadir
             obliqueSeg = reconciled.oblique
+            // The review outline is drawn from this map and matched to the
+            // rows by class. Without this line it stays the segmenter's own
+            // labels while the rows carry the reconciled class, and a nadir
+            // that saw only `unknown_food` draws nothing at all against a
+            // `bread_wholemeal` row (2026-09-25 outcomes 7845FF40, BB05A08C).
+            measuredArgmax = nadirSeg.argmax
             let matching = MaskMatcher.match(
                 view1: nadirSeg.argmax,
                 view2: obliqueSeg.argmax,
