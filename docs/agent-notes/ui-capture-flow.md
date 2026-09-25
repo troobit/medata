@@ -125,11 +125,27 @@ composition only; all behaviour is in the model and is unit-tested.
   mapping, the giveaway is the dashed "Reference card" marker sitting somewhere other
   than the card.
 
+- **Settings is a list of submenus, not one long Form**
+  (`specs/ui/settings-information-architecture`, 2026-09-25). The top level is rows
+  only — Account, Glucose, Capture, Insulin, Estimation log, Benchmark, Export, About,
+  and Developer in the field builds — each `NavigationLink`ing to its own file under
+  `App/Pages/Settings/`. Every editable control lives on the pushed screen, so a new
+  control goes in `GlucoseSettingsView` / `CaptureSettingsView` / `InsulinSettingsView`
+  / `DeveloperSettingsView`, never back in `SettingsView`. Insulin owns the per-band
+  carbohydrate ratios AND the dose schedule, and the outstanding-dose deep link
+  (`scrollToDoseSchedule`) pushes it automatically on appear. `DeveloperSettingsView.swift`
+  is wholly `#if FIELD_LOOP` (Debug and Release, absent from ProductRelease); the
+  demo-seed and clear-data buttons are `#if DEBUG` nested inside that, because their
+  store methods are Debug-only. Estimation log and Benchmark stay outside both guards —
+  Req 2.3 wants them in Release. Accessibility identifiers are unchanged; the submenu
+  rows added `settings.glucose`, `settings.capture`, `settings.insulin`,
+  `settings.developer`.
+
 - **Review photo attempts 1 and 2 coexist in the Debug binary.** The 3:4 photo no longer
   fills the column at the 40% height budget, which is the one thing worth a look.
   Settings › Developer › **Review photo fills width**
-  (`DeveloperFlags.reviewPhotoFillsWidthKey`, DEBUG-only) flips between attempt 1 (off,
-  and the only thing Release compiles): the whole photo, centred, with side gutters; and
+  (`DeveloperFlags.reviewPhotoFillsWidthKey`, `#if FIELD_LOOP`) flips between attempt 1
+  (off, and what ProductRelease compiles): the whole photo, centred, with side gutters; and
   attempt 2 (on): the photo widened to the full column with the rounded clip taking the
   top and bottom off. `MealReviewView.photoGeometry(in:)` is the whole of the
   difference — it returns the photo's full drawn extent and the window it is seen
@@ -278,12 +294,13 @@ composition only; all behaviour is in the model and is unit-tested.
   once.
 
 - **Two developer-phase capture switches live in `App/Shared/DeveloperFlags.swift`
-  and Settings › Developer, and the whole file plus every call site is `#if DEBUG`.**
+  and Settings › Developer, and the whole file plus every call site is `#if FIELD_LOOP`
+  — Debug and Release both, absent from ProductRelease.**
   They are `UserDefaults`-backed rather than compile-time flags on purpose:
   `HARNESS_ENABLED` / `DEV_STUB_SEGMENTER` gate code that must not be *compiled*
   into the shipping binary, whereas these are flipped between two captures while
-  standing over a plate, so Release compiles nothing at all and there is no
-  branch to fold. **`Capture without depth`** (Req 4.5) makes `supportsLiDAR` a
+  standing over a plate, so ProductRelease compiles nothing at all and there is
+  no branch to fold. **`Capture without depth`** (Req 4.5) makes `supportsLiDAR` a
   computed property that returns false, and `performFlow` calls
   `RawFrame.clearingDepth()` on the captured frame before anything reads it —
   that one mutation is what puts `Pipeline.estimate` on the card branch, and it
