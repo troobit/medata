@@ -31,6 +31,8 @@ struct Args {
     var maxObservations: Int = 8
     // `cards --oblique` replays the detector on the oblique frame instead.
     var oblique: Bool = false
+    // `carve-audit`: the synthetic control box, "LxWxH" in mm (grid axes).
+    var boxMm: SIMD3<Float> = SIMD3(120, 70, 40)
     var checkpointSHA256: String = ""
     var outputPath: String = ""
     var voxelEdgeMm: Float = 3.0
@@ -107,7 +109,7 @@ func regularisationConfig(args: Args) -> MaskRegularisationConfig {
 func parseArgs() -> Args? {
     var args = CommandLine.arguments.dropFirst()
     guard let subcommand = args.first else {
-        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval|diagnose|volumes|cards> [flags]\n", stderr)
+        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval|diagnose|volumes|cards|carve-audit> [flags]\n", stderr)
         return nil
     }
     args = args.dropFirst()
@@ -146,6 +148,11 @@ func parseArgs() -> Args? {
             if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
         case "--oblique":
             result.oblique = true
+        case "--box":
+            if let s = it.next() {
+                let parts = s.split(separator: "x").compactMap { Float($0) }
+                if parts.count == 3 { result.boxMm = SIMD3(parts[0], parts[1], parts[2]) }
+            }
         case "--seed-x":
             if let s = it.next(), let v = Int(s) { result.seedX = v }
         case "--seed-y":
@@ -1367,6 +1374,84 @@ func runSegBench(args: Args) throws {
     }
 }
 
+// MARK: - carve-audit
+
+// Accounts for the two-view carve's residual over-read on one or more stored
+// bundles: the silhouette footprint, the whole height distribution behind the
+// grid's vertical bound, a percentile x margin sweep of that bound, and a
+// synthetic box of known size carved through the SAME estimator at the same
+// bundle's baseline, which measures the visual hull's own bias with perfect
+// masks. Positional `.fixture` paths, no checkpoint gate (as `cards`).
+func runCarveAudit(args: Args) throws {
+    guard !args.fixturePaths.isEmpty else {
+        fputs("carve-audit requires one or more .fixture paths\n", stderr); exit(1)
+    }
+    func fmt(_ v: Float, _ places: Int = 1) -> String { String(format: "%.\(places)f", v) }
+    let options = CarveResidualAudit.Options(
+        edgeMm: args.voxelEdgeMm,
+        boxMm: args.boxMm,
+        regularisation: regularisationConfig(args: args))
+    for path in args.fixturePaths {
+        let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        let fixture = try PbMealFixture(serializedBytes: Data(contentsOf: URL(fileURLWithPath: path)))
+        // Every bundle with nadir depth gets the profile: on a single-view
+        // capture of the same food it IS the reference the carve is judged
+        // against, measured by the identical rule.
+        if let profile = try? CarveResidualAudit.heightProfile(
+            fixture: fixture, palette: paletteForFixture(fixture), options: options) {
+            var line = "stem=\(stem) profile path=\(profile.capturePath)"
+            line += " plane=\(profile.planeReference ?? "none")"
+            line += " planeDistMm=\(fmt(profile.planeDistanceMm))"
+            line += " planeResidualMm=\(profile.planeResidualMm.map { fmt($0, 2) } ?? "none")"
+            line += " foodPx=\(profile.foodPixels) footprintCm2=\(fmt(profile.footprintCm2))"
+            line += " heightFieldCm3=\(fmt(profile.heightFieldIntegralCm3))"
+            for q in profile.heights { line += " p\(Int(q.percentile * 100))=\(fmt(q.heightMm))" }
+            print(line)
+        }
+        let report: CarveResidualAudit.Report
+        do {
+            report = try CarveResidualAudit.audit(
+                fixture: fixture, palette: paletteForFixture(fixture), options: options)
+        } catch {
+            print("stem=\(stem) skipped=\(error)")
+            continue
+        }
+        var head = "stem=\(stem) plane=\(report.planeReference ?? "none")"
+        head += " planeResidualMm=\(report.planeResidualMm.map { fmt($0, 2) } ?? "none")"
+        head += " baselineMm=\(fmt(report.baselineMm)) rotationDeg=\(fmt(report.obliqueRotationDeg))"
+        head += " nadirFoodPx=\(report.nadirFoodPixels) obliqueFoodPx=\(report.obliqueFoodPixels)"
+        head += " nadirFootprintCm2=\(fmt(report.nadirFootprintCm2))"
+        head += " obliqueFootprintCm2=\(fmt(report.obliqueFootprintCm2))"
+        head += " heightSamples=\(report.heightSampleCount)"
+        print(head)
+        var hs = "stem=\(stem) heights"
+        for q in report.heights { hs += " p\(Int(q.percentile * 100))=\(fmt(q.heightMm))" }
+        print(hs)
+        print("stem=\(stem) production carvedCm3=\(fmt(report.productionCarvedCm3))"
+            + " extentMm=\(fmt(report.productionExtentMm)) prismFill=\(fmt(report.prismFill, 3))")
+        for row in report.sweep {
+            print("stem=\(stem) sweep p=\(fmt(row.percentile, 2)) marginMm=\(fmt(row.marginMm, 0))"
+                + " heightMm=\(fmt(row.heightMm)) extentMm=\(fmt(row.extentMm)) dimsZ=\(row.dimsZ)"
+                + " carvedCm3=\(fmt(row.carvedCm3)) clippedFrac=\(fmt(row.clippedSampleFraction, 4))")
+        }
+        for v in report.planeVariants {
+            print("stem=\(stem) plane variant=\(v.name) reference=\(v.reference ?? "none")"
+                + " distMm=\(fmt(v.distanceMm)) residualMm=\(fmt(v.residualMm, 2))"
+                + " footprintCm2=\(fmt(v.footprintCm2)) p50Mm=\(fmt(v.medianHeightMm))"
+                + " p98Mm=\(fmt(v.p98HeightMm)) extentMm=\(fmt(v.extentMm))"
+                + " carvedCm3=\(fmt(v.carvedCm3)) heightFieldCm3=\(fmt(v.heightFieldCm3))"
+                + " hullOverSurface=\(fmt(v.heightFieldCm3 > 0 ? v.carvedCm3 / v.heightFieldCm3 : 0, 3))")
+        }
+        for row in report.synthetic {
+            print("stem=\(stem) synthetic box=\(row.boxMm.map { fmt($0, 0) }.joined(separator: "x"))"
+                + " extentMm=\(fmt(row.extentMm)) truthCm3=\(fmt(row.voxelisedTruthCm3))"
+                + " carvedCm3=\(fmt(row.carvedCm3)) hullBias=\(fmt(row.hullBias, 3))"
+                + " silhouetteFootprintCm2=\(fmt(row.silhouetteFootprintCm2))"
+                + " trueFootprintCm2=\(fmt(row.trueFootprintCm2))")
+        }
+    }
+}
+
 // MARK: - Entry point
 
 guard let args = parseArgs() else { exit(1) }
@@ -1380,9 +1465,10 @@ do {
     case "diagnose":           try runDiagnose(args: args)
     case "volumes":            try runVolumes(args: args)
     case "cards":              try runCards(args: args)
+    case "carve-audit":        try runCarveAudit(args: args)
     default:
         fputs("Unknown subcommand '\(args.subcommand)'\n", stderr)
-        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose, volumes, cards\n", stderr)
+        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose, volumes, cards, carve-audit\n", stderr)
         exit(1)
     }
 } catch {

@@ -343,3 +343,154 @@ The options for actually fixing it differ by an order of magnitude in cost, and 
 - The degraded flag is a promise to come back; if the tilt experiment fails and no prior is acceptable, the honest outcome is removing the non-LiDAR volume claim rather than leaving a flag on it indefinitely.
 
 ---
+
+## Decision 9: No two-view correction factor and no height-bound tuning; the residual is accounted for
+
+**Date**: 2026-09-25
+
+**Status**: accepted
+
+### Context
+
+After the two fixes of the 2026-09-25 evening — the grid sized to the measured
+food height instead of a flat 120 mm, and the silhouette taken from the
+regularised argmax instead of the raw tensor at 50 % non-background — three real
+bundles replayed at 397, 510 and 351 cm³ against a single-view LiDAR reference
+of 267–302 cm³ for the same roll. That is 1.3–1.9x high, and three candidate
+causes were open: the visual hull's own bias, a nadir silhouette still wider
+than the food, and a height bound reading high (the P98 measured 47.3, 50.4 and
+36.0 mm on rolls of about 40 mm). The obvious next moves were to lower the
+height percentile, to tighten the mask, or to introduce a two-view β — the
+per-class correction factor the codebase already applies on both estimators.
+
+`HarnessCLI carve-audit` (added with this decision) measured all three on five
+two-view bundles. The accounting is in `docs/agent-notes/two-view-geometry-audit.md`
+§7. Three findings change the question.
+
+First, the 267–302 cm³ band is a different capture. The like-for-like reference
+is the height-field integral over the same nadir frame, the same plane and the
+same silhouette the carve used. Against that, the carve reads 1.10, 1.19, 1.25,
+1.10 and 1.37. A synthetic control at each bundle's own geometry — exact
+silhouettes of a box of known size, real intrinsics, the real stored transform,
+through the shipping sizer and estimator — puts the hull's unavoidable bias at
+1.05–1.17. The unexplained part is 0–24 %, and zero on the bundle the earlier
+analysis was built around.
+
+Second, the footprint is not wide. A raised object's silhouette back-projected
+to the support plane exceeds its footprint by (d / (d − h))² from perspective
+alone; the synthetic control measures a true 84 cm² x 40 mm object at 108–119
+cm² by the identical rule, and four of the five real rolls measure at or below
+that.
+
+Third, the height percentile has no leverage. P90 to the raw maximum spans
+0.8–1.9 mm on every bundle, under one 3 mm voxel, and after rounding to whole
+voxels P90, P95, P98 and the maximum give the identical carve on four of five.
+The P98 reads high because the MEDIAN reads high (44.7 mm where the P98 reads
+47.3) — the whole smoothed surface sits near the apex — not because the
+percentile is reaching into a tail.
+
+### Decision
+
+Change no constant. `heightPercentile` stays at 0.98 and `heightMarginMm` at
+5 mm, the silhouette rule stays as it is, and no two-view β is introduced.
+Ship the measurement instead: `HarnessCLI carve-audit` and the accounting in the
+agent note, so the next person arrives at the numbers rather than the
+hypotheses. Record that the one structural difference found between the paths —
+the single-view branch refits its support plane from the grown food region and
+the two-view branch never refits — is the next lever, worth 6–23 % on two of
+five bundles and nothing on the other three, and that it is a `Pipeline` change
+to be taken deliberately rather than folded into this accounting.
+
+### Rationale
+
+A β exists to absorb a systematic, geometric bias, and the hull's
+circumscription is exactly that shape of error. But β is calibrated from weighed
+truth, the corpus holds three weighed plates, and none of them are two-view. A
+two-view β fitted today would be one number derived from one bread roll
+photographed five times, dressed as a calibration. The measured spread of the
+unexplained excess across those five captures is 1.00 to 1.24 — wider than any
+constant could usefully split — which is itself the evidence that the input is
+too thin.
+
+The height bound cannot be tuned because the quantity it reads has no tail to
+trim. Lowering the percentile moves the answer by less than the voxel edge.
+Lowering the 5 mm margin does move it, by about 11 %, but at 0 mm it clips real
+food on three of five bundles (1.9 %, 5.7 % and 8.0 % of the height samples sit
+above the resulting extent), and the only clip-free reduction, 2 mm, is below
+the measured plane residual of 2.0–3.2 mm the margin exists to cover. Spending
+it would buy a better-looking number by discarding measured food, which is the
+failure mode the percentile was deliberately left untuned to avoid.
+
+What remains after the hull bias is the difference between a food's volume and
+the convex hull two near-vertical silhouettes can describe of it. A roll is
+roughly 83 % of its bounding prism and cones at the tilts the aim guide allows
+cannot see the taper. Nothing offline distinguishes that from a systematic
+estimator error; only weighed truth on two-view captures can.
+
+### Alternatives Considered
+
+- **Introduce a two-view β from the current corpus**: Directly targets a
+  systematic geometric bias, which is what β is for, and would land the roll in
+  the reference band. Rejected: the only truth available is three weighed
+  plates, none two-view, so the constant would be fitted to one roll and would
+  then be indistinguishable from the hull bias it is meant to correct. It also
+  bakes today's plane-fit inconsistency into the coefficient, so fixing the
+  plane later would silently double-correct.
+- **Lower `heightPercentile` to P90 or P95**: The cheapest change available and
+  the one the earlier analysis implied. Rejected on measurement: the top decile
+  of the height distribution spans under one voxel, so the carve is unchanged on
+  four of five bundles, and on the fifth P90 is the setting that clips 8.0 % of
+  the food.
+- **Lower `heightMarginMm` from 5 mm to 2 mm**: Worth about 5 %, clips nothing
+  on any of the five bundles. Rejected because 2 mm is below the plane residual
+  measured on the same bundles (2.0–3.2 mm); the margin covers quantisation and
+  the plane's own fit error, and both are larger than the saving.
+- **Tighten the nadir silhouette further**: Rejected on measurement — the
+  synthetic control shows the silhouettes are already at or below what a
+  geometrically perfect object of the roll's size produces, so tightening would
+  remove real food.
+- **Refit the two-view support plane from the grown region now**: The one lever
+  the audit did find, worth 6–23 % on two bundles. Deferred, not rejected: it is
+  a change in `Pipeline`'s two-view branch, it changes what every future
+  two-view row means, and it deserves its own decision with its own device
+  round rather than being carried in on an accounting pass.
+- **Keep chasing the 267–302 cm³ band**: Rejected once the band was shown to
+  come from different captures whose own nadir depth reads the food at 258–430
+  cm³. Closing a gap to a reference that disagrees with itself by 1.7x is
+  fitting to noise.
+
+### Consequences
+
+**Positive:**
+- No constant in the estimation path is tuned to one food, and the two-view
+  number stays traceable to geometry rather than to a fitted correction.
+- The residual is now split into a part that is measured and unavoidable (the
+  hull's 5–17 % circumscription) and a part that is not (0–24 %), so a future
+  β has a defined job instead of absorbing everything.
+- `carve-audit` re-runs the whole accounting on any bundle in about a second,
+  so the next round starts from numbers.
+- The plane-refit asymmetry between the single-view and two-view branches is now
+  measured and recorded rather than latent.
+
+**Negative:**
+- The two-view carve still reads above the single-view one on the same food, and
+  this decision does not close that gap — it explains it and declines to paper
+  over it.
+- The gap can only be closed with weighed truth on two-view captures, which is a
+  kitchen-scale session that has not happened.
+- `carve-audit` is a diagnostic with no production consumer; it is code to carry
+  and will rot unless a later round uses it.
+
+### Impact
+
+`MedataCore/Sources/Volume/VoxelGridSizer.swift` (`foodHeightSamplesMm`,
+`percentile` — a refactor, `measuredFoodHeightMm` is unchanged in behaviour),
+`MedataCore/Sources/Volume/FoodRegionGrowth.swift` (`heightAboveSupportPlaneMm`
+made public so the diagnostic measures the production height rather than a
+copy), `HarnessCore/CarveResidualAudit.swift`, `HarnessCLI` (`carve-audit`),
+`MedataCore/Tests/VolumeTests/VoxelGridHeightSamplesTests.swift`,
+`MedataCore/Tests/HarnessCLITests/CarveResidualAuditTests.swift`,
+`docs/agent-notes/two-view-geometry-audit.md` §7. Nothing in `App/`,
+`Pipeline/` or `SupportPlane/` changed, and no device behaviour changed.
+
+---

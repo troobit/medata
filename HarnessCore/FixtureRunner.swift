@@ -540,7 +540,7 @@ public enum FixtureRunner {
 
     // MARK: - Private helpers
 
-    private static func makeSegResult(
+    static func makeSegResult(
         probsData: Data,
         argmaxData: Data,
         width: Int, height: Int,
@@ -572,7 +572,7 @@ public enum FixtureRunner {
     }
 
     // Gravity-aligned nominal support plane at -300 mm from camera.
-    private static func nominalPlane(gravity: Vec3) -> SupportPlane {
+    static func nominalPlane(gravity: Vec3) -> SupportPlane {
         // `gravity` is world-up in the camera frame (RawFrame.gravity contract),
         // so the plane normal IS that vector; negating it pointed the nominal
         // plane down and put the carve grid under it.
