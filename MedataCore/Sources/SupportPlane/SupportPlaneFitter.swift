@@ -5,8 +5,8 @@ import PortableContracts
 
 // Support-plane fit counters exposed to the caller as returned values (snaq-
 // parity Req 3.1; replaces the racy `LiDARPlaneFitter.debugLast*` statics).
-// Populated by the LiDAR fitter on both exits; the card-only path leaves the
-// defaults (its quality signal is `SupportPlane.residualMm`).
+// Populated by the LiDAR fitter on both exits; the card-only path refuses
+// (two-view-trust Req 4.4) and leaves the defaults.
 public struct SupportPlaneFitStats: Sendable, Equatable {
     // UNITS DEPEND ON `reference`: native depth samples on a `.foodSupport` row,
     // colour-grid points on an `.edgeBand` one. The two differ by ~56x on a
@@ -25,8 +25,9 @@ public struct SupportPlaneFitStats: Sendable, Equatable {
     public var foodBBoxW: Int
     public var foodBBoxH: Int
     // Which surface the plane references (Req 4.4). nil on the card-only path:
-    // no depth map, so no depth-derived reference exists, and Req 6.3 wants the
-    // field absent rather than defaulted.
+    // no depth map, so no depth-derived reference exists (and since two-view-trust
+    // Req 4.4 that path refuses outright), and Req 6.3 wants the field absent
+    // rather than defaulted.
     public var reference: SupportPlaneReference?
     // The contact-ring measure for the plane actually returned, on BOTH paths —
     // Req 6.1 requires it on every depth-derived attempt, and Req 6.2's
@@ -138,48 +139,31 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
             )
         }
 
-        // Card-only path mirrors the pre-existing inlined logic in
-        // Pipeline.fitSupportPlane: back-project the two lower card corners as
-        // lower-silhouette edge points and seed a single food-centroid offset
-        // from the card centre.
-        guard let pose = cardPose, let c = corners, c.count >= 4 else {
-            return SupportPlaneFitOutcome(
-                plane: nil, stats: SupportPlaneFitStats(), refusal: .noLowerSilhouetteEdges
-            )
-        }
-        let k = nadir.intrinsics
-        let dCard = abs(pose.translationMm.z)
-        let s0 = pose.scaleAtCardPlaneMmPerPx
-        let lowerEdges: [Vec3] = c.suffix(2).map { corner in
-            Vec3((corner.u - k.cx) * s0, (corner.v - k.cy) * s0, -dCard)
-        }
-        let centroid = Vec3(
-            pose.translationMm.x,
-            pose.translationMm.y + 20,
-            pose.translationMm.z
+        // Card-only path (no depth map): REFUSE (two-view-trust Req 4.4).
+        //
+        // This branch used to back-project the two lower CARD corners as if they
+        // were the food's lower silhouette edge and seed a single food centroid
+        // 20 mm below the card centre. `CardOnlyPlaneFitter` then returned a
+        // plane fitted to the card's neighbourhood, carrying no information
+        // about where the food touches the table — and nothing downstream could
+        // tell it apart from a measured fit. `docs/agent-notes/two-view-geometry-audit.md`
+        // section 3 records that the path has never run end to end on a real
+        // capture, so the invented plane was never even wrong in a way anyone
+        // could see.
+        //
+        // `noLowerSilhouetteEdges` is the honest name for it: the fitter has no
+        // food lower-silhouette edges, only card corners. Reusing the existing
+        // case also keeps the Pipeline's exhaustive `SupportPlaneError` switch
+        // (which maps it to `EstimationFailure.noScaleAvailable`) unchanged.
+        //
+        // What would make this branch work: the food's lower silhouette edges,
+        // taken from the nadir food mask (pipeline Req 4.3), back-projected at
+        // the card-plane scale and handed to `CardOnlyPlaneFitter` in place of
+        // the card corners. `CardOnlyPlaneFitter` itself is unchanged and still
+        // covered by `CardOnlyPlaneFitterTests`; it is the INPUT that is missing.
+        return SupportPlaneFitOutcome(
+            plane: nil, stats: SupportPlaneFitStats(), refusal: .noLowerSilhouetteEdges
         )
-        do {
-            let plane = try CardOnlyPlaneFitter.fit(CardOnlyPlaneFitter.Inputs(
-                cardCentreDepthMm: dCard,
-                scaleAtCardPlaneInitMmPerPx: s0,
-                gravityCamera: nadir.gravity,
-                edgePoints3DAtInitScale: lowerEdges,
-                foodCentroids3DAtInitScale: [centroid]
-            ))
-            return SupportPlaneFitOutcome(
-                plane: plane,
-                stats: SupportPlaneFitStats(residualMm: plane.residualMm),
-                refusal: nil
-            )
-        } catch {
-            // CardOnlyPlaneFitter throws SupportPlaneError only; the fallback
-            // keeps the conservative refusal if that ever changes.
-            return SupportPlaneFitOutcome(
-                plane: nil,
-                stats: SupportPlaneFitStats(),
-                refusal: (error as? SupportPlaneError) ?? .iterationDiverged
-            )
-        }
     }
 
     // The fallback ladder of Req 4 in Decision 5's order: the food-support fit is
