@@ -65,6 +65,15 @@ public struct SupportPlaneFitOutcome: Sendable {
     public let stats: SupportPlaneFitStats
     public let refusal: SupportPlaneError?
 
+    /// The plane only when it references the food's own support surface. A
+    /// refit that lands on the table (edgeBand) is not adopted for volume:
+    /// the integrator measures from the plane with no offset, and on the
+    /// 2026-09-25 roll an adopted table plane read 519 cm³ against 247 cm³
+    /// from the plate plane (depth-grown-food-region Decision 3).
+    public var foodSupportPlane: SupportPlane? {
+        stats.reference == .foodSupport ? plane : nil
+    }
+
     public init(plane: SupportPlane?, stats: SupportPlaneFitStats, refusal: SupportPlaneError?) {
         self.plane = plane
         self.stats = stats

@@ -413,21 +413,24 @@ public struct Pipeline: Sendable {
                 let refit = supportPlaneFitter.fitOutcome(
                     nadir: nadir, cardPose: cardPose, corners: corners,
                     preShutterFoodMask: PipelineBridges.foodMask(from: candidate.argmax, palette: palette))
+                // Only a foodSupport refit is usable; a table refit keeps
+                // the first plane and its offset (Decision 3).
+                let refitPlane = refit.foodSupportPlane
                 refitRefused = refit.plane == nil
-                let pruneOffset = refit.plane == nil
+                if refit.plane != nil { refitReference = refit.stats.reference }
+                let pruneOffset = refitPlane == nil
                     ? Self.supportOffsetMm(reference: planeReference, ringMedianMm: planeRingMedianMm)
-                    : Self.supportOffsetMm(reference: refit.stats.reference, ringMedianMm: refit.stats.ring?.medianMm)
+                    : 0
                 growth = FoodRegionGrowth.prune(
                     candidate, depth: depth, intrinsics: nadir.intrinsics,
-                    supportPlane: refit.plane ?? plane, supportOffsetMm: pruneOffset,
+                    supportPlane: refitPlane ?? plane, supportOffsetMm: pruneOffset,
                     palette: palette, config: regionGrowth)
                 // Adopt the refit plane only when the pruned region still
                 // stands; a region pruned to nothing means the refit's mask
                 // was not food, so its plane is not trusted either.
-                if growth.applied, let refitPlane = refit.plane {
+                if growth.applied, let refitPlane {
                     plane = refitPlane
                     planeReference = refit.stats.reference
-                    refitReference = refit.stats.reference
                     diagnostics.recordSupportPlane(
                         candidateCount: refit.stats.candidatePointCount,
                         inlierCount: refit.stats.inlierCount,

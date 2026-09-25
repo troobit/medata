@@ -39,7 +39,7 @@ The floor is applied again after the refit rather than only during the fill beca
 
 The roll capture grows from 0.49 % to 7.1 % of the frame at every setting — the roll's footprint in the photo — and its refit lands on the plate as `foodSupport` at floors 2 and 3. Floor 2 fails the 20 % bar (median +40 %; `1786844576261`, a well-segmented bread plate, grows 2.5×, which is plate noise admitted). Floor 3 passes (+9 %) and floor 5 adds nothing on the well-segmented plates but drops the roll's refit back to `edgeBand` at cliffs 3 and 4. Cliff has no effect on the median; it moves only the largest single addition (`1785135663727`, bread on a white plate, 12 % → 19 % at cliff 3 and → 23 % at 4 and 6). Without a truth mask that addition cannot be called food or leak, so the tighter cliff ships.
 
-**Shipped: cliff 3 mm, floor 3 mm, cap 0.35.** The Req 8 rule's "largest cliff" clause is set aside for the outlier above; the rule's other clauses hold at 3/3.
+**Shipped: cliff 3 mm, floor 3 mm, cap 0.35.** The Req 8 rule's "largest cliff" clause is set aside for the outlier above; the rule's other clauses hold at 3/3. **Revised 2026-09-25 (Decision 3): floor 5 mm.** This sweep ran on a harness path that fitted the first plane from the argmax rather than the pre-shutter mask the device uses; on the device path floor 3 leaks a plate blob to the rim on both roll captures and floor 5 does not.
 
 **The carb-MAE half, measured overnight 2026-09-24/25 on Nutrition5k.** `tools/nutrition5k/ingest.py --checkpoint` re-ingested with the shipped checkpoint (after fixing its 513×513 tensor size), giving 236 `single_dominant` plates with probability tensors and weighed carbs (BACKLOG 23 closed for this purpose). `HarnessCLI accuracy` over them, sliver 0.05, growth 3/3/0.35:
 
@@ -107,5 +107,42 @@ The device pass answers whether the roll is measured whole; the sweep answers wh
 
 **Negative:**
 - The constants on the phone today may move after the sweep.
+
+---
+
+## Decision 3: A table refit is never adopted; the floor is 5 mm; the harness fits the first plane the way the device does
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+The 2026-09-25 single-view capture of the roll (`1790310107431`) grew from 112,439 to 200,165 pixels and read 518.7 cm³ against 280 cm³ for the same roll the day before, with plate speckles visible around the roll in the review outline. Replaying it with the first plane fitted from the pre-shutter mask, as the device does, reproduced the row exactly. The added cells all carry full depth confidence; 459 of 1,197 sit 3–5 mm above the first (plate) plane, most of them a contiguous blob running to the plate rim, because the plate is not level with the fitted plane by that much. That blob is about 11 cm³. The rest of the excess came from the refit: on the grown mask the fitter returned an `edgeBand` plane, the table 19 mm below the plate, and the integrator measures from the adopted plane with no offset, so the whole footprint gained 19 mm. Keeping the first plane gives 247 cm³ from the same mask.
+
+The harness replay had been fitting the first plane from the argmax rather than the pre-shutter mask, so Decision 1's sweep and the `volumes`/`accuracy` commands were not seeing what the device saw (yesterday's capture replays as 690 cm³ on that path against 280 on the device).
+
+### Decision
+
+A refit that references `edgeBand` is not adopted: `SupportPlaneFitOutcome.foodSupportPlane` is what `Pipeline` and `FixtureRunner` prune against and adopt, and a table refit keeps the first plane and its offset. `FoodRegionGrowthConfig.standard` floor rises from 3 mm to 5 mm. `FixtureRunner` fits the first plane from the fixture's pre-shutter mask when it carries one.
+
+### Rationale
+
+The integrator has no offset term, so an adopted plane must be the food's support surface; the first plane already is on a `foodSupport` fit, and on an `edgeBand` first fit the ring-median offset is applied by the growth pass, not the integrator, so adopting a second `edgeBand` plane can only add the plate height to every pixel. On the four bundles replayed on the device path the guard changes only the rows where the refit was `edgeBand` (519 → 247, and a mixed plate 459 → 322) and leaves every `foodSupport` row untouched. Floor 5 removes the plate blob on both roll captures (200k → 164k and 194k → 177k pixels) without flipping any refit on the device path; the earlier finding that floor 5 "drops the roll's refit to edgeBand" came from the divergent replay path and is moot under the guard anyway.
+
+### Alternatives Considered
+
+- **Offset an adopted `edgeBand` refit by its ring median**: Rejected for now; it would also change every `edgeBand` first fit's integration, which is the known flat-food over-read and a separate decision with the whole corpus behind it.
+- **A seed-median height band for added cells**: Rejected; the crust foot and the plate blob share the 3–5 mm band, and it does nothing about the plane.
+- **Leave the floor at 3 mm and rely on the guard**: Rejected; the outline the owner reviews still shows the plate blob, and the blob is real volume (about 11 cm³) on a capture judged good by eye at 280.
+
+### Consequences
+
+**Positive:**
+- Today's capture replays at 224 cm³ and yesterday's at 302 cm³ with the outline on the roll.
+- The harness sees the device's first plane, so sweeps and accuracy runs measure the shipped path.
+
+**Negative:**
+- The Decision 1 sweep numbers are from the divergent path and need re-running before the merge gate in Decision 2 is applied.
+- A capture whose first fit is `edgeBand` and whose refit would have been a correct `foodSupport` plane is unaffected; one whose refit is `edgeBand` keeps a first plane that may itself be wrong. The guard removes a wrong adoption, it does not add a right one.
 
 ---
