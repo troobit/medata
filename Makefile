@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test test-corpus device-reset food-db build-app build-release-check deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test test-corpus device-reset spec-portfolio food-db build-app build-release-check deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -352,6 +352,16 @@ logs-device:
 deploy-release:
 	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
 	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release.sh
+
+# Spec portfolio: one JSON record per spec (tasks, decisions, last touched,
+# state) and a self-contained HTML page to explore what is left. The page is
+# what gets published; the JSON is the contract between the two scripts.
+PORTFOLIO_DIR ?= /private/tmp/medata-portfolio
+spec-portfolio:
+	@mkdir -p $(PORTFOLIO_DIR)
+	$(PYTHON) tools/spec_portfolio/collect.py $(PORTFOLIO_DIR)/data.json
+	$(PYTHON) tools/spec_portfolio/render.py --data $(PORTFOLIO_DIR)/data.json --out $(PORTFOLIO_DIR)/portfolio.html
+	@echo "portfolio: $(PORTFOLIO_DIR)/portfolio.html"
 
 # Dev-loop reset: pull everything off the phone into the corpus (with prune),
 # then remove the app and its data container (captures, meals DB, notes,
