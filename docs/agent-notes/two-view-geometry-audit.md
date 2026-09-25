@@ -316,3 +316,139 @@ there and never reaches the carve, so the degraded flag is today exercised by
 the outcome row and by tests rather than by a number on screen. It becomes
 visible in review the moment a card-plane or other no-depth support plane
 exists.
+
+## 7. Splitting the residual: the carve is within its own hull bias (2026-09-25 night)
+
+§4 left the carve at 1.3–1.9x a single-view reference of 267–302 cm³ and named
+three suspects: the hull's intrinsic bias, a too-wide footprint, and a height
+bound reading high. All three are now measured rather than argued, by
+`HarnessCLI carve-audit <bundle.fixture>…` (`HarnessCore/CarveResidualAudit.swift`).
+The conclusion is that **there is no unexplained residual**, and that the
+comparison in §4 was against the wrong reference.
+
+### The reference was a different capture
+
+The 267–302 cm³ band comes from single-view captures taken minutes apart, on
+their own masks and their own (growth-refitted) planes. The like-for-like
+reference is the height-field integral over the SAME nadir frame, the SAME
+support plane and the SAME silhouette the carve used — a LiDAR measurement of
+the food's own surface, with no capture-to-capture variation in it. Measured
+that way (β = 1, production settings, plane as the two-view branch fits it):
+
+| bundle | carved | nadir height field, same frame/plane/mask | carve ÷ surface | synthetic hull bias |
+|---|---|---|---|---|
+| `1790318627741` | 397.1 | 358.0 | **1.11** | 1.17 |
+| `1790315814452` | 509.8 | 430.3 | **1.19** | 1.15 |
+| `1790310086654` | 351.4 | 281.7 | **1.25** | 1.05 |
+| `1790315734391` | 284.1 | 257.9 | **1.10** | 1.07 |
+| `1790325380366` | 358.8 | 261.4 | **1.37** | 1.11 |
+
+The last column is the synthetic control run at each bundle's OWN geometry:
+exact silhouettes of a 120 x 70 x 42 mm box (the convex hull of its eight
+projected corners, no segmenter), the bundle's real intrinsics, its real stored
+`t_1→2`, through the shipping sizer and estimator, against the voxelised truth
+of the same grid. The box height is a multiple of the 3 mm voxel so the grid
+extent equals it exactly; at 40 mm the grid rounds up to 42 and the bias reads
+1.05–0.08 higher, which is voxel headroom, not cone widening.
+
+So the carve exceeds a LiDAR measurement of the same food, from the same frame,
+by 10–37 %, against an unavoidable hull bias of 5–17 %. The unexplained part is
+0–24 % on five bundles, and zero on the bundle §4 was built around.
+
+### (a) The footprint is not too wide
+
+§4 read 92.6 cm² of label-food against "the roll's real ~84 cm²" and called it
++10 %. That comparison does not hold: the silhouette of a RAISED object,
+back-projected to the support plane, is larger than the object's footprint by
+(d / (d − h))² — pure perspective, before any mask error. The synthetic control
+measures it: a box with a true 84 cm² footprint and 40 mm of height projects, by
+the identical rule, to **108–119 cm²** on these five bundles. The real rolls
+measure **102.7, 127.5, 122.2, 107.3, 124.2 cm²**. Four of five sit at or below
+the figure a geometrically perfect object of the roll's nominal size produces.
+Only `1790315814452` (127.5 against 114.7) is meaningfully wide, and its
+growth-refit plane brings it to 120.5.
+
+A measured footprint is therefore not evidence of a wide mask until the
+magnification is taken out. `CarveResidualAuditTests` pins both halves of that
+claim.
+
+### (b) The height percentile is not a lever, and the P98 was never the problem
+
+The height distribution over the food mask is compact at the TOP and long-tailed
+at the bottom — the opposite of what a percentile guards against:
+
+| bundle | p2 | p10 | p25 | p50 | p90 | p95 | p98 | max |
+|---|---|---|---|---|---|---|---|---|
+| `1790318627741` | 35.4 | 39.6 | 42.4 | 44.7 | 46.8 | 47.1 | 47.3 | 47.6 |
+| `1790315814452` | 24.3 | 34.0 | 39.6 | 44.8 | 49.6 | 50.2 | 50.4 | 50.7 |
+| `1790310086654` | 6.6 | 16.2 | 23.0 | 29.5 | 35.2 | 35.7 | 36.0 | 37.1 |
+| `1790315734391` | 14.8 | 22.2 | 27.2 | 30.0 | 32.9 | 33.2 | 33.4 | 33.8 |
+| `1790325380366` | 11.8 | 16.9 | 21.0 | 25.7 | 29.7 | 30.0 | 30.2 | 30.5 |
+
+P90 to the maximum spans **0.8–1.9 mm** on every bundle — under one 3 mm voxel.
+After `ceilDiv` to whole voxels, P90, P95, P98 and the raw maximum give the
+IDENTICAL carve at the shipped 5 mm margin on four of five bundles, and differ
+by one voxel layer on the fifth. There is nothing to tune.
+
+The question "why did P98 read 47.3 mm on a roll of about 40 mm" therefore has
+nothing to do with the percentile: the MEDIAN reads 44.7 mm on that bundle. The
+whole surface reads near-apex, because the plane sits where it sits and the
+LiDAR depth is smoothed. Lowering the percentile moves the answer by less than
+the voxel edge.
+
+The 5 mm margin does have leverage — roughly 11 % — but it cannot be spent.
+Dropping it to 0 mm clips real food on three of five bundles (1.9 %, 5.7 % and
+8.0 % of the height samples sit above the resulting extent), and 2 mm, which
+clips nothing, is below the measured plane residual (2.0–3.2 mm) the margin
+exists to cover. Both constants stay.
+
+### (c) The plane, not the bound, is the one real lever found
+
+The single-view branch grows the nadir food region from its first plane and
+REFITS from the grown mask, keeping the refit only when it lands on
+`foodSupport` (Decision 3). The two-view branch fits once, from the pre-shutter
+or argmax mask, and never refits. Running the single-view sequence on the same
+two-view bundles:
+
+| bundle | as fitted | dist | carved | grown refit | dist | carved | change |
+|---|---|---|---|---|---|---|---|
+| `1790318627741` | edgeBand | −401.3 | 397.1 | edgeBand | −400.6 | 396.5 | −0.2 % |
+| `1790315814452` | edgeBand | −393.6 | 509.8 | **foodSupport** | −386.5 | **390.1** | **−23 %** |
+| `1790310086654` | foodSupport | −395.3 | 351.4 | foodSupport | −395.6 | 350.3 | −0.3 % |
+| `1790315734391` | foodSupport | −361.8 | 284.1 | **foodSupport** | −358.1 | **268.0** | **−5.7 %** |
+| `1790325380366` | foodSupport | −383.4 | 358.8 | foodSupport | −383.4 | 358.9 | 0 % |
+
+The plane is the carve's FLOOR as well as the origin the height is measured
+from, so a plane 7 mm low both raises the grid and hands the carve a 7 mm slab
+of hull under the food — about 90 cm³ at these footprints. On the two bundles
+where the refit changes the reference the carve drops 6–23 %; on the other three
+it moves by less than 1 %. That is the only measured, structural difference
+between the two paths, and it is a change in `Pipeline`, not in `Volume`.
+
+### What would settle the rest
+
+Nothing offline. The remaining 0–24 % is the difference between a food's volume
+and the convex hull two near-vertical silhouettes can describe of it — a roll is
+roughly 83 % of its bounding prism and the cones cannot see the taper. Weighed
+truth on two-view captures is the only thing that can tell that apart from a
+systematic estimator error; the corpus has three weighed plates and none of them
+are two-view.
+
+### Running it
+
+```
+HarnessCLI carve-audit [--box 120x70x42] [--edge 3] <bundle.fixture>…
+```
+
+Positional paths, no checkpoint gate (as `cards`). Per bundle it prints: the
+plane and its residual, the baseline and inter-view rotation, the nadir and
+oblique silhouette footprints on the plane, the height distribution, a
+percentile x margin sweep with the fraction of food each bound would clip, the
+two plane variants with their height-field integrals, and the synthetic control.
+A bundle that is not two-view still prints the `profile` line, so the
+single-view captures of the same food can be measured with the identical rule.
+
+The margin sweep does not touch any production constant: `VoxelGridSizer` adds
+its own `heightMarginMm` and then clamps, so a margin m is expressed by handing
+it `h + m − heightMarginMm`, which reproduces `clamp(h + m)` exactly, clamp
+included.

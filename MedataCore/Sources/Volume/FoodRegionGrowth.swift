@@ -441,8 +441,10 @@ public enum FoodRegionGrowth {
 // §6.7 ray–plane height of a colour pixel's surface above the support plane,
 // in mm; nil on a degenerate ray. The same arithmetic, in the same order, as
 // `HeightFieldEstimator.integrate` so the two agree pixel for pixel.
+// `public` so a harness diagnostic can measure the same height a production
+// stage measures, rather than re-deriving this arithmetic and drifting from it.
 @inline(__always)
-func heightAboveSupportPlaneMm(
+public func heightAboveSupportPlaneMm(
     colourX x: Float, colourY y: Float, depthMm zt: Float,
     intrinsics k: CameraIntrinsics, plane: SupportPlane
 ) -> Float? {

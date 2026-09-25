@@ -196,6 +196,24 @@ public enum VoxelGridSizer {
         intrinsics: CameraIntrinsics,
         supportPlane: SupportPlane
     ) -> Float? {
+        let samples = foodHeightSamplesMm(
+            foodMask: foodMask, depth: depth,
+            intrinsics: intrinsics, supportPlane: supportPlane)
+        guard samples.count >= minHeightSampleCount else { return nil }
+        return percentile(ofSorted: samples, heightPercentile)
+    }
+
+    /// The per-pixel food heights above the support plane, mm, ascending — the
+    /// sample set `measuredFoodHeightMm` takes its percentile of. Exposed so a
+    /// diagnostic can read the whole distribution (how far the P98 sits above
+    /// the food, what fraction of the food a candidate grid would clip) without
+    /// re-deriving the sampling rule and drifting from it.
+    public static func foodHeightSamplesMm(
+        foodMask: BinaryMask,
+        depth: DepthMap,
+        intrinsics: CameraIntrinsics,
+        supportPlane: SupportPlane
+    ) -> [Float] {
         let w = foodMask.width
         let h = foodMask.height
         var heights: [Float] = []
@@ -215,10 +233,15 @@ public enum VoxelGridSizer {
                 heights.append(height)
             }
         }
-        guard heights.count >= minHeightSampleCount else { return nil }
         heights.sort()
-        let idx = Int((Float(heights.count - 1) * heightPercentile).rounded())
-        return heights[min(heights.count - 1, max(0, idx))]
+        return heights
+    }
+
+    /// Nearest-rank percentile of an ascending sample array. nil when empty.
+    public static func percentile(ofSorted sorted: [Float], _ p: Float) -> Float? {
+        guard !sorted.isEmpty else { return nil }
+        let idx = Int((Float(sorted.count - 1) * p).rounded())
+        return sorted[min(sorted.count - 1, max(0, idx))]
     }
 
     // MARK: - helpers
