@@ -426,28 +426,33 @@ struct CaptureFlowView: View {
 
 // Static rendering of the captured frame(s) shown in place of the live
 // `ARPreviewView` during `.estimating` (Req §"Freeze viewfinder"). Single mode
-// shows the nadir frame filling the safe area; two-view mode stacks nadir over
-// oblique so the user sees BOTH photos were taken. Vertical stacking reads
-// better than side-by-side here: each captured buffer is itself landscape
-// (1920×1440), so two of them sit naturally one above the other in the portrait
-// safe area without per-frame letterboxing.
+// shows the nadir frame filling the safe area; two-view mode sets nadir and
+// oblique side by side so the user sees BOTH photos were taken.
+//
+// `RawFrame.imageBytes` is the sensor-native landscape buffer (1920×1440,
+// `orientation: 1`); the live `ARView` rotates that feed to the portrait
+// interface itself. Drawing the buffer as-is therefore showed the just-taken
+// photo turned 90° from the viewfinder the user was looking at a moment
+// earlier. `RawFrameImage.portraitOrientation` puts it back the way the phone
+// was held. Display-only: the frame, the mask artefact and the estimator all
+// stay in buffer coordinates.
 private struct CapturedFramesView: View {
     let result: CaptureResult
 
     var body: some View {
         GeometryReader { proxy in
-            // Nadir fills the whole safe area in single mode; in two-view mode it
-            // takes the top half and the oblique the bottom half.
-            let nadirHeight = obliqueImage == nil ? proxy.size.height : proxy.size.height / 2
-            VStack(spacing: 0) {
+            // Nadir fills the whole safe area in single mode; in two-view mode
+            // each portrait frame takes half the width.
+            let frameWidth = obliqueImage == nil ? proxy.size.width : proxy.size.width / 2
+            HStack(spacing: 0) {
                 frameImage(result.nadirFrame)
-                    .frame(width: proxy.size.width, height: nadirHeight)
+                    .frame(width: frameWidth, height: proxy.size.height)
                     .clipped()
                 if let oblique = obliqueImage {
-                    Image(decorative: oblique, scale: 1)
+                    Image(decorative: oblique, scale: 1, orientation: RawFrameImage.portraitOrientation)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height / 2)
+                        .frame(width: frameWidth, height: proxy.size.height)
                         .clipped()
                 }
             }
@@ -458,7 +463,7 @@ private struct CapturedFramesView: View {
     @ViewBuilder
     private func frameImage(_ frame: RawFrame) -> some View {
         if let cgImage = RawFrameImage.cgImage(frame) {
-            Image(decorative: cgImage, scale: 1)
+            Image(decorative: cgImage, scale: 1, orientation: RawFrameImage.portraitOrientation)
                 .resizable()
                 .scaledToFill()
         } else {
@@ -480,14 +485,14 @@ private struct CapturedFramesView: View {
 private struct NadirThumbnailView: View {
     let frame: RawFrame
 
-    private let width: CGFloat = 96
-    // Captured buffers are landscape ~4:3 (e.g. 1920×1440).
-    private var height: CGFloat { width * 3 / 4 }
+    // Shown the way the phone was held (portrait 3:4), like the frozen frames.
+    private let height: CGFloat = 96
+    private var width: CGFloat { height * 3 / 4 }
 
     var body: some View {
         if let cgImage = RawFrameImage.cgImage(frame) {
             VStack(alignment: .leading, spacing: 4) {
-                Image(decorative: cgImage, scale: 1)
+                Image(decorative: cgImage, scale: 1, orientation: RawFrameImage.portraitOrientation)
                     .resizable()
                     .scaledToFill()
                     .frame(width: width, height: height)

@@ -93,6 +93,20 @@ composition only; all behaviour is in the model and is unit-tested.
 
 ## Gotchas / non-obvious behaviour
 
+- **Captured buffers are landscape; the capture screen turns them to portrait for
+  display only.** `RawFrame.imageBytes` is ARKit's sensor-native 1920×1440 buffer
+  (`orientation: 1`), while the live `ARView` rotates the same feed to the portrait
+  interface itself. Drawn as-is, the frozen frames during `.estimating` and the nadir
+  thumbnail showed the photo turned 90° from the viewfinder (the owner read it as a
+  "flip" and it likely nudged them into laying the ID-1 card in portrait).
+  `CapturedFramesView` and `NadirThumbnailView` now pass
+  `RawFrameImage.portraitOrientation` (`.right`) to `Image(decorative:scale:orientation:)`;
+  nothing in the buffer, the intrinsics or the mask artefact moved. The saved Photos
+  asset (`PhotoKitSaver`), `MealReviewView.photoSection` (4:3 box) and the
+  `MaskOverlayLoader` surfaces still show the landscape buffer, because the mask PNG and
+  the contour unit coordinates are in buffer space — turning those means rotating photo,
+  contours, badges and tap hit-testing together, a separate decision.
+
 - **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
   `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
   ahead of SwiftUI-drawn siblings, and `allowsHitTesting(false)`/`zIndex` on the

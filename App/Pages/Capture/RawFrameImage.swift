@@ -1,6 +1,7 @@
 import CaptureKit
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 // `CGImage` decode from `RawFrame.imageBytes` + `.pixelFormat`, shared by every
 // capture-side surface that has to show or re-encode a captured buffer: the
@@ -12,6 +13,15 @@ import Foundation
 // so the switch keeps the other portable formats decodable too rather than
 // assuming one layout.
 enum RawFrameImage {
+
+    // How a captured buffer is turned to match the live viewfinder. ARKit's
+    // `capturedImage` is always the sensor's landscape orientation; with the
+    // phone held portrait (the only way the capture screen runs) the scene
+    // sits in it rotated 90° anticlockwise, and `.right` (90° clockwise on
+    // display) undoes that — the same orientation Vision is handed for a
+    // portrait ARFrame. Capture-screen display only: the saved photo and the
+    // review/result surfaces stay in buffer coordinates with the mask.
+    static let portraitOrientation: Image.Orientation = .right
 
     // Returns nil when the byte count does not match the declared geometry or
     // Core Graphics refuses the buffer; callers render a placeholder rather
