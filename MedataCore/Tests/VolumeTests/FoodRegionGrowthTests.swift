@@ -136,6 +136,44 @@ struct FoodRegionGrowthTests {
         #expect(!onFood.applied && onFood.argmax == a)
     }
 
+    // Decision 4: a first plane 4–5° off the table put the plate 6–16 mm above
+    // the support surface on the 2026-09-25 roll captures, past any fixed
+    // floor, with the food at 30 mm. The seed band prunes an added cell that
+    // sits more than `seedBandMm` below the seed cells' median height.
+    @Test("the seed band prunes a plate strip a tilted plane raised above the floor")
+    func seedBandPrunesTheRaisedPlate() {
+        // Food disc at 570 (30 mm), a ramp column at 580 (20 mm), then a
+        // plate strip at 592 (8 mm, over the 5 mm floor) — every step within a
+        // 20 mm cliff, so only the band can keep the strip out.
+        let tilted = depth { dy, dx in
+            if inSlab(dx, dy) { return 570 }
+            guard (3..<9).contains(dy) else { return 599 }
+            if dx == 12 { return 580 }
+            if (13...15).contains(dx) { return 592 }
+            return 599
+        }
+        let a = seedArgmax(cells: [(5, 4, 0)])
+        func run(band: Float) -> FoodRegionGrowthResult {
+            let cfg = FoodRegionGrowthConfig(cliffMm: 20, floorMm: 5, frameFractionCap: 0.6, seedBandMm: band)
+            let grown = FoodRegionGrowth.grow(argmax: a, depth: tilted, intrinsics: k,
+                                              supportPlane: plane, palette: palette, config: cfg)
+            return FoodRegionGrowth.prune(grown, depth: tilted, intrinsics: k,
+                                          supportPlane: plane, palette: palette, config: cfg)
+        }
+        let unbanded = run(band: 0)
+        let banded = run(band: 10)
+        #expect(unbanded.applied && banded.applied)
+        // Cells 14 and 15 are the strip clear of the ramp's neighbour rule:
+        // food without the band, background with it; the ramp (20 mm) stays.
+        let free = [UInt8](unbanded.argmax.pixels)
+        let held = [UInt8](banded.argmax.pixels)
+        #expect(Int(free[5 * 4 * w + 14 * 4]) == 0)
+        #expect(Int(held[5 * 4 * w + 14 * 4]) == palette.background)
+        #expect(Int(held[5 * 4 * w + 12 * 4]) == 0)
+        #expect(banded.foodPixelsAfter < unbanded.foodPixelsAfter - 16 * 12,
+                "banded \(banded.foodPixelsAfter) unbanded \(unbanded.foodPixelsAfter)")
+    }
+
     @Test("growth past the frame cap returns the input unchanged and says so")
     func capTrips() {
         // Everything raised and flat: the fill would cover the whole frame.

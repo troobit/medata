@@ -74,16 +74,18 @@ struct Args {
     var growthCliffMm: Float?
     var growthFloorMm: Float?
     var growthCap: Float?
+    var growthBandMm: Float?
 }
 
 // The growth the harness applies on the single-view replay: `.standard` (what
-// the device runs) with any of the three constants substituted when given.
+// the device runs) with any of the four constants substituted when given.
 func growthConfig(args: Args) -> FoodRegionGrowthConfig {
     let standard = FoodRegionGrowthConfig.standard
     return FoodRegionGrowthConfig(
         cliffMm: args.growthCliffMm ?? standard.cliffMm,
         floorMm: args.growthFloorMm ?? standard.floorMm,
-        frameFractionCap: args.growthCap ?? standard.frameFractionCap)
+        frameFractionCap: args.growthCap ?? standard.frameFractionCap,
+        seedBandMm: args.growthBandMm ?? standard.seedBandMm)
 }
 
 // The regularisation the harness applies to a replayed argmax: `.standard`
@@ -131,6 +133,8 @@ func parseArgs() -> Args? {
             if let s = it.next(), let f = Float(s) { result.growthFloorMm = f }
         case "--growth-cap":
             if let s = it.next(), let f = Float(s) { result.growthCap = f }
+        case "--growth-band-mm":
+            if let s = it.next(), let f = Float(s) { result.growthBandMm = f }
         case "--max-observations":
             if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
         case "--oblique":
