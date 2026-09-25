@@ -1,3 +1,4 @@
+import CardDetection
 import PortableContracts
 import XCTest
 @testable import MetricScale
@@ -33,7 +34,7 @@ final class MetricScaleResolverTests: XCTestCase {
     // more than the bound is dropped, so it can never raise σ_s; just inside
     // the bound it is kept and raises σ_s by its agreement.
     func testDisagreementBeyondBoundDropsCard() throws {
-        let bound = MetricScaleResolver.maxCardLidarDisagreement
+        let bound = CardPoseSolver.maxLidarDisagreement
         let lidar: Float = 0.20
         let justIn = try MetricScaleResolver.resolve(
             cardScaleMmPerPx: lidar * (1 + bound - 0.02), lidarScaleMmPerPx: lidar)

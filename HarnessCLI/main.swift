@@ -592,7 +592,7 @@ func runCards(args: Args) throws {
             print(line + " corners=none"); continue
         }
         // The candidate the pipeline would take (CardPoseSolver.pick).
-        let picked = (try? CardPoseSolver.pick(candidates: candidates, intrinsics: k))??.corners
+        let picked = (try? CardPoseSolver.pick(candidates: candidates, intrinsics: k, lidarMmPerPx: sLidar))??.corners
         for (index, corners) in candidates.enumerated() {
             var row = line + " candidate=\(index + 1)/\(candidates.count) picked=\(corners == picked)"
             let labels = ["tl", "tr", "br", "bl"]
