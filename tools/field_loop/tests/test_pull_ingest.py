@@ -393,35 +393,44 @@ def test_listing_entries_prefer_relative_paths_and_sizes():
         ("Documents/notes/x.json", 7)]
 
 
-def test_progress_bar_carries_the_req_3_8_figures(tmp_path):
-    # Req 3.8 in bar form: fraction, bytes, throughput, ETA, and the file in
-    # flight — including live bytes read off the `.partial` while it copies.
+def test_status_line_carries_the_req_3_8_figures(tmp_path):
+    # Req 3.8 on the in-place line: fraction, bytes, throughput, ETA, and the
+    # file in flight — including live bytes read off the `.partial`.
     out = io.StringIO()      # no .encoding, so the ASCII frames are exercised
-    bar = field_pull._ProgressBar(1_000, out=out, columns=120)
+    status = field_pull._StatusLine(1_000, out=out, columns=120)
     partial = tmp_path / "a.fixture.partial"
     partial.write_bytes(b"x" * 250)
-    bar.start("captures/a.fixture", partial)
+    status.start("captures/a.fixture", partial)
     inflight = out.getvalue()
-    bar.advance(250, rate=14_500_000, eta_s=85)
-    bar.close()
+    status.advance(250, rate=14_500_000, eta_s=85)
+    status.close()
     done = out.getvalue()[len(inflight):]
-    assert "captures/a.fixture" in inflight and " 25.0%" in inflight
-    for piece in (" 25.0%", "250 B/1.0 kB", " 14.5 MB/s", "eta 1:25", "######"):
+    assert inflight.endswith("  a") and " 25.0%" in inflight
+    for piece in (" 25.0%", "250 B/1.0 kB", " 14.5 MB/s", "eta 1:25"):
         assert piece in done
-    assert done.endswith("\r\x1b[K")    # the closed bar leaves a clean line
+    assert "\n" not in out.getvalue()      # in place: never a newline
+    assert done.endswith("\r\x1b[K")      # the closed line is a clean one
 
 
-def test_progress_bar_trims_long_paths_keeping_the_stem(tmp_path):
+def test_status_line_never_exceeds_the_terminal_width(tmp_path):
+    # A line wider than the pane wraps, and then `\r` returns to the start of
+    # the LAST row: every redraw leaves a row behind. Clipping is the fix.
     out = io.StringIO()
-    bar = field_pull._ProgressBar(1_000, out=out, columns=72)
-    bar.start("captures/0001756000000001-success.fixture",
-              tmp_path / "absent.partial")
+    status = field_pull._StatusLine(1_000, out=out, columns=60)
+    status.start("captures/0001756000000001-success.fixture",
+                 tmp_path / "absent.partial")
     line = out.getvalue()
-    bar.close()
-    # Directory and extension go first; the stem's varying tail survives.
+    status.close()
     assert ".fixture" not in line and "captures/" not in line
-    assert line.endswith("-success")
-    assert len(line.split("\x1b[K")[-1]) <= 72
+    assert line.split("\x1b[K")[1].endswith("-success")  # tail survives
+    assert all(len(row) < 60 for row in line.split("\r\x1b[K"))
+
+    out = io.StringIO()
+    status = field_pull._StatusLine(1_000, out=out, columns=30)
+    status.start("captures/0001756000000001-success.fixture",
+                 tmp_path / "absent.partial")
+    status.close()
+    assert all(len(row) < 30 for row in out.getvalue().split("\r\x1b[K"))
 
 
 class StubPullTransport:
@@ -467,6 +476,42 @@ def test_pull_skips_present_files_at_listed_size_and_marks_completion(corpus_roo
     assert set(hashes) == {"captures/a.fixture", "captures/b.fixture",
                            "meals.sqlite"}
     assert (pull_dir / field_pull.PULL_COMPLETE_NAME).exists()
+
+
+def test_pull_skips_bundles_the_corpus_already_holds_but_still_lists_them(
+        corpus_root, capsys):
+    # A bundle the phone kept after an earlier pull is in <corpus>/captures/ at
+    # its listed size: it is not copied again, and it is still hashed into the
+    # manifest so the phone prunes it. A size mismatch (slimmed since) copies.
+    held = corpus_root / "captures" / "held.fixture"
+    held.parent.mkdir(parents=True, exist_ok=True)
+    held.write_bytes(b"in-the-corpus")
+    (corpus_root / "captures" / "slimmed.fixture").write_bytes(b"was-bigger")
+    pull_dir = corpus_root / "pulls" / "20260827-1"
+    transport = StubPullTransport(
+        {"Documents/captures": [
+            ("Documents/captures/held.fixture", len(b"in-the-corpus")),
+            ("Documents/captures/slimmed.fixture", 4),
+            ("Documents/captures/new.fixture", 3)]},
+        {"Documents/captures/slimmed.fixture": b"slim",
+         "Documents/captures/new.fixture": b"new",
+         "Documents/meals.sqlite": b"db"})
+
+    hashes = field_pull.pull_files(transport, pull_dir, corpus_root=corpus_root)
+
+    assert transport.copied == ["Documents/captures/slimmed.fixture",
+                                "Documents/captures/new.fixture",
+                                "Documents/meals.sqlite"]
+    assert hashes["captures/held.fixture"] == corpus.sha256_file(held)
+    assert not (pull_dir / "captures" / "held.fixture").exists()
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == ("pull dir=20260827-1 copy bundles=2 files=7 mb=0 "
+                        "present bundles=1 mb=0")
+    copies = [line for line in lines if line.startswith("pull copy ")]
+    assert len(copies) == 3
+    assert copies[0].startswith(
+        "pull copy n=1/7 file=captures/slimmed.fixture mb=0.0 secs=")
+    assert lines[-1].startswith("pull copied=3 present=1 failed=0 ")
 
 
 def test_pull_without_the_database_is_a_failure_and_stays_resumable(corpus_root, capsys):

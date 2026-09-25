@@ -14,7 +14,7 @@ feedback". What that does not say, and an agent needs:
 | Want | Run | Then check |
 |---|---|---|
 | Read notes taken today | `make field-notes` | `ingest … notes=N`, and `db_integrity=ok` |
-| Full session, bundles included | `make field-pull` | `pull copied/resumed/failed`, then `joins_resolved` |
+| Full session, bundles included | `make field-pull` | `pull copied/present/failed`, then `joins_resolved` |
 | Turn notes into tracked work | `make field-triage`, then route | every item checked with a `routed:` line |
 | Re-ingest a directory already on disk | `make field-pull PULL_DIR=<path>` | idempotent by key; safe to repeat |
 | Just the Python suite | `make field-test PYTHON=/opt/homebrew/bin/python3` | Xcode's `python3` has no pytest |
@@ -711,15 +711,34 @@ everything each time (9+ GB of repeats across sibling dirs).
 `field_pull.py` reports progress in **bytes, percent, MB/s and an ETA**
 (bytes, because a file count means nothing when files span 2-400 MB, and the
 ETA waits for three copies because a rate off one small file is mostly
-devicectl's per-invocation overhead). On a TTY that is a single redrawn
-Homebrew-style bar (`_ProgressBar`, stdlib-only, threads a poll of the
-in-flight `.partial` size so a 400 MB copy visibly moves); piped or captured
-output keeps one key=value line per copy — the parseable record, and what the
-tests see. Failed-copy lines print above the bar and survive it. The pull
-lands copies as `.partial` + rename, resumes the newest same-day dir lacking
-its `pull_complete.json` marker by skipping files present at listed size, and
-times out wedged `devicectl` calls per-file. Do not "clean up" the marker
-file: its absence is the resume signal.
+devicectl's per-invocation overhead). Before the first copy one line states
+the job — `pull dir=… copy bundles=N files=M mb=… present bundles=K mb=…` —
+so 1.2 GB of three new bundles is distinguishable from 1.2 GB of repeats
+(the 2026-09-25 complaint: the size was right, the tool just could not say
+so). Every finished copy prints one `pull copy n=… file=… mb=… secs=…`
+key=value line — the parseable record, and what the tests see. On a TTY a
+single in-place status line (`_StatusLine`, stdlib-only, a thread polls the
+in-flight `.partial` size so a 400 MB copy visibly moves) sits below those
+lines, redrawn with a carriage return and **clipped to the terminal width**:
+the earlier bar appended the untrimmed path in any pane narrower than its
+75-column prefix, the line wrapped, and every 150 ms tick left a row behind
+("the loading icon prints a new row every time"). Piped or captured output
+has no status line at all.
+
+**A pull skips what the Mac already holds.** `_present_at_size` checks two
+places for each listed file: this pull dir (a resumed pull) and, for
+`captures/`, `<corpus>/captures/` — ingest hardlinks bundles there under the
+same relative path. A match by name and listed size is hashed, not copied,
+and the hash still goes into the manifest so the phone prunes it; before
+this (up to 2026-09-25) only the same-dir resume skipped, and the corpus was
+never consulted — the phone-side prune was the only thing stopping a kept
+bundle from crossing again on every pull. A bundle slimmed on the phone
+since its pull has a new size and copies again, which is right.
+
+The pull lands copies as `.partial` + rename, resumes the newest same-day dir
+lacking its `pull_complete.json` marker, and times out wedged `devicectl`
+calls per-file. Do not "clean up" the marker file: its absence is the resume
+signal.
 
 **`meals.sqlite` is required; its WAL siblings are not.** The first pull
 treated the whole DB group as optional, the one `meals.sqlite` copy failed for
