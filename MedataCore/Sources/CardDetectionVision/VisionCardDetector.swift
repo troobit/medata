@@ -21,7 +21,10 @@ private let cardDetectorLog = Logger(subsystem: "ie.medata.app", category: "Shut
 #endif
 
 // Vision-backed `CardDetector` per spec `pipeline-real-device-correctness` design
-// §VisionCardDetector. A single `VNDetectRectanglesRequest` is constructed at
+// §VisionCardDetector. Lives in its own SwiftPM target (not the App) so the
+// harness can run the same detector on stored capture bundles off-device;
+// `CardDetection` itself stays free of the Vision framework.
+// A single `VNDetectRectanglesRequest` is constructed at
 // init time and reused on every detect() call so the second and later
 // invocations pay warm-path latency (Reqs 5.6, 5.7). The wrapped request is
 // configured for an ID-1 aspect envelope (53.98 / 85.60 ≈ 0.631 ± 10%).
@@ -32,14 +35,18 @@ private let cardDetectorLog = Logger(subsystem: "ie.medata.app", category: "Shut
 // braces against a future caller racing the two: it serialises access to the
 // mutable `VNDetectRectanglesRequest.results` and moves the synchronous Vision
 // work off the calling actor.
-final class VisionCardDetector: CardDetector, @unchecked Sendable {
+public final class VisionCardDetector: CardDetector, @unchecked Sendable {
     private let request: VNDetectRectanglesRequest
     private let queue = DispatchQueue(
         label: "ie.medata.vision-card-detector",
         qos: .userInitiated
     )
 
-    init() {
+    // `maximumObservations` is 1 in production (brightest / largest single match
+    // wins, multi-card frames are out of scope). The harness raises it to list
+    // every quad Vision ranks, because on the 2026-08-11 real-card bundles the
+    // single pick was a bread slice or a phantom on the plate, not the card.
+    public init(maximumObservations: Int = 1) {
         let r = VNDetectRectanglesRequest()
         // ID-1 short/long ≈ 0.631. Vision's `minimumAspectRatio` / `maximumAspectRatio`
         // are the short-over-long ratio of the candidate quad; ±10 % absorbs
@@ -50,9 +57,7 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
         // occupies ~8 % of the shorter edge, so 5 % gives margin without admitting
         // tiny noise rectangles.
         r.minimumSize = 0.05
-        // Brightest / largest single match wins; multi-card frames are out of scope
-        // for this spec.
-        r.maximumObservations = 1
+        r.maximumObservations = maximumObservations
         r.quadratureTolerance = 20
         self.request = r
     }
@@ -60,7 +65,7 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
     // Req 5.7: pre-warm Vision's pipeline so the first shutter-tap of a session
     // pays warm-path latency only. Runs the configured request on a 64×64 black
     // BGRA buffer and drops the result.
-    func warmup() async {
+    public func warmup() async {
         let bytes = Self.blackBGRA(width: 64, height: 64)
         let request = self.request
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
@@ -74,12 +79,19 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
         }
     }
 
-    func detect(in frame: RawFrame) async -> [PixelCorner]? {
+    public func detect(in frame: RawFrame) async -> [PixelCorner]? {
+        await detectCandidates(in: frame).first
+    }
+
+    // Every rectangle Vision returned, in its ranking order, up to
+    // `maximumObservations`. Empty when nothing was found or the buffer could
+    // not be read. `detect(in:)` is the first of these.
+    public func detectCandidates(in frame: RawFrame) async -> [[PixelCorner]] {
         let bytes = frame.imageBytes
         let width = frame.imageWidth
         let height = frame.imageHeight
         let request = self.request
-        return await withCheckedContinuation { (cont: CheckedContinuation<[PixelCorner]?, Never>) in
+        return await withCheckedContinuation { (cont: CheckedContinuation<[[PixelCorner]], Never>) in
             queue.async {
                 cont.resume(returning: Self.runDetection(
                     request: request,
@@ -98,12 +110,12 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
         imageBytes: Data,
         width: Int,
         height: Int
-    ) -> [PixelCorner]? {
+    ) -> [[PixelCorner]] {
         let startNs = DispatchTime.now().uptimeNanoseconds
 
         guard let cg = cgImageFromBGRA8(imageBytes, width: width, height: height) else {
             logEnd(success: false, cornerCount: 0, startNs: startNs)
-            return nil
+            return []
         }
         // `.up` is correct because `RawFrame.imageBytes` is already in image-display
         // orientation per the `rawframe-rgb-conversion` spec (`imageWidth = 1920`,
@@ -115,11 +127,11 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
             try handler.perform([request])
         } catch {
             logEnd(success: false, cornerCount: 0, startNs: startNs)
-            return nil
+            return []
         }
-        guard let observation = request.results?.first else {
+        guard let observations = request.results, !observations.isEmpty else {
             logEnd(success: false, cornerCount: 0, startNs: startNs)
-            return nil
+            return []
         }
 
         // Vision returns observation corners in normalised image coordinates with
@@ -129,14 +141,16 @@ final class VisionCardDetector: CardDetector, @unchecked Sendable {
         // already left-to-right in both frames since we passed `.up` orientation.
         let w = Float(width)
         let h = Float(height)
-        let corners: [PixelCorner] = [
-            PixelCorner(Float(observation.topLeft.x) * w,     (1 - Float(observation.topLeft.y))     * h),
-            PixelCorner(Float(observation.topRight.x) * w,    (1 - Float(observation.topRight.y))    * h),
-            PixelCorner(Float(observation.bottomRight.x) * w, (1 - Float(observation.bottomRight.y)) * h),
-            PixelCorner(Float(observation.bottomLeft.x) * w,  (1 - Float(observation.bottomLeft.y))  * h)
-        ]
-        logEnd(success: true, cornerCount: corners.count, startNs: startNs)
-        return corners
+        let candidates: [[PixelCorner]] = observations.map { observation in
+            [
+                PixelCorner(Float(observation.topLeft.x) * w,     (1 - Float(observation.topLeft.y))     * h),
+                PixelCorner(Float(observation.topRight.x) * w,    (1 - Float(observation.topRight.y))    * h),
+                PixelCorner(Float(observation.bottomRight.x) * w, (1 - Float(observation.bottomRight.y)) * h),
+                PixelCorner(Float(observation.bottomLeft.x) * w,  (1 - Float(observation.bottomLeft.y))  * h)
+            ]
+        }
+        logEnd(success: true, cornerCount: candidates[0].count, startNs: startNs)
+        return candidates
     }
 
     private static func logEnd(success: Bool, cornerCount: Int, startNs: UInt64) {

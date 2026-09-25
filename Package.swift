@@ -26,7 +26,10 @@ let package = Package(
         // EstimationLogView can render Report and the anchor block
         // (snaq-parity lane B); the target itself still depends on
         // Persistence only, keeping the report maths in `make test`.
-        .library(name: "MedataCore", targets: ["Pipeline", "Benchmark"]),
+        // CardDetectionVision rides here too: the App links SwiftPM code by
+        // product name only, and `import CardDetectionVision` from App/ needs
+        // the target reachable through this product.
+        .library(name: "MedataCore", targets: ["Pipeline", "Benchmark", "CardDetectionVision"]),
         // Separate product: glucose ingestion is a data stream beside the
         // estimation pipeline, not part of it (specs/data/libre-ingestion
         // Decision 2). The app links both.
@@ -79,6 +82,15 @@ let package = Package(
             name: "CardDetection",
             dependencies: ["PortableContracts", "CaptureKit"],
             path: "MedataCore/Sources/CardDetection"
+        ),
+        // The Vision-backed `CardDetector` (VNDetectRectanglesRequest). Its own
+        // target so `CardDetection` stays framework-free and so the harness can
+        // replay card detection on stored bundles off-device: Vision exists on
+        // both platforms this package declares.
+        .target(
+            name: "CardDetectionVision",
+            dependencies: ["PortableContracts", "CaptureKit", "CardDetection"],
+            path: "MedataCore/Sources/CardDetectionVision"
         ),
         .target(
             name: "SupportPlane",
@@ -238,6 +250,8 @@ let package = Package(
             dependencies: [
                 "Pipeline",
                 "CaptureKit",
+                "CardDetection",
+                "CardDetectionVision",
                 "Segmentation",
                 "SupportPlane",
                 "Volume",

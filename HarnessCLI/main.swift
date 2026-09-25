@@ -1,5 +1,6 @@
 // HarnessCLI — offline test-set runner per design §7.3.
-// Subcommands: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose.
+// Subcommands: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose,
+// volumes, cards.
 // Usage: HarnessCLI <subcommand> [flags]
 //
 // Feature-flagged off in v1 per Decision 41. The entire file is gated on
@@ -7,6 +8,8 @@
 // iOS app never includes this binary.
 #if HARNESS_ENABLED
 import CaptureKit
+import CardDetection
+import CardDetectionVision
 import Foods
 import Foundation
 import HarnessCore
@@ -21,6 +24,11 @@ import Volume
 struct Args {
     let subcommand: String
     var fixturesDir: String = ""
+    // Positional `.fixture` paths (`cards`): one bundle at a time, no directory.
+    var fixturePaths: [String] = []
+    // `cards`: how many ranked rectangles Vision may return per frame. 1 is
+    // what the device runs; more lists the candidates the single pick hides.
+    var maxObservations: Int = 1
     var checkpointSHA256: String = ""
     var outputPath: String = ""
     var voxelEdgeMm: Float = 3.0
@@ -88,7 +96,7 @@ func regularisationConfig(args: Args) -> MaskRegularisationConfig {
 func parseArgs() -> Args? {
     var args = CommandLine.arguments.dropFirst()
     guard let subcommand = args.first else {
-        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval|diagnose> [flags]\n", stderr)
+        fputs("Usage: HarnessCLI <accuracy|calibrate|seg-bench|calibrate-and-eval|diagnose|volumes|cards> [flags]\n", stderr)
         return nil
     }
     args = args.dropFirst()
@@ -121,7 +129,10 @@ func parseArgs() -> Args? {
             if let s = it.next(), let f = Float(s) { result.growthFloorMm = f }
         case "--growth-cap":
             if let s = it.next(), let f = Float(s) { result.growthCap = f }
-        default: break
+        case "--max-observations":
+            if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
+        default:
+            if !flag.hasPrefix("--") { result.fixturePaths.append(flag) }
         }
     }
     return result
@@ -532,6 +543,95 @@ func runVolumes(args: Args) throws {
     } else {
         try data.write(to: URL(fileURLWithPath: args.outputPath))
     }
+}
+
+// MARK: - cards (card-detection replay: what Vision finds on a stored nadir frame)
+
+// One line per fixture and candidate: the quad Vision's rectangle detector
+// returns on the bundle's nadir image, the P4P pose solved from it, and the
+// card-plane scale beside the LiDAR scale at the food plane (|d| / f_mean, the
+// single-view replay's own plane fit). `--max-observations 1` (the default) is
+// the device's single pick; higher lists the ranked candidates behind it. No
+// checkpoint gate — the detector reads the image, not the segmenter's output;
+// the stored argmax is used only for the food mask the plane fit needs,
+// regularised as the replay regularises it.
+func runCards(args: Args) throws {
+    guard !args.fixturePaths.isEmpty else {
+        fputs("cards requires one or more .fixture paths\n", stderr); exit(1)
+    }
+    let detector = VisionCardDetector(maximumObservations: args.maxObservations)
+    let palette = ClassPalette.standard
+    func fmt(_ v: Float, _ places: Int = 2) -> String { String(format: "%.\(places)f", v) }
+    for path in args.fixturePaths {
+        let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        let fixture = try PbMealFixture(serializedBytes: Data(contentsOf: URL(fileURLWithPath: path)))
+        let frame = try FixtureRunner.nadirFrame(fixture: fixture)
+        let k = frame.intrinsics
+        let W = k.imageWidth
+        let H = k.imageHeight
+        var line = "stem=\(stem) path=\(fixture.capturePathCanonical)"
+
+        var sLidar: Float?
+        if fixture.hasNadirDepth, fixture.nadirArgmax.count == W * H {
+            let cleaned = SegmenterPostProcessor.regularise(
+                argmax: fixture.nadirArgmax, width: W, height: H,
+                palette: palette, config: .standard)
+            let argmax = ArgmaxMap(pixels: cleaned, height: H, width: W)
+            if let fit = try? FixtureRunner.fitSupportPlane(
+                depth: DepthMap(pb: fixture.nadirDepth), intrinsics: k, gravity: frame.gravity,
+                foodMask: FixtureRunner.foodRegionMask(argmax: argmax, palette: palette),
+                fixtureID: fixture.fixtureID) {
+                sLidar = abs(fit.plane.distanceMm) / ((k.fx + k.fy) / 2)
+                line += " lidarPlaneDistMm=\(fmt(fit.plane.distanceMm, 1))"
+            }
+        }
+        line += " sLidarMmPerPx=" + (sLidar.map { fmt($0, 4) } ?? "none")
+
+        let candidates = detectSync(detector, frame: frame)
+        guard !candidates.isEmpty else {
+            print(line + " corners=none"); continue
+        }
+        for (index, corners) in candidates.enumerated() {
+            var row = line + " candidate=\(index + 1)/\(candidates.count)"
+            let labels = ["tl", "tr", "br", "bl"]
+            for (label, c) in zip(labels, corners) {
+                row += " \(label)=(\(fmt(c.u, 1)),\(fmt(c.v, 1)))"
+            }
+            // The solver maps TL→TR onto the card's 85.60 mm edge; a quad whose
+            // first edge is the short one is being solved with the sides swapped.
+            let e0 = hypot(corners[1].u - corners[0].u, corners[1].v - corners[0].v)
+            let e1 = hypot(corners[2].u - corners[1].u, corners[2].v - corners[1].v)
+            row += " edgesPx=\(fmt(e0, 0))/\(fmt(e1, 0))"
+            do {
+                let pose = try CardPoseSolver.solve(corners: corners, intrinsics: k)
+                row += " pnpResidualPx=\(fmt(pose.pnpResidualPx))"
+                row += " tzMm=\(fmt(pose.translationMm.z, 1))"
+                row += " sCardMmPerPx=\(fmt(pose.scaleAtCardPlaneMmPerPx, 4))"
+                if let sLidar {
+                    let sCard = pose.scaleAtCardPlaneMmPerPx
+                    row += " disagreement=\(fmt(abs(sLidar - sCard) / ((sLidar + sCard) / 2), 3))"
+                }
+            } catch {
+                row += " pose=failed(\(error))"
+            }
+            print(row)
+        }
+    }
+}
+
+// `detectCandidates(in:)` is async and this is a synchronous command-line
+// tool: run it on a task and block the main thread until the continuation
+// resumes off the detector's own queue.
+func detectSync(_ detector: VisionCardDetector, frame: RawFrame) -> [[PixelCorner]] {
+    final class Box: @unchecked Sendable { var candidates: [[PixelCorner]] = [] }
+    let box = Box()
+    let done = DispatchSemaphore(value: 0)
+    Task {
+        box.candidates = await detector.detectCandidates(in: frame)
+        done.signal()
+    }
+    done.wait()
+    return box.candidates
 }
 
 // MARK: - accuracy (task 60)
@@ -1246,9 +1346,10 @@ do {
     case "seg-bench":          try runSegBench(args: args)
     case "diagnose":           try runDiagnose(args: args)
     case "volumes":            try runVolumes(args: args)
+    case "cards":              try runCards(args: args)
     default:
         fputs("Unknown subcommand '\(args.subcommand)'\n", stderr)
-        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose, volumes\n", stderr)
+        fputs("Valid: accuracy, calibrate, seg-bench, calibrate-and-eval, diagnose, volumes, cards\n", stderr)
         exit(1)
     }
 } catch {

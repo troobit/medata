@@ -1,5 +1,6 @@
 import ARKit
 import CaptureKit
+import CardDetectionVision
 import LibreLinkUpKit
 import OSLog
 import Pipeline
