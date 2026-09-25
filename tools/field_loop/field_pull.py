@@ -83,22 +83,23 @@ def _size_text(n) -> str:
     return "%d B" % n
 
 
-class _ProgressBar:
-    """Homebrew-style single-line bar for interactive pulls.
+class _StatusLine:
+    """One in-place line for interactive pulls (stdout a TTY).
 
-    Rendered only when stdout is a TTY; every other consumer — the pytest
-    suite, a log file, `make field-pull | tee` — keeps the per-copy key=value
-    lines, which remain the parseable record Req 3.8 describes. The bar
-    carries the same figures (bytes, fraction, throughput, ETA) plus the file
-    in flight, redrawn in place with a carriage return.
+    Redrawn with a carriage return, never a newline, and CLIPPED to the
+    terminal width: a line that wraps makes `\r` return to the start of its
+    last row, so every redraw leaves the rows above behind — the "loading
+    icon prints a new row every time" the first bar produced in a pane
+    narrower than its 75-column prefix (2026-09-25). Durable lines (a
+    finished copy, a failed one) go through `println`, above the status.
 
     A background thread polls the in-flight `.partial` file's size, so a
     400 MB copy visibly advances rather than freezing the line for half a
-    minute — a frozen line is the hang-lookalike this surface exists to kill.
-    Stdlib only, like everything under tools/field_loop.
+    minute. It only writes when the text changed. Non-TTY consumers — the
+    pytest suite, a log file, `make field-pull | tee` — never see this class;
+    they get the per-copy key=value lines alone. Stdlib only, like
+    everything under tools/field_loop.
     """
-
-    WIDTH = 24
 
     def __init__(self, total_bytes, out=None, columns=None):
         self.out = out or sys.stdout
@@ -106,13 +107,13 @@ class _ProgressBar:
         self.columns = columns
         utf = "utf" in ((getattr(self.out, "encoding", "") or "").lower())
         self.frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" if utf else "|/-\\"
-        self.blocks = ("█", "░") if utf else ("#", "-")
         self.lock = threading.Lock()
         self.done = 0                # bytes of files fully landed or skipped
         self.rate = 0.0              # measured wire throughput, bytes/second
         self.eta_s = None
         self.current = None          # (label, Path of the .partial) in flight
         self._tick = 0
+        self._last = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -132,9 +133,10 @@ class _ProgressBar:
         self._draw()
 
     def println(self, line):
-        """A durable line (a failed copy) printed above the bar."""
+        """A durable line printed above the status."""
         with self.lock:
             self.out.write("\r\x1b[K" + line + "\n")
+            self._last = None
         self._draw()
 
     def close(self):
@@ -145,42 +147,46 @@ class _ProgressBar:
             self.out.flush()
 
     def _run(self):
-        while not self._stop.wait(0.15):
+        while not self._stop.wait(0.25):
             self._draw()
+
+    def _text(self):
+        inflight = 0
+        label = ""
+        if self.current:
+            label, partial = self.current
+            try:
+                inflight = partial.stat().st_size
+            except OSError:
+                inflight = 0
+        frac = (min(1.0, (self.done + inflight) / self.total)
+                if self.total else 1.0)
+        self._tick += 1
+        spin = (self.frames[self._tick % len(self.frames)]
+                if self.current else " ")
+        prefix = "%s %5.1f%%  %s/%s  %5.1f MB/s%s" % (
+            spin, 100.0 * frac,
+            _size_text(self.done + inflight), _size_text(self.total),
+            self.rate / 1_000_000,
+            "  eta %s" % _hms(self.eta_s) if self.eta_s is not None else "")
+        # The tail of a stem is its millisecond timestamp, the part that
+        # varies, so a label that does not fit loses its head, not its tail.
+        width = (self.columns or shutil.get_terminal_size().columns) - 1
+        if label:
+            label = Path(label).stem
+            room = width - len(prefix) - 2
+            if room > 1 and len(label) > room:
+                label = "…" + label[-(room - 1):]
+            prefix += "  " + label
+        return prefix[:width]
 
     def _draw(self):
         with self.lock:
-            inflight = 0
-            label = ""
-            if self.current:
-                label, partial = self.current
-                try:
-                    inflight = partial.stat().st_size
-                except OSError:
-                    inflight = 0
-            frac = (min(1.0, (self.done + inflight) / self.total)
-                    if self.total else 1.0)
-            filled = int(self.WIDTH * frac)
-            self._tick += 1
-            spin = (self.frames[self._tick % len(self.frames)]
-                    if self.current else " ")
-            prefix = "%s [%s%s] %5.1f%%  %s/%s  %5.1f MB/s%s" % (
-                spin,
-                self.blocks[0] * filled, self.blocks[1] * (self.WIDTH - filled),
-                100.0 * frac,
-                _size_text(self.done + inflight), _size_text(self.total),
-                self.rate / 1_000_000,
-                "  eta %s" % _hms(self.eta_s) if self.eta_s is not None else "")
-            # The numbers keep their room; a long path sheds its directory
-            # and extension first, then trims from the left — the tail of the
-            # stem is the millisecond timestamp, the part that varies.
-            columns = self.columns or shutil.get_terminal_size().columns
-            room = columns - len(prefix) - 2
-            if label and room > 1 and len(label) > room:
-                label = Path(label).stem
-                if len(label) > room:
-                    label = "…" + label[-(room - 1):]
-            self.out.write("\r\x1b[K" + prefix + ("  " + label if label else ""))
+            text = self._text()
+            if text == self._last:
+                return
+            self._last = text
+            self.out.write("\r\x1b[K" + text)
             self.out.flush()
 
 
@@ -350,16 +356,41 @@ def resolve_pull_dir(root: Path, now=None, kind: str = ""):
     return root / "pulls" / next_pull_id(root, now, kind), False
 
 
-def pull_files(transport, pull_dir: Path, notes_only: bool = False) -> dict:
+def _present_at_size(relative: str, size, *dirs) -> Path | None:
+    """The first directory already holding `relative` at its listed size.
+
+    `copy_from`'s partial-then-rename means a final-name file is complete,
+    and ingest hardlinks a bundle into the corpus unchanged — so a size match
+    in either place is the file, and hashing it is cheaper than the wire.
+    """
+    if size is None:
+        return None
+    for root in dirs:
+        if root is None:
+            continue
+        local = root / relative
+        if local.is_file() and local.stat().st_size == size:
+            return local
+    return None
+
+
+def pull_files(transport, pull_dir: Path, notes_only: bool = False,
+               corpus_root: Path | None = None) -> dict:
     """Copy `Documents/` down. Returns {relative path: sha256}.
+
+    Before the first copy one line says what the job is: how many bundles
+    and megabytes will cross, and how many were skipped because the Mac
+    already holds them — in this pull dir (a resumed pull) or, for capture
+    bundles, in `<corpus>/captures/` from an earlier pull. Without that line a
+    1.2 GB pull of three new bundles reads the same as 1.2 GB of repeats
+    (2026-09-25). A skipped file is hashed, not copied, so the manifest still
+    names it and the phone still prunes it.
 
     Progress is never silent: a multi-gigabyte backlog with silent copies is
     indistinguishable from a hang (which is exactly how the first field pull
-    read, and why it was interrupted twice). On a TTY that is a single
-    redrawn bar (`_ProgressBar`); everywhere else it is one key=value line
-    per wire copy, the parseable record. A file already present at its listed
-    size is hashed and skipped — `copy_from`'s partial-then-rename means a
-    final-name file is always complete.
+    read, and why it was interrupted twice). Every finished copy prints one
+    key=value line — the parseable record Req 3.8 describes — and on a TTY a
+    single in-place status line (`_StatusLine`) shows the copy in flight.
 
     `notes_only` skips the capture bundles, which are the entire cost of a
     pull: notes are kilobytes, so the feedback a developer wrote minutes ago is
@@ -385,90 +416,99 @@ def pull_files(transport, pull_dir: Path, notes_only: bool = False) -> dict:
     wanted.extend(("Documents/%s" % name, None, True)
                   for name in DB_SIBLINGS + LOOSE_FILES)
 
-    # Progress is measured in BYTES, not files: bundles run from 2 MB to 400 MB,
-    # so a file count says nothing about how far along a pull is. The listed
-    # total is known before the first copy, so the first line can state the size
-    # of the job and every later line can carry a percentage and an ETA off
-    # measured throughput. Silence is what made a twelve-minute pull read as a
-    # hang and get killed twice.
-    total_bytes = sum(size or 0 for _, size, _ in wanted)
-    print("pull dir=%s files=%d bytes=%d mb=%d"
-          % (pull_dir.name, len(wanted), total_bytes, total_bytes // 1_000_000),
+    def is_bundle(relative):
+        return relative.startswith("captures/") and relative.endswith(".fixture")
+
+    # Plan first, so the size of the job is stated before the first copy.
+    # Progress is measured in BYTES, not files: bundles run from 2 MB to
+    # 400 MB, so a file count says nothing about how far along a pull is.
+    plan = []                           # (remote, relative, size, optional, present)
+    for remote, size, optional in wanted:
+        relative = remote[len("Documents/"):]
+        present = _present_at_size(
+            relative, size, pull_dir,
+            corpus_root if relative.startswith("captures/") else None)
+        plan.append((remote, relative, size, optional, present))
+    to_copy = [item for item in plan if item[4] is None]
+    skipped = [item for item in plan if item[4] is not None]
+    total_bytes = sum(size or 0 for _, _, size, _, _ in to_copy)
+    print("pull dir=%s copy bundles=%d files=%d mb=%d present bundles=%d mb=%d"
+          % (pull_dir.name,
+             sum(1 for _, rel, _, _, _ in to_copy if is_bundle(rel)),
+             len(to_copy), total_bytes // 1_000_000,
+             sum(1 for _, rel, _, _, _ in skipped if is_bundle(rel)),
+             sum(size for _, _, size, _, _ in skipped) // 1_000_000),
           flush=True)
-    bar = _ProgressBar(total_bytes) if sys.stdout.isatty() else None
-    copied = resumed = failed = 0
+    for _, relative, _, _, present in skipped:
+        hashes[relative] = corpus.sha256_file(present)
+
+    status = _StatusLine(total_bytes) if sys.stdout.isatty() else None
+
+    def say(line):
+        if status:
+            status.println(line)
+        else:
+            print(line, flush=True)
+
+    copied = failed = 0
     done_bytes = 0
     wire_bytes = 0.0                    # only what crossed, for the rate
     wire_secs = 0.0
     try:
-        for n, (remote, size, optional) in enumerate(wanted, 1):
-            relative = remote[len("Documents/"):]
+        for n, (remote, relative, size, optional, _) in enumerate(to_copy, 1):
             local = pull_dir / relative
-            if size is not None and local.is_file() and local.stat().st_size == size:
-                hashes[relative] = corpus.sha256_file(local)
-                resumed += 1
-                done_bytes += size
-                if bar:
-                    bar.advance(size)
-                continue
-            if bar:
-                bar.start(relative, local.with_name(local.name + ".partial"))
+            if status:
+                status.start(relative, local.with_name(local.name + ".partial"))
             started = time.monotonic()
             if not transport.copy_from(remote, local, size):
                 if not optional:
                     failed += 1
-                    line = ("pull copy_failed n=%d/%d file=%s%s"
-                            % (n, len(wanted), relative,
-                               " reason=required_database"
-                               if relative == DB_PRIMARY else ""))
-                    if bar:
-                        bar.println(line)
-                    else:
-                        print(line, flush=True)
-                if bar:
-                    bar.advance(0)
+                    say("pull copy_failed n=%d/%d file=%s%s"
+                        % (n, len(to_copy), relative,
+                           " reason=required_database"
+                           if relative == DB_PRIMARY else ""))
+                if status:
+                    status.advance(0)
                 continue
-            if local.is_file():
-                elapsed = time.monotonic() - started
-                landed = local.stat().st_size
-                copied += 1
-                done_bytes += landed
-                wire_bytes += landed
-                wire_secs += elapsed
-                rate = wire_bytes / wire_secs if wire_secs > 0 else 0
-                # Unlisted files (the DB and its siblings) land bytes the total
-                # never counted, so cap rather than report 240% done. The ETA
-                # waits for three copies: a rate measured off one small file is
-                # mostly devicectl's per-invocation overhead and reads as
-                # nonsense.
-                pct = (min(100.0, 100.0 * done_bytes / total_bytes)
-                       if total_bytes else 100.0)
-                eta_s = (None if copied < 3 or not rate else
-                         int(max(total_bytes - done_bytes, 0) / rate))
-                if bar:
-                    bar.advance(landed, rate, eta_s)
-                else:
-                    print("pull copy n=%d/%d file=%s bytes=%d secs=%.1f "
-                          "pct=%.1f mb_s=%.1f%s"
-                          % (n, len(wanted), relative, landed, elapsed, pct,
-                             rate / 1_000_000,
-                             "" if eta_s is None else " eta_s=%d" % eta_s),
-                          flush=True)
-                hashes[relative] = corpus.sha256_file(local)
-            elif bar:
-                bar.advance(0)
+            if not local.is_file():
+                if status:
+                    status.advance(0)
+                continue
+            elapsed = time.monotonic() - started
+            landed = local.stat().st_size
+            copied += 1
+            done_bytes += landed
+            wire_bytes += landed
+            wire_secs += elapsed
+            rate = wire_bytes / wire_secs if wire_secs > 0 else 0
+            # Unlisted files (the DB and its siblings) land bytes the total
+            # never counted, so cap rather than report 240% done. The ETA
+            # waits for three copies: a rate measured off one small file is
+            # mostly devicectl's per-invocation overhead and reads as
+            # nonsense.
+            pct = (min(100.0, 100.0 * done_bytes / total_bytes)
+                   if total_bytes else 100.0)
+            eta_s = (None if copied < 3 or not rate else
+                     int(max(total_bytes - done_bytes, 0) / rate))
+            say("pull copy n=%d/%d file=%s mb=%.1f secs=%.1f pct=%.1f mb_s=%.1f%s"
+                % (n, len(to_copy), relative, landed / 1_000_000, elapsed, pct,
+                   rate / 1_000_000,
+                   "" if eta_s is None else " eta_s=%d" % eta_s))
+            if status:
+                status.advance(landed, rate, eta_s)
+            hashes[relative] = corpus.sha256_file(local)
     finally:
-        if bar:
-            bar.close()
-    print("pull copied=%d resumed=%d failed=%d mb=%d mb_s=%.1f"
-          % (copied, resumed, failed, done_bytes // 1_000_000,
+        if status:
+            status.close()
+    print("pull copied=%d present=%d failed=%d mb=%d mb_s=%.1f"
+          % (copied, len(skipped), failed, done_bytes // 1_000_000,
              (wire_bytes / wire_secs / 1_000_000) if wire_secs > 0 else 0.0),
           flush=True)
     # No marker while anything failed: the next run resumes this directory and
     # retries exactly the misses.
     if failed == 0:
         (pull_dir / PULL_COMPLETE_NAME).write_text(json.dumps(
-            {"files": len(wanted), "copied": copied, "resumed": resumed,
+            {"files": len(wanted), "copied": copied, "present": len(skipped),
              "notes_only": notes_only},
             sort_keys=True))
     return hashes
@@ -544,7 +584,8 @@ def run(args, transport=None) -> int:
         pull_dir.mkdir(parents=True, exist_ok=True)
         if resumed:
             print("pull resume dir=%s" % pull_dir.name, flush=True)
-        hashes = pull_files(transport, pull_dir, notes_only=args.notes_only)
+        hashes = pull_files(transport, pull_dir, notes_only=args.notes_only,
+                            corpus_root=root)
 
     summary = ingest_pull(pull_dir, root, conn)
     for line in summary.lines():
