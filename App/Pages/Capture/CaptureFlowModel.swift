@@ -60,7 +60,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // enough; it is deliberately not an observable stored property, because
     // nothing is expected to change while the Capture cover is on screen.
     var supportsLiDAR: Bool {
-        #if DEBUG
+        #if FIELD_LOOP
         if DeveloperFlags.forceNonLiDAR { return false }
         #endif
         return deviceSupportsLiDAR
@@ -191,7 +191,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // param, keeping the closure @Sendable.
         let hasLiDAR = supportsLiDAR
         self.captureModeReader = captureModeReader ?? {
-            #if DEBUG
+            #if FIELD_LOOP
             // A phone rehearsing the no-depth path defaults to two-view, the
             // same fork a real non-LiDAR device takes on a fresh install.
             if DeveloperFlags.forceNonLiDAR { return .double }
@@ -814,7 +814,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         do {
             log.info("event=capture.start stage=\(stage.name, privacy: .public)")
             var frame = try await capture(stage: stage)
-            #if DEBUG
+            #if FIELD_LOOP
             // Req 4.5: the one mutation the no-depth switch makes to the data.
             // Applied here, before anything reads the frame, so the stashed
             // nadir, the persisted bundle and `Pipeline.estimate` all see the
@@ -1031,7 +1031,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     private func distanceGateOK(_ snapshot: GatingSnapshot) -> Bool {
-        #if DEBUG
+        #if FIELD_LOOP
         // A phone rehearsing the no-depth path must not keep the depth-derived
         // distance gate a real non-LiDAR phone does not have: there, ARKit
         // publishes no distance at all and the guard below returns true.
@@ -1065,7 +1065,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // nothing else bounds height. Measuring what a wider band buys needs a
     // capture outside the band, which today the shutter refuses to take.
     private func obliqueTiltOk(degrees: Float) -> Bool {
-        #if DEBUG
+        #if FIELD_LOOP
         if DeveloperFlags.unlockObliqueTilt { return true }
         #endif
         return obliqueTiltInBand(degrees: degrees)

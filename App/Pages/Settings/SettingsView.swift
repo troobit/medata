@@ -82,11 +82,11 @@ struct SettingsView: View {
     @State private var showsGlucoseImport = false
     @State private var showsGlucoseSources = false
     @State private var isSeeding = false
-    #if DEBUG
+    #if FIELD_LOOP
     // Developer-phase capture switches (two-view-trust Req 4.5 and the oblique
     // band measurement, plus the review-photo attempt switch). `DeveloperFlags`
-    // and these three properties compile in Debug only, so Release builds the
-    // Settings form it built before.
+    // and these three properties compile under FIELD_LOOP — Debug and Release,
+    // the field profiles — and are absent from the ProductRelease build.
     @AppStorage(DeveloperFlags.forceNonLiDARKey) private var forceNonLiDAR = false
     @AppStorage(DeveloperFlags.unlockObliqueTiltKey) private var unlockObliqueTilt = false
     @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
