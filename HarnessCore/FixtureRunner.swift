@@ -191,7 +191,8 @@ public enum FixtureRunner {
                let fit = try? fitSupportPlane(
                     depth: DepthMap(pb: fixture.nadirDepth), intrinsics: nadirIntrinsics,
                     gravity: gravity,
-                    foodMask: foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
+                    foodMask: preShutterMask(fixture, width: W, height: H)
+                        ?? foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
                     fixtureID: fixture.fixtureID) {
                 plane = fit.plane
                 supportPlaneResidualMm = fit.plane.residualMm
