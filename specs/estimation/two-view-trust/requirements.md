@@ -38,6 +38,7 @@ This spec orders the work so each step is verifiable on the phone within a sitti
 4.3 Double mode MUST show the "include an ID-1 card" reminder that iphone-experience Req 6.1 promised, and on a phone without LiDAR the shutter MUST NOT arm until a card is detected live.
 4.4 `CardOnlyPlaneFitter` MUST be fed the food's lower silhouette edges (pipeline Req 4.3), not the card's corners and a constant; until then the card-only path MUST refuse rather than return an invented plane.
 4.5 A Debug switch MUST let a LiDAR phone run the non-LiDAR path (depth cleared, card branch taken) so the card path is verifiable on the phones in hand; the harness MUST be able to replay it.
+4.6 A detected card MUST NOT contribute food pixels: its solved image quadrilateral (nadir) and its projection into the oblique view (via the Req 1 transform and the card plane) MUST be cleared to background in both argmax maps before region growth and volume, and the outcome row MUST record the pixel count removed. Evidence: 2026-08-11 capture `1786439234576`, bank card integrated as `cheese` 43.7 g.
 
 ## Out of scope
 
