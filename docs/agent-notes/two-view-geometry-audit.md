@@ -286,3 +286,33 @@ aim guide allows. That path therefore keeps the full over-read this section
 describes. The only bounds available to it are a wider baseline (a tilt
 where the cones actually close), the ID-1 card's own plane, or an explicit
 prior height — none of them built.
+
+## 6. The no-depth path is now flagged, and its refusal says what is missing (2026-09-25 night)
+
+Two changes close out two-view-trust tasks 13 and 18 on the finding above.
+Every two-view attempt whose nadir frame carries no depth is now stamped
+`degradedReason = unbounded_carve_height` on its outcome row, by
+`PipelineDiagnostics.recordDegraded` at the very top of `runEstimation` —
+before any stage can refuse, so a refused row carries the same fact about the
+capture that a successful one would. The review screen does not read the
+outcome row, so it re-derives the same condition from the persisted meal
+(`MealRecord.carveHeightWasUnbounded`: `capturePath == .twoViewSfS && !scale.lidarScaleAvailable`,
+the LiDAR scale being the record's witness for nadir depth), and renders it
+through the accessory-signal line MealReviewView already uses for the
+calibration and drink flags. The copy says the height was not measured and the
+volume is therefore not a measurement — deliberately not "a lower bound",
+which would read as "the true number is higher" when the measured direction of
+the error is 1.6-2.5x too high.
+
+Separately, `SupportPlaneError.noLowerSilhouetteEdges` no longer maps to
+`EstimationFailure.noScaleAvailable`. Since 9f02ff2 the card-only branch of
+`LiDARSupportPlaneFitter` refuses with that case whenever there is no depth,
+and on such a capture the card usually resolves scale perfectly well — it is
+the plane that is missing, at stage D, before scale resolution at stage E ever
+runs. The new case is `noSupportPlaneWithoutDepth` ("no plane" / "No depth to
+fit the table surface" in the capture overlay). The practical consequence: with
+the `Capture without depth` developer switch on, a two-view capture refuses
+there and never reaches the carve, so the degraded flag is today exercised by
+the outcome row and by tests rather than by a number on screen. It becomes
+visible in review the moment a card-plane or other no-depth support plane
+exists.

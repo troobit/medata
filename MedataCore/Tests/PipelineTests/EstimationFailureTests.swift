@@ -34,6 +34,7 @@ final class EstimationFailureTests: XCTestCase {
             .lidarFitResidualTooHigh,
             .iterationDiverged,
             .noScaleAvailable,
+            .noSupportPlaneWithoutDepth,
             .noFoodPixels,
             .noFoodVolumeRecovered,
             .lidarCoverageTooLow(["bread", "rice"]),
@@ -61,9 +62,14 @@ final class EstimationFailureTests: XCTestCase {
         XCTAssertTrue(true)
     }
 
-    // MARK: - noScaleAvailable: no card, no LiDAR depth
-
-    func testNoCardNoLidar_throwsNoScaleAvailable() async throws {
+    // MARK: - noSupportPlaneWithoutDepth: no depth, so no support plane
+    //
+    // two-view-trust task 13. With no depth map the fitter's card-only branch
+    // refuses (`SupportPlaneError.noLowerSilhouetteEdges`) at stage D, BEFORE
+    // scale resolution at stage E — so the refusal must name the missing plane,
+    // not a missing scale. The old `noScaleAvailable` label sent anyone reading
+    // the row or the device log to the wrong stage.
+    func testNoDepth_refusesWithNoSupportPlaneNotNoScaleAvailable() async throws {
         let pipeline = Pipeline(
             cardDetector: NilCardDetector(),
             segmenter: makeStubSegmenter(),
@@ -71,8 +77,8 @@ final class EstimationFailureTests: XCTestCase {
             store: NoOpPersistenceStore()
         )
         let nadir = RawFrame.fixture(timestampMonotonicNs: 0)   // no depth
-        // Non-empty pre-shutter mask so the new SupportPlaneFitter's empty-
-        // mask gate (Decision 2) does not pre-empt the noScaleAvailable path.
+        // Non-empty pre-shutter mask so the SupportPlaneFitter's empty-mask
+        // gate (Decision 2) does not pre-empt the card-only refusal.
         let mask = makeNonEmptyMask(
             width: nadir.imageWidth, height: nadir.imageHeight
         )
@@ -87,10 +93,114 @@ final class EstimationFailureTests: XCTestCase {
         )
         do {
             _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
-            XCTFail("Expected EstimationFailure.noScaleAvailable")
+            XCTFail("Expected EstimationFailure.noSupportPlaneWithoutDepth")
         } catch EstimationFailure.noScaleAvailable {
+            XCTFail("No depth is a missing PLANE, not a missing scale (task 13)")
+        } catch EstimationFailure.noSupportPlaneWithoutDepth {
             // expected
         }
+    }
+
+    // MARK: - two-view-trust Decision 8: the degraded marker on the row
+    //
+    // A two-view attempt whose nadir frame carries no depth has nothing
+    // bounding the carve's height, so the outcome row must say so. The row is
+    // stamped before any stage can refuse, which is what this exercises: the
+    // attempt below refuses (no depth ⇒ no support plane) and the row it hands
+    // the delegate still carries the marker, because the reason is a property
+    // of the capture rather than of the outcome.
+    func testTwoViewWithoutDepthMarksRowDegraded() async throws {
+        let recorder = AttemptRecorder()
+        var pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        pipeline.delegate = recorder
+        let nadir = RawFrame.fixture(timestampMonotonicNs: 9)   // depth cleared
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: .unavailable,
+            nadirFrame: nadir,
+            obliqueFrame: RawFrame.fixture(timestampMonotonicNs: 10),
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v0",
+            nadirAngleAtCaptureDeg: 0,
+            obliqueAngleAtCaptureDeg: 25,
+            preShutterFoodMask: makeNonEmptyMask(
+                width: nadir.imageWidth, height: nadir.imageHeight
+            )
+        )
+        _ = try? await pipeline.estimate(captureResult: captureResult, mode: .double)
+
+        let record = try XCTUnwrap(recorder.last)
+        XCTAssertEqual(
+            record.degradedReason,
+            EstimationAttemptRecord.DegradedReason.unboundedCarveHeight.rawValue
+        )
+    }
+
+    // The mirror case: the same two-view capture WITH depth carries no marker —
+    // the nadir frame measures the food's height and bounds the grid.
+    func testTwoViewWithDepthDoesNotMarkRowDegraded() async throws {
+        let recorder = AttemptRecorder()
+        var pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        pipeline.delegate = recorder
+        let nadir = RawFrame.fixture(
+            timestampMonotonicNs: 11, depth: makeMinimalDepthMap()
+        )
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 60),
+            nadirFrame: nadir,
+            obliqueFrame: RawFrame.fixture(timestampMonotonicNs: 12),
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v0",
+            nadirAngleAtCaptureDeg: 0,
+            obliqueAngleAtCaptureDeg: 25,
+            preShutterFoodMask: makeNonEmptyMask(
+                width: nadir.imageWidth, height: nadir.imageHeight
+            )
+        )
+        _ = try? await pipeline.estimate(captureResult: captureResult, mode: .double)
+
+        let record = try XCTUnwrap(recorder.last)
+        XCTAssertNil(record.degradedReason)
+    }
+
+    // A single-view attempt is never marked: the marker names the two-view
+    // carve's missing height bound, not the absence of depth in general.
+    func testSingleViewWithoutDepthIsNotMarkedDegraded() async throws {
+        let recorder = AttemptRecorder()
+        var pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        pipeline.delegate = recorder
+        let nadir = RawFrame.fixture(timestampMonotonicNs: 13)   // no depth
+        let captureResult = CaptureResult(
+            capturePath: .singleViewLidar,
+            lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 90),
+            nadirFrame: nadir,
+            obliqueFrame: nil,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v0",
+            preShutterFoodMask: makeNonEmptyMask(
+                width: nadir.imageWidth, height: nadir.imageHeight
+            )
+        )
+        _ = try? await pipeline.estimate(captureResult: captureResult, mode: .single)
+
+        let record = try XCTUnwrap(recorder.last)
+        XCTAssertNil(record.degradedReason)
     }
 
     // MARK: - Capture-bundle recording on refusal (capture-bundle-recorder smolspec)
@@ -383,6 +493,18 @@ final class EstimationFailureTests: XCTestCase {
 }
 
 // MARK: - Test doubles
+
+// Captures the one snapshot `Pipeline.estimate` hands the delegate per attempt.
+private final class AttemptRecorder: CaptureFlowDelegate, @unchecked Sendable {
+    // `@unchecked`: the pipeline calls back once, synchronously within the
+    // awaited `estimate`, and the test reads it after that call returns.
+    private(set) var last: EstimationAttemptRecord?
+    func didUpdateTilt(angleDegrees: Float) {}
+    func didUpdateLiDARCoverage(percent: Float) {}
+    func didDetectInterClassOcclusion() {}
+    func didProduceEstimate(_ record: MealRecord) {}
+    func didCompleteAttempt(_ record: EstimationAttemptRecord) { last = record }
+}
 
 private struct NilCardDetector: CardDetector {
     func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }

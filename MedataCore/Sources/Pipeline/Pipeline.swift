@@ -163,6 +163,22 @@ public struct Pipeline: Sendable {
             nadirDeg: captureResult.nadirAngleAtCaptureDeg,
             obliqueDeg: captureResult.obliqueAngleAtCaptureDeg
         )
+        // two-view-trust Decision 8: with no depth in the nadir frame nothing
+        // bounds the carve's height. Two silhouette cones close only above
+        // roughly 74 degrees of tilt on a plate-sized object and the shutter
+        // arms between 10 and 40, so the grid's constant vertical extent sets
+        // the answer — measured at 1.6x to 2.5x truth on a synthetic control.
+        // The volume is therefore not a measurement and must not be read as a
+        // dosing number. Stamped here, before any stage can refuse, so a
+        // refused row carries the same fact about the capture that a
+        // successful one does; the review screen derives it from the persisted
+        // record (`MealRecord.carveHeightWasUnbounded`).
+        if capturePath == .twoViewSfS, nadir.depth == nil {
+            diagnostics.recordDegraded(.unboundedCarveHeight)
+            supportPlaneLog.info(
+                "event=estimate.degraded reason=\(EstimationAttemptRecord.DegradedReason.unboundedCarveHeight.rawValue, privacy: .public)"
+            )
+        }
         #if DEBUG
         // estimate.start augmented with maskAgeMs (Req 4.5 erratum / Decision 15).
         let maskAgeMs = captureResult.preShutterMaskAgeMs ?? -1
@@ -900,10 +916,15 @@ public struct Pipeline: Sendable {
         case .noLidarPoints:
             // Pre-existing card-only fallback when LiDAR cannot produce a fit
             // and a card pose is unavailable; otherwise the fitter raises
-            // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
+            // `noLowerSilhouetteEdges`, mapped just below.
             throw EstimationFailure.lidarFitDegenerate
         case .noLowerSilhouetteEdges:
-            throw EstimationFailure.noScaleAvailable
+            // Since 9f02ff2 the card-only branch of the fitter refuses with
+            // this whenever there is no depth (two-view-trust Req 4.4), and on
+            // such a capture the card usually resolves scale perfectly well —
+            // it is the PLANE that is missing. `noScaleAvailable` sent every
+            // reader of the row or the log to the wrong stage (task 13).
+            throw EstimationFailure.noSupportPlaneWithoutDepth
         case .iterationDiverged:
             throw EstimationFailure.iterationDiverged
         }

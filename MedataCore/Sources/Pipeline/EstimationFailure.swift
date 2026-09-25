@@ -23,6 +23,13 @@ public enum EstimationFailure: Error, Equatable {
     case iterationDiverged
     // Neither card nor LiDAR scale is available (Req 7.5).
     case noScaleAvailable
+    // No depth map, so nothing measures where the food meets the table: the
+    // card-only support-plane branch refuses with
+    // `SupportPlaneError.noLowerSilhouetteEdges` (two-view-trust Req 4.4).
+    // Distinct from `noScaleAvailable` — a card on such a capture usually
+    // resolves scale perfectly well, and reporting a scale problem sent every
+    // reader of the row or the log to the wrong stage (two-view-trust task 13).
+    case noSupportPlaneWithoutDepth
     // Zero food pixels survive the silhouette test (§5 edge case 3).
     case noFoodPixels
     // The segmenter labelled a substantial region `unknown_food` and it
@@ -74,6 +81,8 @@ public enum EstimationFailure: Error, Equatable {
             return "Unable to determine plate position. Please include the card in the nadir view."
         case .noScaleAvailable:
             return "Unable to determine meal scale. Please include the reference card in the image."
+        case .noSupportPlaneWithoutDepth:
+            return "MeData can't find the surface the meal rests on without depth, so no estimate was made."
         case .noFoodPixels:
             return "No food detected in the image. Please ensure the meal is clearly visible."
         case .unrecognisedFood:

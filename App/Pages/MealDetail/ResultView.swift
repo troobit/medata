@@ -120,6 +120,18 @@ enum ResultFormat {
     static let liquidOverEstimateFlagCopy =
         "Includes a drink estimate that assumes a full serving, so it is more likely too high than too low."
 
+    // two-view-trust Decision 8: a two-view carve taken without depth has
+    // nothing bounding the food's height, so the voxel grid's constant extent
+    // sets the volume rather than the food does. A functional accuracy signal
+    // in the same family as the calibration banner, not a disclaimer: it names
+    // what was not measured on this capture.
+    static func showsUnboundedCarveHeightFlag(_ record: MealRecord) -> Bool {
+        record.carveHeightWasUnbounded
+    }
+
+    static let unboundedCarveHeightFlagCopy =
+        "The food's height was not measured on this capture, so this volume is not a measurement."
+
     // Decision 17 / research Decisions 43–47 (UI side): the Very-Low surface
     // surfaces the per-stage angular error Δθ that contributed to the low
     // confidence. The persisted `PbConfidenceResult` carries
@@ -277,6 +289,11 @@ struct ResultView: View {
         !showsPlaceholderChip
             && ResultFormat.showsLiquidOverEstimateFlag(record.macros)
     }
+    // Not suppressed by the placeholder chip: the height was unmeasured
+    // whatever segmenter named the food.
+    private var showsUnboundedHeightFlag: Bool {
+        ResultFormat.showsUnboundedCarveHeightFlag(record)
+    }
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
     // MARK: - Row model
@@ -398,6 +415,7 @@ struct ResultView: View {
                     case .suppressed, .none: EmptyView()
                     }
                     if showsLiquidFlag { liquidOverEstimateFlag }
+                    if showsUnboundedHeightFlag { unboundedCarveHeightFlag }
                     plateCard
                     summaryCard
                     macroPlaceholders
@@ -902,6 +920,24 @@ struct ResultView: View {
         .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("result.uncalibratedBanner")
+    }
+
+    // two-view-trust Decision 8: same card treatment as its siblings above, a
+    // distinct glyph for the missing vertical measurement.
+    private var unboundedCarveHeightFlag: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.and.down.circle.fill")
+            Text(ResultFormat.unboundedCarveHeightFlagCopy)
+                .font(.caption.weight(.semibold))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Color.captureBackground)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("result.unboundedCarveHeightFlag")
     }
 
     // Req 8.2: additive liquid over-estimate flag — renders alongside whatever
