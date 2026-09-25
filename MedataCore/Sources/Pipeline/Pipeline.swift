@@ -195,11 +195,16 @@ public struct Pipeline: Sendable {
         let cardStartedAt = ContinuousClock.now
         let cardInterval = pipelineSignposter.beginInterval("CardDetection")
         #endif
-        let corners = await cardDetector.detect(in: nadir)
-        let cardPose: CardPose?
-        if let c = corners {
+        // Every ranked rectangle is a candidate; the one that reprojects as
+        // an ID-1 card is the card (two-view-trust Decision 3).
+        let candidates = await cardDetector.detect(in: nadir)
+        var corners: [PixelCorner]?
+        var cardPose: CardPose?
+        if !candidates.isEmpty {
             do {
-                cardPose = try CardPoseSolver.solve(corners: c, intrinsics: nadir.intrinsics)
+                if let card = try CardPoseSolver.pick(candidates: candidates, intrinsics: nadir.intrinsics) {
+                    (corners, cardPose) = card
+                }
             } catch CardPoseError.degenerateCardPose where nadir.depth != nil {
                 // LiDAR-first fallback (Decision 1): a degenerate card read does
                 // not abort the estimate when LiDAR depth is present — LiDAR
@@ -210,7 +215,6 @@ public struct Pipeline: Sendable {
                 #if DEBUG
                 supportPlaneLog.info("event=scale.card_fallback reason=degenerateCardPose")
                 #endif
-                cardPose = nil
             } catch CardPoseError.cardTooOblique where nadir.depth != nil {
                 // LiDAR-first fallback (Decision 1): same as above for an oblique
                 // card. Continue on the LiDAR-only path.
@@ -218,7 +222,6 @@ public struct Pipeline: Sendable {
                 #if DEBUG
                 supportPlaneLog.info("event=scale.card_fallback reason=cardTooOblique")
                 #endif
-                cardPose = nil
             } catch CardPoseError.degenerateCardPose {
                 #if DEBUG
                 logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
@@ -241,8 +244,6 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.degenerateCardPose
             }
-        } else {
-            cardPose = nil
         }
         #if DEBUG
         logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
@@ -450,7 +451,7 @@ public struct Pipeline: Sendable {
                     // length (stage E); it follows the plane the volume uses.
                     let fMean = (nadir.intrinsics.fx + nadir.intrinsics.fy) / 2
                     if let rescaled = try? MetricScaleResolver.resolve(
-                        cardScaleMmPerPx: cardPose?.scaleAtCardPlaneMmPerPx,
+                        cardScaleMmPerPx: cardAccepted ? cardPose?.scaleAtCardPlaneMmPerPx : nil,
                         lidarScaleMmPerPx: abs(plane.distanceMm) / fMean) {
                         scale = rescaled
                     }

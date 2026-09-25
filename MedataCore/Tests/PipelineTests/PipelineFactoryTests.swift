@@ -152,7 +152,7 @@ import CardDetection
 import Foods
 
 private struct NullDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }
 }
 
 private struct EmptyFoodDatabase: FoodDatabase {

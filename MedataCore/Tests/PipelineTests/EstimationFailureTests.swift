@@ -385,7 +385,7 @@ final class EstimationFailureTests: XCTestCase {
 // MARK: - Test doubles
 
 private struct NilCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }
 }
 
 // Returns four collinear corners. CardPoseSolver.solve throws degenerateCardPose
@@ -393,13 +393,13 @@ private struct NilCardDetector: CardDetector {
 // .testDegenerateCardPoseWhenAllCornersCollinear. Used to drive Stage C's
 // card-solve failure path deterministically.
 private struct CollinearCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? {
-        [
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] {
+        [[
             PixelCorner(100, 100),
             PixelCorner(200, 100),
             PixelCorner(300, 100),
             PixelCorner(400, 100)
-        ]
+        ]]
     }
 }
 
