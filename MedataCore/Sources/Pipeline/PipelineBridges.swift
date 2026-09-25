@@ -12,7 +12,24 @@ import Volume
 // Bridges between Swift-ergonomic module types and the Pb* wire types stored in
 // MealRecord. These are the only files in Pipeline that touch the Pb* constructors.
 
-enum PipelineBridges {
+public enum PipelineBridges {
+    /// Nadir-frame points (mm, §6.0) as oblique pixels through p₂ = T·p₁ and
+    /// the §6.0 projection (−z forward). Empty when any point lands behind
+    /// the oblique camera, so a caller clearing a quad clears nothing.
+    public static func projectToOblique(
+        _ pointsMm: [Vec3], transform1To2 m: Mat4, intrinsics k: CameraIntrinsics
+    ) -> [SIMD2<Float>] {
+        var out: [SIMD2<Float>] = []
+        for p in pointsMm {
+            let x = m[col: 0, row: 0] * p.x + m[col: 1, row: 0] * p.y + m[col: 2, row: 0] * p.z + m[col: 3, row: 0]
+            let y = m[col: 0, row: 1] * p.x + m[col: 1, row: 1] * p.y + m[col: 2, row: 1] * p.z + m[col: 3, row: 1]
+            let z = m[col: 0, row: 2] * p.x + m[col: 1, row: 2] * p.y + m[col: 2, row: 2] * p.z + m[col: 3, row: 2]
+            guard z < 0 else { return [] }
+            out.append(SIMD2(k.fx * x / -z + k.cx, k.fy * y / -z + k.cy))
+        }
+        return out
+    }
+
 
     // MARK: - SupportPlane → PbSupportPlane
 

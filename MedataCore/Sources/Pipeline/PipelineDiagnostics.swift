@@ -274,14 +274,17 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         public let lidarDisagreement: Float?
         // Nadir pixels whose label changed to background under the card quad.
         public let clearedPixels: Int
+        // Oblique pixels cleared under the card's projected quad; nil on single-view.
+        public let obliqueClearedPixels: Int?
 
         public init(pnpResidualPx: Float, distanceMm: Float, scaleMmPerPx: Float,
-                    lidarDisagreement: Float?, clearedPixels: Int) {
+                    lidarDisagreement: Float?, clearedPixels: Int, obliqueClearedPixels: Int? = nil) {
             self.pnpResidualPx = pnpResidualPx
             self.distanceMm = distanceMm
             self.scaleMmPerPx = scaleMmPerPx
             self.lidarDisagreement = lidarDisagreement
             self.clearedPixels = clearedPixels
+            self.obliqueClearedPixels = obliqueClearedPixels
         }
     }
 
@@ -507,6 +510,13 @@ public final class PipelineDiagnostics {
 
     public func recordCard(_ c: EstimationAttemptRecord.CardMeasurements) {
         card = c
+    }
+
+    public func recordCardObliqueCleared(_ pixels: Int) {
+        guard let c = card else { return }
+        card = .init(pnpResidualPx: c.pnpResidualPx, distanceMm: c.distanceMm, scaleMmPerPx: c.scaleMmPerPx,
+                     lidarDisagreement: c.lidarDisagreement, clearedPixels: c.clearedPixels,
+                     obliqueClearedPixels: pixels)
     }
 
     public func recordCardCandidates(_ count: Int) {

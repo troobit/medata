@@ -1,10 +1,13 @@
 #if HARNESS_ENABLED
 import CaptureKit
+import CardDetection
+import CardDetectionVision
 import CoreGraphics
 import Foods
 import Foundation
 import ImageIO
 import Macros
+import Pipeline
 import PortableContracts
 import Segmentation
 import SupportPlane
@@ -50,7 +53,8 @@ public enum FixtureRunner {
         voxelEdgeMm: Float = 3.0,
         regularisation: MaskRegularisationConfig = .standard,
         growth: FoodRegionGrowthConfig = .standard,
-        reconciliation: Bool = true
+        reconciliation: Bool = true,
+        cardExclusion: Bool = true
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -89,10 +93,6 @@ public enum FixtureRunner {
                 throw Error.missingDepthForSingleView(fixture.fixtureID)
             }
             let depth = DepthMap(pb: fixture.nadirDepth)
-            // Same per-view pass as Pipeline, before growth (two-view-trust Req 2.1).
-            let nadirSeg = reconciliation
-                ? ObjectReconciler.reconcile(nadir: nadirSeg, palette: palette, userClass: nil).nadir
-                : nadirSeg
             // Req 5.1: one implementation for device and replay. Both the legacy
             // whole-frame fit and the N5k plate-region flood fill are gone from this
             // branch — the estimator_path stamp no longer selects a fitter here. The
@@ -106,6 +106,18 @@ public enum FixtureRunner {
                 foodMask: preShutterMask(fixture, width: W, height: H)
                     ?? foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
                 fixtureID: fixture.fixtureID)
+            // The device's stage C–F order: the LiDAR scale at the first plane
+            // picks the card, the card quad is cleared from the nadir labels
+            // (two-view-trust Req 4.6), then one object takes one class before
+            // growth (Req 2.1).
+            var nadirSeg = nadirSeg
+            if cardExclusion, let card = try pickCard(
+                fixture: fixture, intrinsics: nadirIntrinsics, lidarMmPerPx: lidarScale(fit.plane, nadirIntrinsics)) {
+                nadirSeg = nadirSeg.excluding(quad: card.corners.map { SIMD2($0.u, $0.v) }).result
+            }
+            if reconciliation {
+                nadirSeg = ObjectReconciler.reconcile(nadir: nadirSeg, palette: palette, userClass: nil).nadir
+            }
             // Depth-grown food region, exactly as Pipeline.estimate runs it
             // (depth-grown-food-region Req 7): grow from the regularised map,
             // refit from the grown mask, keep the first plane on a refusal.
@@ -162,7 +174,7 @@ public enum FixtureRunner {
             let obliqueW = obliqueIntrinsics.imageWidth
             let obliqueH = obliqueIntrinsics.imageHeight
             // Req 10 applies to each view independently on the two-view path.
-            let obliqueSeg = makeSegResult(
+            var obliqueSeg = makeSegResult(
                 probsData: fixture.obliqueProbs,
                 argmaxData: fixture.obliqueArgmax,
                 width: obliqueW, height: obliqueH,
@@ -188,6 +200,16 @@ public enum FixtureRunner {
                 plane = nominalPlane(gravity: gravity)
             }
             let t1to2 = Mat4(pb: fixture.t1To2)
+            // Card exclusion in both views as on the device (Req 4.6): the
+            // nadir quad directly, the oblique through the stored transform.
+            var nadirSeg = nadirSeg
+            if cardExclusion, let card = try pickCard(
+                fixture: fixture, intrinsics: nadirIntrinsics,
+                lidarMmPerPx: fixture.hasNadirDepth ? lidarScale(plane, nadirIntrinsics) : nil) {
+                nadirSeg = nadirSeg.excluding(quad: card.corners.map { SIMD2($0.u, $0.v) }).result
+                obliqueSeg = obliqueSeg.excluding(quad: PipelineBridges.projectToOblique(
+                    card.pose.cornersCameraMm, transform1To2: t1to2, intrinsics: obliqueIntrinsics)).result
+            }
             let est = try runVoxelCarve(
                 nadirSeg: nadirSeg, obliqueSeg: obliqueSeg,
                 nadirIntrinsics: nadirIntrinsics, obliqueIntrinsics: obliqueIntrinsics,
@@ -414,6 +436,41 @@ public enum FixtureRunner {
         } catch {
             throw Error.volumeEstimationFailed(fixtureID, error)
         }
+    }
+
+    // MARK: - Card pick (the device's stage C + E on the stored nadir frame)
+
+    static func lidarScale(_ plane: SupportPlane, _ k: CameraIntrinsics) -> Float {
+        abs(plane.distanceMm) / ((k.fx + k.fy) / 2)
+    }
+
+    /// The card the device would pick: Vision's ranked rectangles on the
+    /// stored nadir image, solved and arbitrated by the LiDAR scale
+    /// (`CardPoseSolver.pick`). nil for a fixture without an image, when
+    /// nothing is found, or when no rectangle solves as a card.
+    public static func pickCard(
+        fixture: PbMealFixture, intrinsics: CameraIntrinsics, lidarMmPerPx: Float?
+    ) throws -> (corners: [PixelCorner], pose: CardPose)? {
+        guard !fixture.nadirImage.isEmpty else { return nil }
+        let frame = try nadirFrame(fixture: fixture)
+        let candidates = detectCards(in: frame)
+        guard !candidates.isEmpty else { return nil }
+        return try? CardPoseSolver.pick(candidates: candidates, intrinsics: intrinsics, lidarMmPerPx: lidarMmPerPx)
+    }
+
+    /// `detect(in:)` is async and replay is synchronous: block until the
+    /// detector's continuation resumes off its own queue.
+    public static func detectCards(in frame: RawFrame, maximumObservations: Int = 8) -> [[PixelCorner]] {
+        final class Box: @unchecked Sendable { var candidates: [[PixelCorner]] = [] }
+        let detector = VisionCardDetector(maximumObservations: maximumObservations)
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        Task {
+            box.candidates = await detector.detect(in: frame)
+            done.signal()
+        }
+        done.wait()
+        return box.candidates
     }
 
     // MARK: - Nadir frame (card-detection replay)

@@ -65,6 +65,21 @@ final class CardPoseSolverTests: XCTestCase {
         XCTAssertLessThan(pose.pnpResidualPx, 1.5)
     }
 
+    // two-view-trust Req 4.6 (oblique half): the 3-D corners follow the pose.
+    func testCornersCameraMmFollowThePose() throws {
+        let r = rotation(yaw: 0.2, pitch: 0.3)
+        let t = Vec3(-40, -30, -400)
+        let pose = try CardPoseSolver.solve(corners: projectCard(rotation: r, translation: t, k: intrinsics), intrinsics: intrinsics)
+        let corners = pose.cornersCameraMm
+        XCTAssertEqual(corners.count, 4)
+        for (i, m) in ISO7810.cornersMm.enumerated() {
+            let expected = CardPoseSolver.applyR(r, to: Vec3(m.x, m.y, 0)) + t
+            XCTAssertEqual(corners[i].x, expected.x, accuracy: 1)
+            XCTAssertEqual(corners[i].y, expected.y, accuracy: 1)
+            XCTAssertEqual(corners[i].z, expected.z, accuracy: 1)
+        }
+    }
+
     // §7.1: perturb image points by ≤1 px noise; assert recovered translation < 2 mm error.
     // Pose chosen near nadir (Req 3.2 target ±5° of vertical) so this matches actual
     // capture conditions rather than a worst-case oblique view.

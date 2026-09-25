@@ -559,14 +559,27 @@ public struct Pipeline: Sendable {
             }
             diagnostics.recordSegmentation(view: .oblique, measurements: Self.segmentationMeasurements(rawObliqueSeg))
             diagnostics.debugObliqueSegmentation = rawObliqueSeg
+            // The picked card is cleared from the oblique too (Req 4.6, oblique
+            // half): its 3-D corners go through the verified transform and the
+            // oblique intrinsics, and the quad is cleared as in the nadir.
+            var obliqueSeg = rawObliqueSeg
+            if let cardPose {
+                let quad = PipelineBridges.projectToOblique(
+                    cardPose.cornersCameraMm, transform1To2: t1to2, intrinsics: oblique.intrinsics)
+                let cleared: Int
+                (obliqueSeg, cleared) = rawObliqueSeg.excluding(quad: quad)
+                diagnostics.recordCardObliqueCleared(cleared)
+                supportPlaneLog.info(
+                    "event=card view=oblique clearedPixels=\(cleared, privacy: .public) quad=\(quad.map { [$0.x, $0.y] }, privacy: .public)")
+            }
             // Both views relabelled to one carvable class so the carve has a
             // matched class with both silhouettes (two-view-trust Req 2.1).
             // The bundle keeps the raw segmenter outputs assigned above.
             let reconciled = ObjectReconciler.reconcile(
-                nadir: nadirSeg, oblique: rawObliqueSeg, palette: palette, userClass: nil)
+                nadir: nadirSeg, oblique: obliqueSeg, palette: palette, userClass: nil)
             Self.logReconciliation(reconciled.reconciliation, diagnostics: diagnostics)
             let nadirSeg = reconciled.nadir
-            let obliqueSeg = reconciled.oblique
+            obliqueSeg = reconciled.oblique
             let matching = MaskMatcher.match(
                 view1: nadirSeg.argmax,
                 view2: obliqueSeg.argmax,

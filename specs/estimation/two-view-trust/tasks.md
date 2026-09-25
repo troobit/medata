@@ -23,7 +23,7 @@ references:
 
 - [x] 7. Card detection replays in the harness (macOS Vision) and the bound is set from real-card and no-card bundles (Req 4.5, harness half)
 
-- [ ] 8. The card's projection into the oblique view is cleared once the Req 1.3 transform is verified (Req 4.6, oblique half)
+- [x] 8. The card's projection into the oblique view is cleared once the Req 1.3 transform is verified (Req 4.6, oblique half)
 
 - [ ] 9. Double mode shows the card reminder; without LiDAR the shutter does not arm until a card is detected live (Req 4.3)
 
