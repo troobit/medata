@@ -29,6 +29,8 @@ struct Args {
     // `cards`: how many ranked rectangles Vision may return per frame. 1 is
     // what the device runs; more lists the candidates the single pick hides.
     var maxObservations: Int = 8
+    // `cards --oblique` replays the detector on the oblique frame instead.
+    var oblique: Bool = false
     var checkpointSHA256: String = ""
     var outputPath: String = ""
     var voxelEdgeMm: Float = 3.0
@@ -131,6 +133,8 @@ func parseArgs() -> Args? {
             if let s = it.next(), let f = Float(s) { result.growthCap = f }
         case "--max-observations":
             if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
+        case "--oblique":
+            result.oblique = true
         default:
             if !flag.hasPrefix("--") { result.fixturePaths.append(flag) }
         }
@@ -565,14 +569,15 @@ func runCards(args: Args) throws {
     for path in args.fixturePaths {
         let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         let fixture = try PbMealFixture(serializedBytes: Data(contentsOf: URL(fileURLWithPath: path)))
-        let frame = try FixtureRunner.nadirFrame(fixture: fixture)
+        let frame = try args.oblique ? FixtureRunner.obliqueFrame(fixture: fixture) : FixtureRunner.nadirFrame(fixture: fixture)
         let k = frame.intrinsics
         let W = k.imageWidth
         let H = k.imageHeight
-        var line = "stem=\(stem) path=\(fixture.capturePathCanonical)"
+        var line = "stem=\(stem) view=\(args.oblique ? "oblique" : "nadir") path=\(fixture.capturePathCanonical)"
+        line += " K=(\(k.fx),\(k.fy),\(k.cx),\(k.cy),\(W)x\(H))"
 
         var sLidar: Float?
-        if fixture.hasNadirDepth, fixture.nadirArgmax.count == W * H {
+        if !args.oblique, fixture.hasNadirDepth, fixture.nadirArgmax.count == W * H {
             let cleaned = SegmenterPostProcessor.regularise(
                 argmax: fixture.nadirArgmax, width: W, height: H,
                 palette: palette, config: .standard)
@@ -609,6 +614,7 @@ func runCards(args: Args) throws {
                 row += " pnpResidualPx=\(fmt(pose.pnpResidualPx))"
                 row += " tzMm=\(fmt(pose.translationMm.z, 1))"
                 row += " sCardMmPerPx=\(fmt(pose.scaleAtCardPlaneMmPerPx, 4))"
+                row += " cornersExact=\(corners.map { [$0.u, $0.v] })"
                 if let sLidar {
                     let sCard = pose.scaleAtCardPlaneMmPerPx
                     row += " disagreement=\(fmt(abs(sLidar - sCard) / ((sLidar + sCard) / 2), 3))"
@@ -1359,3 +1365,4 @@ do {
     exit(1)
 }
 #endif
+

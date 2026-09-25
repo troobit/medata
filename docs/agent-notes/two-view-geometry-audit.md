@@ -1,5 +1,12 @@
 # Two-view geometry audit (night of 2026-09-24)
 
+**Verified 2026-09-25** (two-view-trust Decision 4): on bundle `1790310086654`
+the stored transform maps the nadir card's corners onto the oblique card face
+within 10 px; every alternative convention misses by 20–700 px. §1–2 below
+describe the state before the fix. `HarnessCLI cards --oblique` replays the
+detector on the oblique view; Vision's oblique quad includes the card's side
+and shadow (15–20 px outside the face at 26°), so it is not the yardstick.
+
 What was found while preparing the "user identifies the food in both photos"
 options (`specs/estimation/two-view-trust/`). Read this before touching the
 two-view path, `MaskMatcher`, `VoxelCarveEstimator`, or the card path.
