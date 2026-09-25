@@ -61,7 +61,9 @@ final class EstimationAttemptRecordTests: XCTestCase {
             cardCandidateCount: 3,
             twoViewReconciliation: .init(nadirClasses: [34], obliqueClasses: [3, 4, 34],
                                          nadirSingleObject: true, obliqueSingleObject: true,
-                                         chosenClass: 4, applied: true)
+                                         chosenClass: 4, applied: true),
+            voxelGrid: .init(measuredFoodHeightMm: 47.3, verticalExtentMm: 54,
+                             dimsZ: 18, edgeMm: 3)
         )
     }
 
@@ -119,6 +121,32 @@ final class EstimationAttemptRecordTests: XCTestCase {
         let data = try JSONEncoder().encode(record)
         let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
         XCTAssertEqual(decoded, record)
+    }
+
+    // two-view-trust 2026-09-25: the carve's vertical bound and the measurement
+    // behind it survive the JSON round trip — the pair a two-view volume has to
+    // be read against.
+    func testVoxelGridMeasurementsRoundTrip() throws {
+        let data = try JSONEncoder().encode(makeSuccessRecord())
+        let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
+        let g = try XCTUnwrap(decoded.voxelGrid)
+        XCTAssertEqual(g.measuredFoodHeightMm ?? 0, 47.3, accuracy: 1e-4)
+        XCTAssertEqual(g.verticalExtentMm, 54, accuracy: 1e-4)
+        XCTAssertEqual(g.dimsZ, 18)
+        XCTAssertEqual(g.edgeMm, 3, accuracy: 1e-4)
+    }
+
+    // A row written without depth records no height, and that must stay
+    // distinguishable from a zero.
+    func testAbsentMeasuredHeightRoundTripsAsNilNotZero() throws {
+        let diagnostics = PipelineDiagnostics(
+            capturePath: "two_view_sfs", modelVersion: "m", timestampMs: 1)
+        diagnostics.recordVoxelGrid(.init(measuredFoodHeightMm: nil,
+                                          verticalExtentMm: 120, dimsZ: 40, edgeMm: 3))
+        let data = try JSONEncoder().encode(diagnostics.snapshot())
+        let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
+        XCTAssertNil(decoded.voxelGrid?.measuredFoodHeightMm)
+        XCTAssertEqual(decoded.voxelGrid?.verticalExtentMm, 120)
     }
 
     // MARK: - schema version field

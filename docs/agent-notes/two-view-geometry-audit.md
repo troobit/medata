@@ -211,3 +211,78 @@ The carved numbers stay 2–3× the roll (~12 × 7 × 4 cm) because the nadir
 silhouette is wider than the roll and an oblique ~26° from vertical bounds
 height only near its far edge; the grid's 120 mm `verticalExtentMm` is the
 other cap. Tighter silhouettes (Req 3) and a wider baseline are the levers.
+
+## 4. What the 2–3× over-read actually was (2026-09-25 evening)
+
+Two measured causes, both now fixed in `MedataCore/Sources/Volume/`.
+
+**The grid's vertical extent was setting the answer.** Two silhouette cones
+at the tilts the aim guide allows never close over a low food: a voxel at
+height h only leaves the oblique silhouette once h·tan(θ) exceeds the
+object's extent along the tilt direction — 139 mm / tan(22.2°) ≈ 340 mm for
+the roll, far above any grid. Inside the food's true height the carve is
+accurate (a synthetic control with exact silhouettes, real intrinsics and
+the real baseline carves ~375 cm³ against a voxelised truth of 337);
+everything above is un-carved hull, and the top layer at 118.5 mm still
+kept 42 % of the base layer's voxels. Cumulative volume by cap on
+`1790318627741`: 24 mm → 238, 40 → 379, 48 → 460, 62 → 587, 72 → 656, 86 →
+756, 96 → 810, 120 → 927 cm³. So `VoxelGridSizer.verticalExtentMm` was not
+a safety cap — it was the estimate. When the nadir frame carries depth the
+grid is now sized to the food: `VoxelGridSizer.measuredFoodHeightMm` takes
+the 98th percentile of the per-pixel height above the support plane over
+the nadir food mask (same `heightAboveSupportPlaneMm` the single-view
+height field uses), adds a 5 mm margin, and clamps to [30, 120] mm. The
+percentile, not the maximum, so one bad return cannot set the grid; 5 mm
+and not more because the percentile measured ABOVE the food on all three
+bundles (47.3, 50.4, 36.0 mm on rolls of ~40 mm — it is taken over the same
+smoothed depth the plane was fitted to), so the margin covers only
+quantisation and the plane residual. Z is rounded up to a whole voxel and
+no longer to a threadgroup: 8 voxels is 24 mm at the default edge, most of
+a 40 mm food. The kernel's `gid.z >= dims_z` guard makes a ragged dims_z
+safe. With no depth the constant AND its old rounding stand, byte for byte,
+so the non-LiDAR two-view path is unchanged.
+
+**The carve's silhouette was softer than every other consumer's.** The test
+was `(1 − q[bg]) ≥ 0.5` on the RAW tensor, while `MaskMatcher`,
+`VoxelGridSizer`, the review overlay and persistence all read the
+REGULARISED argmax; `ObjectReconciler.relabel` then concentrates every
+carvable channel into one, so a pixel with no winning class but half its
+mass off background passed. On `1790318627741`: nadir 138,671 px soft
+against 108,531 px of label-food (118.3 vs 92.6 cm², +28 %), oblique 77,932
+vs 60,949 — against a roll footprint of ~84 cm². `VoxelCarveView` now
+carries the regularised `argmax` and a pixel is in the silhouette only if
+its label is carvable (the same `isCarvableClass` MaskMatcher uses); the
+tensor is still what resolves the per-voxel class. The single-view
+extrusion fallback uses the label map the same way. A nil `argmax` keeps
+the old soft test for synthetic tests. `HeightFieldEstimator` is NOT
+touched — the single-view path reads the roll correctly today and is the
+reference the two-view number is measured against.
+
+Replay of the three bundles (β = 1, totals in cm³):
+
+| bundle | before | height only | hard silhouette only | both |
+|---|---|---|---|---|
+| `1790318627741` | 926.9 | 512.8 | 709.8 | **397.1** |
+| `1790315814452` | 929.1 | 598.8 | 781.6 | **509.8** |
+| `1790310086654` | 850.3 | 442.5 | 678.9 | **351.4** |
+
+Measured heights / grid extents: 47.3 → 54 mm, 50.4 → 57 mm, 36.0 → 42 mm.
+
+**Still over.** Single-view LiDAR of the same roll minutes apart reads
+267–272 cm³, and the target band is 267–302; the carve lands 1.3–1.9× above
+it. Capping alone cannot reach the band — the cap sweep shows ~379 cm³ at
+the roll's true 40 mm even with the old silhouette, and ~357 at 48 mm with
+the hard one. What remains is the footprint: the nadir mask is still wider
+than the roll (92.6 cm² of label-food against ~84 cm² real) and the
+perspective cone widens the hull with height. The row now records
+`voxelGrid {measuredFoodHeightMm, verticalExtentMm, dimsZ, edgeMm}` and the
+Shutter log prints `event=grid.height`, so the bound is auditable per
+attempt.
+
+**A phone without LiDAR still has no height bound at all.** The measured
+extent needs nadir depth; without it the 120 mm constant stands, and
+nothing in the two-view geometry closes the hull from above at any tilt the
+aim guide allows. That path therefore keeps the full over-read this section
+describes. The only bounds available to it are a wider baseline (a tilt
+where the cones actually close), the ID-1 card's own plane, or an explicit
+prior height — none of them built.

@@ -587,13 +587,24 @@ public struct Pipeline: Sendable {
                 palette: palette
             )
             let foodMask = PipelineBridges.foodMask(from: nadirSeg.argmax, palette: palette)
+            // The grid's height is the food's height when the nadir frame can
+            // measure it (two-view-trust, 2026-09-25). Two silhouettes at the
+            // tilts the aim guide allows do not close the hull from above, so
+            // the vertical extent is not a safety cap — it sets the answer.
+            // Without depth this is nil and the 120 mm constant stands.
+            let measuredFoodHeightMm = nadir.depth.flatMap {
+                VoxelGridSizer.measuredFoodHeightMm(
+                    foodMask: foodMask, depth: $0,
+                    intrinsics: nadir.intrinsics, supportPlane: plane)
+            }
             let grid: VoxelGrid
             do {
                 grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
                     foodMask: foodMask,
                     nadirIntrinsics: nadir.intrinsics,
                     supportPlane: plane,
-                    gravityCamera: nadir.gravity
+                    gravityCamera: nadir.gravity,
+                    measuredFoodHeightMm: measuredFoodHeightMm
                 ))
             } catch {
                 #if DEBUG
@@ -602,12 +613,26 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
+            diagnostics.recordVoxelGrid(.init(
+                measuredFoodHeightMm: measuredFoodHeightMm,
+                verticalExtentMm: grid.verticalExtentMm,
+                dimsZ: grid.dimsZ, edgeMm: grid.edgeMm))
+            // Release-emitted channel: what bounded the carve on this attempt.
+            supportPlaneLog.info(
+                """
+                event=grid.height measured_mm=\(measuredFoodHeightMm ?? -1, privacy: .public) \
+                extent_mm=\(grid.verticalExtentMm, privacy: .public) \
+                dimsZ=\(grid.dimsZ, privacy: .public) edge_mm=\(grid.edgeMm, privacy: .public)
+                """
+            )
             let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
                 grid: grid,
                 view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
-                                     intrinsics: nadir.intrinsics),
+                                     intrinsics: nadir.intrinsics,
+                                     argmax: nadirSeg.argmax),
                 view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
-                                     intrinsics: oblique.intrinsics),
+                                     intrinsics: oblique.intrinsics,
+                                     argmax: obliqueSeg.argmax),
                 transform1To2: t1to2,
                 supportPlane: plane,
                 matchedClasses: matching.matchedClasses,

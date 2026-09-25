@@ -30,6 +30,10 @@ public struct VoxelGrid: Sendable, Equatable {
     }
 
     public var voxelCount: Int { dimsX * dimsY * dimsZ }
+    /// Height of the grid above the support plane, mm — `dimsZ` whole voxels.
+    /// This is the ceiling the carve can never read above, so it is recorded
+    /// on the outcome row next to the height it was derived from.
+    public var verticalExtentMm: Float { Float(dimsZ) * edgeMm }
 
     // Voxel centre in camera-1 mm. (ix, iy, iz) are 0-based.
     public func voxelCentre(ix: Int, iy: Int, iz: Int) -> Vec3 {
