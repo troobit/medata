@@ -24,6 +24,43 @@ flattest food. `LiDARPlaneFitter` is not buggy — it faithfully implements what
 Req 4.2 asked for, which is why the feature amends the specification rather than only
 the code.
 
+## The card-only path refuses, and what would make it fit (two-view-trust Req 4.4)
+
+`LiDARSupportPlaneFitter.fitOutcome` dispatches on `nadir.depth`. When there is no depth
+map — a phone without LiDAR, or LiDAR unavailable — the branch now returns
+`plane: nil` with `refusal: .noLowerSilhouetteEdges`. It does **not** call
+`CardOnlyPlaneFitter`.
+
+It used to. The branch back-projected the two lower **card** corners as if they were the
+food's lower silhouette edge, and seeded a single food centroid 20 mm below the card
+centre with a constant assumed height. The plane that came back describes the card's
+neighbourhood, not the surface the food is resting on, and nothing downstream could tell
+it apart from a measured fit — it arrived as an ordinary `SupportPlane` with a finite
+`convergedIterations` and a plausible `residualMm`. Volume is integrated per-pixel above
+the support plane, so that invention is a per-pixel offset on every food pixel.
+`docs/agent-notes/two-view-geometry-audit.md` section 3 records that the path had never
+run end to end on a real capture, so the error had never been visible either.
+
+`noLowerSilhouetteEdges` is reused rather than a new case added: it is the honest reason
+(the fitter has card corners, not food silhouette edges), and it keeps `Pipeline`'s
+exhaustive `SupportPlaneError` switch unchanged — it already maps to
+`EstimationFailure.noScaleAvailable`. Note that mapping is now reached on a capture whose
+card scale is perfectly good; it is the plane that is missing, not the scale. If that
+label starts costing something in the field, `Pipeline.fitSupportPlane` is where to fix
+it, not here.
+
+`CardOnlyPlaneFitter` itself is unchanged and still covered by `CardOnlyPlaneFitterTests`.
+The **input** is what is missing. What would make the branch work: the food's lower
+silhouette edges taken from the nadir food mask (pipeline Req 4.3) — the mask's lowest
+food pixel per column, along the boundary where the food meets the table — back-projected
+at the card-plane scale and handed to `CardOnlyPlaneFitter` as
+`edgePoints3DAtInitScale`, with real food centroids rather than one offset from the card.
+Until then the refusal is the whole behaviour.
+
+The empty-mask gate stays **before** the dispatch, as its comment says: an empty
+pre-shutter mask reads `emptyFoodMask` (→ `noFoodPixels`) on the depthless path too, not
+the card refusal. `SupportPlaneFitterTests` asserts that ordering.
+
 ## SupportRegion, in the order the data flows
 
 1. **`depthIntrinsics(from:depth:)`** — derives depth intrinsics from the COLOUR ones.

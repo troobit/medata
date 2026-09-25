@@ -124,24 +124,24 @@ struct SupportPlaneFitterTests {
                 "residual \(plane.residualMm) mm exceeds \(LiDARPlaneFitter.residualMaxMm) mm cap")
     }
 
-    // MARK: - depth nil + non-empty mask → CardOnly branch
+    // MARK: - depth nil + non-empty mask → the card-only path REFUSES
 
-    @Test("depth nil + non-empty mask + valid card pose runs the CardOnly branch")
-    func depthNilMaskNonEmptyRunsCardOnlyBranch() throws {
+    // two-view-trust Req 4.4: `CardOnlyPlaneFitter` must be fed the food's lower
+    // silhouette edges, not the card's corners and a constant. Until it is, the
+    // card-only branch refuses rather than returning an invented plane. It used
+    // to back-project the two lower CARD corners as a stand-in for the food's
+    // lower silhouette edge and seed one food centroid 20 mm below the card
+    // centre, which describes the card's neighbourhood and not the food's
+    // contact surface.
+    @Test("depth nil + non-empty mask + a valid card pose refuses with noLowerSilhouetteEdges")
+    func cardOnlyBranchRefusesEvenWithAValidCardPose() throws {
         let fitter = LiDARSupportPlaneFitter()
         let frame = Self.makeFrameNoDepth()
-        // Minimal non-empty mask. The CardOnly fitter does not consume the mask;
-        // the protocol's empty-mask gate only checks that it is non-empty.
-        let mask = BinaryMask(
-            pixels: {
-                var p = [UInt8](repeating: 0, count: 64 * 64)
-                for x in 24..<40 { p[24 * 64 + x] = 1 }
-                return p
-            }(),
-            width: 64, height: 64
-        )
-        // Build a card pose + corners that the CardOnlyPlaneFitter accepts.
-        // Using the same fixture shape as `CardOnlyPlaneFitterTests`.
+        let mask = Self.lowerEdgeMask()
+        // The same pose and corner fixture the branch used to accept: a card
+        // squarely in view, four corners in TL → TR → BR → BL order. Nothing
+        // about the inputs is degenerate — the refusal is about what they mean,
+        // not about whether they parse.
         let dCard: Float = 300
         let pose = CardPose(
             rotationColumnMajor: [1, 0, 0, 0, 1, 0, 0, 0, 1],
@@ -150,24 +150,108 @@ struct SupportPlaneFitterTests {
             pnpResidualPx: 0,
             cardNormalCameraFrame: Vec3(0, 0, 1)
         )
-        // Corner order TL → TR → BR → BL; only the lower two corners
-        // (BR, BL) are read by Pipeline.fitSupportPlane's CardOnly branch.
         let corners: [PixelCorner] = [
             PixelCorner(28, 28),
             PixelCorner(36, 28),
             PixelCorner(36, 34),
             PixelCorner(28, 34)
         ]
-        let plane = try fitter.fit(
-            nadir: frame,
-            cardPose: pose,
-            corners: corners,
+        let outcome = fitter.fitOutcome(
+            nadir: frame, cardPose: pose, corners: corners, preShutterFoodMask: mask
+        )
+        #expect(outcome.plane == nil, "the card-only path must not invent a plane")
+        #expect(outcome.refusal == .noLowerSilhouetteEdges,
+                "expected noLowerSilhouetteEdges; got \(String(describing: outcome.refusal))")
+        // A refusal carries no reference and no ring: there is no depth map, so
+        // no depth-derived reference exists (Req 6.3 wants the field absent).
+        #expect(outcome.stats.reference == nil)
+        #expect(outcome.stats.ring == nil)
+        #expect(outcome.stats.candidatePlaneCount == nil)
+        // -1 is the "refused before a residual was computed" sentinel.
+        #expect(outcome.stats.residualMm == -1)
+    }
+
+    @Test("the card-only refusal reaches throwing callers as noLowerSilhouetteEdges")
+    func cardOnlyRefusalThrowsTheSameCase() throws {
+        let fitter = LiDARSupportPlaneFitter()
+        do {
+            _ = try fitter.fit(
+                nadir: Self.makeFrameNoDepth(),
+                cardPose: nil, corners: nil,
+                preShutterFoodMask: Self.lowerEdgeMask()
+            )
+            Issue.record("expected noLowerSilhouetteEdges; fit succeeded")
+        } catch let error as SupportPlaneError {
+            #expect(error == .noLowerSilhouetteEdges, "expected noLowerSilhouetteEdges; got \(error)")
+        }
+    }
+
+    // The empty-mask gate is at the protocol entry, BEFORE the LiDAR-vs-card
+    // dispatch, so an empty mask on a depthless frame still reads emptyFoodMask
+    // rather than the card path's refusal. Without this the Pipeline would map
+    // a missing food mask to noScaleAvailable instead of noFoodPixels.
+    @Test("the empty-mask gate still fires before the dispatch on a depthless frame")
+    func emptyMaskGateStillPrecedesTheCardOnlyRefusal() throws {
+        let fitter = LiDARSupportPlaneFitter()
+        let empty = BinaryMask(
+            pixels: [UInt8](repeating: 0, count: 64 * 64), width: 64, height: 64
+        )
+        let outcome = fitter.fitOutcome(
+            nadir: Self.makeFrameNoDepth(), cardPose: nil, corners: nil,
+            preShutterFoodMask: empty
+        )
+        #expect(outcome.refusal == .emptyFoodMask,
+                "the empty-mask gate must win over the card-only refusal")
+    }
+
+    // MARK: - The depth path is untouched by this change
+
+    // The card arguments reach `fitOutcome` on the depth path too. Nothing on
+    // that path may read them: the outcome must be exactly what `fitFromDepth`
+    // returns for the same depth map, pose or no pose.
+    @Test("a card pose does not change the depth path's outcome by one bit")
+    func depthPathIgnoresTheCardArgumentsEntirely() throws {
+        let fitter = LiDARSupportPlaneFitter()
+        let fixture = Self.makeLiDARFixture()
+        let mask = Self.centreRectMask(
+            width: fixture.width, height: fixture.height, fillFraction: 0.7
+        )
+        let pose = CardPose(
+            rotationColumnMajor: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            translationMm: Vec3(0, 0, -300),
+            scaleAtCardPlaneMmPerPx: 0.2,
+            pnpResidualPx: 0,
+            cardNormalCameraFrame: Vec3(0, 0, 1)
+        )
+        let corners: [PixelCorner] = [
+            PixelCorner(28, 28), PixelCorner(36, 28),
+            PixelCorner(36, 34), PixelCorner(28, 34)
+        ]
+        let withCard = fitter.fitOutcome(
+            nadir: fixture.frame, cardPose: pose, corners: corners,
             preShutterFoodMask: mask
         )
-        // CardOnly fit reports a finite iteration count.
-        #expect(plane.convergedIterations != nil,
-                "CardOnly branch must populate convergedIterations")
-        #expect(plane.residualMm.isFinite, "residual should be finite")
+        let withoutCard = fitter.fitOutcome(
+            nadir: fixture.frame, cardPose: nil, corners: nil,
+            preShutterFoodMask: mask
+        )
+        let direct = LiDARSupportPlaneFitter.fitFromDepth(
+            depth: try #require(fixture.frame.depth),
+            intrinsics: fixture.frame.intrinsics,
+            mask: mask, gravity: fixture.frame.gravity
+        )
+        let expected = try #require(direct.plane)
+        for outcome in [withCard, withoutCard] {
+            let plane = try #require(outcome.plane)
+            #expect(plane.normal.x == expected.normal.x)
+            #expect(plane.normal.y == expected.normal.y)
+            #expect(plane.normal.z == expected.normal.z)
+            #expect(plane.distanceMm == expected.distanceMm)
+            #expect(plane.residualMm == expected.residualMm)
+            #expect(plane.convergedIterations == expected.convergedIterations)
+            #expect(outcome.stats == direct.stats)
+            #expect(outcome.refusal == nil)
+        }
     }
 
     // MARK: - Fixture helpers
@@ -237,6 +321,15 @@ struct SupportPlaneFitterTests {
             depth: depth
         )
         return LiDARFixture(frame: frame, width: w, height: h)
+    }
+
+    // A minimal non-empty mask: one row of food pixels. The card-only path never
+    // consumed the mask — that is the defect Req 4.4 names — so its only job here
+    // is to get past the protocol's empty-mask gate.
+    private static func lowerEdgeMask() -> BinaryMask {
+        var pixels = [UInt8](repeating: 0, count: 64 * 64)
+        for x in 24..<40 { pixels[24 * 64 + x] = 1 }
+        return BinaryMask(pixels: pixels, width: 64, height: 64)
     }
 
     private static func makeFrameNoDepth() -> RawFrame {
