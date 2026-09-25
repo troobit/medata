@@ -2,8 +2,9 @@ import Persistence
 import SwiftUI
 
 // The schedule-editing surface (specs/data/dose-schedule Req 1.3, 1.4, 3.2,
-// 3.3). A section in the existing Settings Form, following the settings-row
-// pattern already there; functional copy only.
+// 3.3). Two sections of the Insulin settings Form (specs/ui/settings-
+// information-architecture), following the settings-row pattern already there;
+// functional copy only.
 //
 // Disable is deliberately distinct from delete: a regime change is reversible
 // without re-entering the whole entry (Req 1.4). Editing a scheduled dose
@@ -11,7 +12,7 @@ import SwiftUI
 // retrospectively — that holds mechanically, because a scheduled dose is
 // configuration and the occurrence ledger is a separate table it never writes
 // to (Req 1.5).
-extension SettingsView {
+extension InsulinSettingsView {
 
     @ViewBuilder
     var doseScheduleSection: some View {
