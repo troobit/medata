@@ -2369,3 +2369,176 @@ readings are identical and only the time to find a row changes. The reading take
 
 **Not repaired**, on Decisions 52–76's precedent. `stabilityRatioMin` stays
 `[owed]`.
+
+## The 4–5° plane tilt is in the FIT, not in the depth (2026-09-25)
+
+`specs/estimation/depth-grown-food-region/` Decision 4 shipped a seed-relative band to hide a
+plate leak and named the real cause as still open: the fitted plane sits 4–5° off the plate, so
+the plate's far half reads 6–16 mm "above support" and no height floor can bound a region grow.
+Decision 4 offers two explanations — a tilted `edgeBand` fit on `1790315900185`, and a
+**non-planar depth field** on `1790315865030`. Measured independently, the second explanation is
+wrong and the first is right for a reason the decision does not state.
+
+**Read this first: ARKit's smoothed depth over a table IS planar, and it IS perpendicular to
+gravity.** The tilt can be fitted away. What produces it is the inlier-count objective run over a
+sample set that straddles two parallel surfaces.
+
+### Method
+
+A standalone Python probe over the fixture bytes — no MedataCore code, so it cannot inherit the
+fitters' mistake. Back-projection matches `SupportRegion.prepare` (depth intrinsics scaled from
+colour, `p = ((u−cx)/fx, (v−cy)/fy, −1)·z`, τ_conf = 0.40). The reference surface is my own
+RANSAC-then-eigen plane over **every** valid depth sample more than 60 mm outside the pre-shutter
+mask (Felzenszwalb distance transform, as `distanceToFoodPx` does). 31 single-view `success`
+bundles from `20260924-*` and `20260925-*`.
+
+### 1. Is the tilt in the depth data? No.
+
+| | median | worst | n |
+|---|---|---|---|
+| far-field inlier fraction (samples within 5 mm of one plane) | 0.970 | 0.420 | 31 |
+| **tilt of that plane to gravity** | **0.76°** | 2.76° | 29 well-formed |
+| planar RMS over its inliers | 1.34 mm | 2.19 mm | 29 |
+| RMS after adding a full quadratic in (x, y) | 1.10 mm | — | 29 |
+| systematic warp (spread of 5×5 cell medians of the planar residual) | 4.8 mm | 7.4 mm | 29 |
+
+Two bundles read above 2.6° and both are my region selection, not the sensor: their far field is
+not one surface (inlier fraction 0.42 and 0.62, depth reaching 1.2–1.3 m — a table edge or a
+drop-off inside the 60 mm-outside region). On the 29 with a well-formed far field the table is
+within 2.8° of gravity, median 0.76°.
+
+The quadratic buys 0.24 mm, so the 1.3 mm residual is noise and not a bow. There IS a real warp
+of ~5 mm corner-to-corner across a ~550 mm frame (~0.6°), which is worth knowing and is an order
+of magnitude below the errors in play.
+
+Neither of Decision 4's two per-bundle claims reproduces as a property of the depth:
+
+| bundle | Decision 4 | measured here |
+|---|---|---|
+| `1790315900185` | first plane tilted **4.2°** from flat-in-z | table plane **0.80°** from gravity, RMS 1.45 mm, 92.0 % inliers |
+| `1790315865030` | table's depth field **non-planar**, 2.1° left vs 4.9° right | table plane **0.45°** from gravity, RMS 1.67 mm, 96.0 % inliers; left-half fit 0.72°, right-half 0.44° — a **0.28°** difference |
+
+### 2. Is the fit using the wrong samples? Yes — the band straddles plate and table.
+
+Reproducing `collectCandidatePoints` (four bands around the pre-shutter bbox, each as thick as
+the bbox dimension perpendicular to it, food pixels excluded, bilinear depth, NN confidence) and
+classifying each sample by its height above the *true* table plane:
+
+| bundle / region | table px | plate px | food px | free-RANSAC tilt | its inliers | best **gravity-locked** inliers |
+|---|---|---|---|---|---|---|
+| `1790315900185` edge band | 245,136 | **263,986** | 35,460 | **6.10°** | 258,806 | 247,398 |
+| `1790315865030` edge band | **1,079,830** | 156,114 | 3,012 | 0.38° | 1,074,887 | 1,079,274 |
+| `1790315900185` annulus (≤50 mm) | 1,173 | **4,740** | 839 | 1.67° | 3,953 | 3,698 |
+| `1790315865030` annulus (≤50 mm) | **5,100** | 4,620 | 166 | **4.15°** | 5,644 | 5,080 |
+
+That is the whole mechanism. The plate top sits 11–20 mm above the table. When the band or the
+annulus holds both surfaces in comparable numbers, a plane tilted 4–6° **threads both** and
+collects more inliers than either surface alone — by 4.6 % on `1790315900185`'s band and 11 % on
+`1790315865030`'s annulus. RANSAC maximises that count, so it takes the tilt. The margin it wins
+is 2–11 % of the sample count; the price is 20–30 mm of height error at the far side of the
+frame. Where one surface dominates the band the fit is flat (`1790315865030`'s band is 87 %
+table → 0.38°), which is exactly the pattern Decision 4 recorded and read as two different
+defects.
+
+The `foodSupport` refit has the same defect at a smaller radius: `annulusOuterMm = 50` on these
+plates spans the plate well, the plate rim AND the table, so the refit tilts for the same reason
+(4.15° on `1790315865030`). This is what "both refits land `foodSupport` but 4–5° off the first
+plane" is.
+
+The ring measure cannot catch it: on `1790315900185` the 8–25 mm ring spans 22.4 mm of true
+height (p5 13.7, p95 36.1 above the table) because it threads plate top and crust foot, so a
+tilted plane that passes through the middle of that spread reads a ring median near zero.
+
+### 3. Does gravity help? Yes on the tilt, and not on the plate rim.
+
+Heights of the plate surface and of the food, both regions defined independently by height above
+the true table plane, measured against three support surfaces:
+
+| bundle | support surface | plate p5 / p50 / p95 / max | food p5 / p50 |
+|---|---|---|---|
+| `1790315900185` | edge-band plane, 6.10° tilt | −5.9 / 1.8 / 12.9 / **19.6** | **15.5** / 29.2 |
+| `1790315900185` | **normal = gravity**, offset at contact ring | −7.2 / −1.5 / 5.1 / **8.6** | **14.6** / 24.5 |
+| `1790315865030` | edge-band plane (table), 0.38° tilt | 11.5 / 16.4 / 21.7 / 28.0 | 33.8 / 42.6 |
+| `1790315865030` | **normal = gravity**, offset at contact ring | −0.1 / 4.8 / 10.4 / **16.6** | **22.0** / 31.0 |
+
+On `1790315900185` the free fit leaves plate and food **overlapping** (plate reaches 19.6 mm,
+food starts at 15.5 mm) — no floor can separate them, which is precisely Decision 4's finding.
+Gravity-locking the normal and fitting only the offset drops the plate's ceiling to 8.6 mm
+against a food floor of 14.6 mm: a 10–12 mm floor separates them cleanly and the far half stops
+reading 6–16 mm high.
+
+On `1790315865030` the first plane was already flat, so the lock changes almost nothing. Its
+residual 5.4 mm of margin is the plate's own **rim**, 16.6 mm above the contact ring — real
+geometry, not a fit error, and not something a gravity constraint addresses.
+
+Cost of the constraint, over the same far-field inliers on all 29 well-formed bundles: RMS rises
+from **1.34 mm to 2.43 mm** (median), worst case 2.94 mm. About 1 mm of residual bought for
+20–30 mm of plate-height error.
+
+#### The counter-argument, and why it is answerable
+
+`support-plane-reference` Decision 55 is the one decision that prices this angle. It sets
+`gravityAngleMaxRad = 15°` with the derivation that **the corpus's one intended-correct fit is
+the plate top at 8.309° from gravity, from a hypothesis at 8.900°**, leaving 6.100° of margin —
+and it records that the same capture's own table candidate is at 2.030°, calling the 6.3°
+disagreement "unexplained… It could be the plate, the fit, or the recorded gravity, and the
+corpus cannot separate them." **A hard gravity lock refuses that plane**, so it contradicts
+Decision 55's floor as stated.
+
+Measured independently on that same capture, `1785901032716`:
+
+- its table reads **0.61°** from gravity over **99.7 %** of the far field at 1.56 mm RMS — a
+  clean, level table, so a plate resting on it cannot be 8.3° off gravity unless the plate is a
+  wedge;
+- the free tilt of a plate-height band there reads **0.46° / 3.07° / 4.33° / 3.28°** for admitted
+  height windows 4–14 / 6–20 / 8–26 / 10–30 mm. A tilt that is a function of which samples are
+  admitted is the mixing signature, not a surface property.
+
+So Decision 55's "unexplained" most plausibly resolves to **the fit**, and the contradiction is
+with a number that is itself an artefact. Nothing else in that log forbids the constraint:
+Decisions 11 and 13 fix which *candidate* wins, not how a candidate's normal is derived. This is
+the one claim here that rests on inference rather than direct measurement — see the capture that
+settles it, below.
+
+### 4. Smallest change at source
+
+**Gravity-lock the hypothesis normal in both fitters; do not tighten the cone.** In
+`LiDARPlaneFitter.ransac` and `SupportRegion.ccRansac`, replace the sampled triple's
+cross-product normal with the gravity vector both functions already take, keep only the offset
+from the sample (`d = ĝ · p₁`), and make the `refine` step offset-only. Everything downstream —
+the 5 mm inlier band, connected-component scoring, sequential extraction, the ring admissibility
+ladder — is unchanged.
+
+What it buys: a hypothesis's inlier set becomes a height *band*, which cannot span two surfaces
+11–20 mm apart, so the leak's mechanism is removed rather than masked. As a side effect RANSAC
+degenerates to a 1-D mode search over ĝ·p — deterministic, no RNG, and the iteration-budget
+questions of Decisions 51 and 57 stop mattering.
+
+Do **not** instead tighten `gravityAngleMaxRad`. Decision 55 measured that a tighter cone starves
+the hypothesis pool, moves the answer, and leaves the violation *larger* in units of its own bar.
+The defect is not that tilted hypotheses are admitted; it is that they are *generated* and then
+win on count.
+
+Keep one escape: if the gravity-locked inlier count falls below ~0.8× the free fit's on the same
+sample set, the surface may genuinely not be level — record the reference and keep the free fit.
+On everything measured here the locked count is within 2–11 % of the free one.
+
+### What device capture would settle it
+
+1. **An empty rimmed plate on a table, no food.** The plate top's tilt must equal the table's by
+   construction, so this separates "the plate is tilted" from "the fit is mixing" — the single
+   thing a gravity lock contradicts (Decision 55's 8.309°). Cheapest and highest value.
+2. **The same plate on a surface propped to a measured 5° and 10°** (a book under one edge).
+   Bounds the escape threshold and demonstrates the lock failing where it should.
+3. **The same scene at 0°, 10° and 20° of camera tilt.** All 31 bundles here are near-nadir —
+   gravity sits 0.6–3.8° off the optical axis — so ARKit's gravity has never been checked against
+   a known-level plane at a real camera tilt in this corpus.
+
+### Caveats
+
+The probe reproduces the fitters' *sample selection* and runs its own RANSAC; it does not run
+`LiDARPlaneFitter` or `SupportRegion`. So "6.10°" for `1790315900185`'s edge band is my fit on
+the reproduced candidate set, not the shipped 4.2° — the agreement is in mechanism and order of
+magnitude, not to the decimal. Plate and food regions are defined by height above the true table
+plane, which is a clean separation on these captures (a trimodal histogram: table 0 ± 3 mm,
+plate 12–26 mm, food 32–52 mm, with a clear valley between) but is not available at run time.
