@@ -1093,7 +1093,9 @@ public enum SupportRegion {
     // Sequential CC-RANSAC: up to `maxCandidatePlanes` passes over the annulus, each
     // removing its polished inliers within 2 × inlierBandMm before the next.
     static func extractCandidates(annulus: [Int], geometry g: DepthGeometry,
-                                  gravity: Vec3, rng: inout SplitMix64) -> [PlaneCandidate] {
+                                  gravity: Vec3, rng: inout SplitMix64,
+                                  gravityLocked: Bool = SupportPlaneGravityLock.enabled)
+        -> [PlaneCandidate] {
         var residue = annulus
         var candidates: [PlaneCandidate] = []
         let scratch = ComponentScratch(width: g.width, height: g.height)
@@ -1103,8 +1105,22 @@ public enum SupportRegion {
 
         for _ in 0..<maxCandidatePlanes {
             guard residue.count >= residueFloor else { break }
-            guard let hypothesis = ccRansac(indices: residue, geometry: g, gravity: gravity,
-                                            rng: &rng, scratch: scratch) else { break }
+            guard let free = ccRansac(indices: residue, geometry: g, gravity: gravity,
+                                      rng: &rng, scratch: scratch) else { break }
+            // The escape (`SupportPlaneGravityLock`): both searches run over the SAME residue,
+            // and the locked one is adopted only while it keeps at least `escapeInlierRatio` of
+            // the free fit's winning component. A genuinely tilted support surface loses far
+            // more than that and keeps its free fit; a straddling one loses 2-11 %.
+            var hypothesis = free
+            var locked = false
+            if gravityLocked,
+               let lockedFit = ccRansac(indices: residue, geometry: g, gravity: gravity,
+                                        rng: &rng, scratch: scratch, gravityLocked: true),
+               Float(lockedFit.members.count)
+                   >= Float(free.members.count) * SupportPlaneGravityLock.escapeInlierRatio {
+                hypothesis = lockedFit
+                locked = true
+            }
 
             var inliers = hypothesis.members
             // MEASURED GAP (Decision 52): this refinement is NOT gravity-gated, and the
@@ -1124,9 +1140,16 @@ public enum SupportRegion {
             //
             // NOT repaired here. Adding the gate removes a candidate and therefore moves the
             // answer, which is a change task 26 measures and the sitting prices.
-            guard let refined = try? LiDARPlaneFitter.refine(
-                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
-            ) else { break }
+            let refined: (Vec3, Float)
+            if locked {
+                refined = LiDARPlaneFitter.refineOffsetOnly(
+                    inliers: inliers.map { g.points[$0] }, normal: hypothesis.normal)
+            } else {
+                guard let free = try? LiDARPlaneFitter.refine(
+                    inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+                ) else { break }
+                refined = free
+            }
             var normal = refined.0
             var d = refined.1
 
@@ -1145,9 +1168,17 @@ public enum SupportRegion {
                 let component = scratch.largestComponent(of: reselected)
                 let next = component.members
                 if next == inliers || next.count < LiDARPlaneFitter.minPoints { break }
-                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
-                    inliers: next.map { g.points[$0] }, seedNormal: normal
-                ) else { break }
+                let nextNormal: Vec3
+                let nextD: Float
+                if locked {
+                    (nextNormal, nextD) = LiDARPlaneFitter.refineOffsetOnly(
+                        inliers: next.map { g.points[$0] }, normal: normal)
+                } else {
+                    guard let refinedNext = try? LiDARPlaneFitter.refine(
+                        inliers: next.map { g.points[$0] }, seedNormal: normal
+                    ) else { break }
+                    (nextNormal, nextD) = refinedNext
+                }
                 if acos(clampedCosine(nextNormal.dot(gravity))) > LiDARPlaneFitter.gravityAngleMaxRad {
                     break
                 }
@@ -1187,8 +1218,15 @@ public enum SupportRegion {
     // is a genuine single surface with a larger component. It excludes a co-height
     // surface elsewhere in the annulus (a second plate, a board), which forms a
     // separate blob. Surfacing the plate is sequential extraction's job.
+    //
+    // `gravityLocked` fixes the hypothesis normal to gravity and draws only the offset, so a
+    // hypothesis's inlier set is a height band and cannot thread the plate top and the table
+    // at once (`docs/agent-notes/support-plane-fit.md`, 2026-09-25). The three RNG draws stay
+    // unconditional in both modes, so the generator sequence is still independent of how many
+    // hypotheses are rejected (Req 7.7); the locked leg simply ignores p_2 and p_3.
     static func ccRansac(indices: [Int], geometry g: DepthGeometry, gravity: Vec3,
-                         rng: inout SplitMix64, scratch: ComponentScratch) -> RansacHypothesis? {
+                         rng: inout SplitMix64, scratch: ComponentScratch,
+                         gravityLocked: Bool = false) -> RansacHypothesis? {
         let n = indices.count
         guard n >= LiDARPlaneFitter.minPoints else { return nil }
         var best: RansacHypothesis?
@@ -1209,11 +1247,16 @@ public enum SupportRegion {
             if k == i || k == j { continue }
 
             let p1 = g.points[indices[i]], p2 = g.points[indices[j]], p3 = g.points[indices[k]]
-            var nHat = (p2 - p1).cross(p3 - p1)
-            if nHat.lengthSquared < 1e-12 { continue }
-            nHat = nHat.normalised()
-            if nHat.dot(gravity) < 0 { nHat = -nHat }
-            if acos(clampedCosine(nHat.dot(gravity))) > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+            var nHat: Vec3
+            if gravityLocked {
+                nHat = gravity
+            } else {
+                nHat = (p2 - p1).cross(p3 - p1)
+                if nHat.lengthSquared < 1e-12 { continue }
+                nHat = nHat.normalised()
+                if nHat.dot(gravity) < 0 { nHat = -nHat }
+                if acos(clampedCosine(nHat.dot(gravity))) > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+            }
 
             let d = nHat.dot(p1)
             var inliers: [Int] = []
@@ -1394,7 +1437,8 @@ public enum SupportRegion {
     // NEVER throws: rejection is an expected outcome, not an error.
     public static func fitFoodSupportPlane(
         depth: DepthMap, colourIntrinsics: CameraIntrinsics,
-        foodRegionMask: BinaryMask, gravityCamera: Vec3
+        foodRegionMask: BinaryMask, gravityCamera: Vec3,
+        gravityLocked: Bool = SupportPlaneGravityLock.enabled
     ) -> FoodSupportFit? {
         guard let g = prepare(depth: depth, colourIntrinsics: colourIntrinsics,
                               foodRegionMask: foodRegionMask) else { return nil }
@@ -1412,7 +1456,8 @@ public enum SupportRegion {
         var rng = SplitMix64(seed: Fnv1a64.hash(depth.depthBytesMm))
         let gravity = gravityCamera.normalised()
         let candidates = extractCandidates(annulus: samples.annulus, geometry: g,
-                                           gravity: gravity, rng: &rng)
+                                           gravity: gravity, rng: &rng,
+                                           gravityLocked: gravityLocked)
         guard !candidates.isEmpty else { return nil }
 
         var admissible: [(candidate: PlaneCandidate, ring: RingStatistics)] = []
