@@ -102,10 +102,41 @@ composition only; all behaviour is in the model and is unit-tested.
   `CapturedFramesView` and `NadirThumbnailView` now pass
   `RawFrameImage.portraitOrientation` (`.right`) to `Image(decorative:scale:orientation:)`;
   nothing in the buffer, the intrinsics or the mask artefact moved. The saved Photos
-  asset (`PhotoKitSaver`), `MealReviewView.photoSection` (4:3 box) and the
-  `MaskOverlayLoader` surfaces still show the landscape buffer, because the mask PNG and
-  the contour unit coordinates are in buffer space — turning those means rotating photo,
-  contours, badges and tap hit-testing together, a separate decision.
+  asset (`PhotoKitSaver`) is still written landscape — only the display turns.
+
+- **The review and detail surfaces turn the same way, through one mapping:
+  `App/Shared/ReviewPhotoOrientation.swift`.** It holds exactly two things and nothing
+  else is allowed a transpose of its own: `displayRotation` (a quarter turn clockwise,
+  the same turn `RawFrameImage.portraitOrientation` names) for whole raster layers, and
+  `displayPoint`, which sends a unit-square point in buffer space to `(1 - y, x)` in
+  upright display space. `MealReviewView` applies it in two places — `loadContours()`
+  calls `MaskContourSet.uprightForDisplay()` once, so outlines, dimming, badges, the
+  VoiceOver shadow and `handlePhotoTap` all read already-upright coordinates with no
+  further turn; and `cardQuad(_:)` normalises `cardCornersImagePx` by the raster
+  dimensions and then takes the same `displayPoint`. `MaskContourSet.rasterWidth/Height`
+  deliberately stay **buffer** dimensions after `uprightForDisplay()` — they exist only
+  to normalise pipeline pixel geometry, which is also buffer-space, and that result is
+  then turned like everything else. The photo itself is laid out at the transposed
+  (landscape) size, given `displayRotation`, and put back in a portrait frame; 4:3
+  turned is an exact fit for a 3:4 box, so nothing is cropped. `ResultView`'s 64 pt
+  thumbnail turns the photo and the `MaskOverlayLoader` tint separately about the same
+  square centre (the aspect-fill crop is the same pixels either way); the `fork.knife`
+  placeholder is not a capture and does not turn. If a future change disagrees with the
+  mapping, the giveaway is the dashed "Reference card" marker sitting somewhere other
+  than the card.
+
+- **Review photo attempts 1 and 2 coexist in the Debug binary.** The 3:4 photo no longer
+  fills the column at the 40% height budget, which is the one thing worth a look.
+  Settings › Developer › **Review photo fills width**
+  (`DeveloperFlags.reviewPhotoFillsWidthKey`, DEBUG-only) flips between attempt 1 (off,
+  and the only thing Release compiles): the whole photo, centred, with side gutters; and
+  attempt 2 (on): the photo widened to the full column with the rounded clip taking the
+  top and bottom off. `MealReviewView.photoGeometry(in:)` is the whole of the
+  difference — it returns the photo's full drawn extent and the window it is seen
+  through, equal in attempt 1 and not in attempt 2. Overlays are always positioned
+  against the *extent*, never the window, so the crop cannot pull them off the food. The
+  height budget is identical in both, so the total, the action, the scale control and the
+  scrolling rows below are untouched by the choice.
 
 - **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
   `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it

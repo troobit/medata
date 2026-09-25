@@ -84,10 +84,12 @@ struct SettingsView: View {
     @State private var isSeeding = false
     #if DEBUG
     // Developer-phase capture switches (two-view-trust Req 4.5 and the oblique
-    // band measurement). `DeveloperFlags` and these two properties compile in
-    // Debug only, so Release builds the Settings form it built before.
+    // band measurement, plus the review-photo attempt switch). `DeveloperFlags`
+    // and these three properties compile in Debug only, so Release builds the
+    // Settings form it built before.
     @AppStorage(DeveloperFlags.forceNonLiDARKey) private var forceNonLiDAR = false
     @AppStorage(DeveloperFlags.unlockObliqueTiltKey) private var unlockObliqueTilt = false
+    @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
     @State private var isClearing = false
     @State private var confirmsClear = false
     @State private var isSeedingMeal = false
@@ -249,6 +251,11 @@ struct SettingsView: View {
                 // the 25° guidance and the recorded angle are unchanged.
                 Toggle("Oblique tilt unlocked", isOn: $unlockObliqueTilt)
                     .accessibilityIdentifier("settings.unlockObliqueTilt")
+                // Review photo, attempt 1 versus attempt 2. Both show the photo
+                // upright; off is the whole photo with side gutters, on fills
+                // the column and crops top and bottom.
+                Toggle("Review photo fills width", isOn: $reviewPhotoFillsWidth)
+                    .accessibilityIdentifier("settings.reviewPhotoFillsWidth")
             }
 
             Section {

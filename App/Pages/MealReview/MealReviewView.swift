@@ -57,6 +57,21 @@ struct MealReviewView: View {
     // uses (Req 8.2).
     @State private var presetDraft: QuickPreset?
     @State private var presetName = ""
+    #if DEBUG
+    // Review-photo attempt switch (Settings › Developer). DEBUG-only, like
+    // every other `DeveloperFlags` mirror, so Release compiles attempt 1 with
+    // no flag to read.
+    @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
+    #endif
+
+    // Attempt 1 is the shipped treatment; attempt 2 only exists in Debug.
+    private var photoFillsWidth: Bool {
+        #if DEBUG
+        return reviewPhotoFillsWidth
+        #else
+        return false
+        #endif
+    }
 
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
@@ -260,19 +275,43 @@ struct MealReviewView: View {
 
     // MARK: - Photo + outlines (Req 2)
 
-    // The photo area keeps the mask's 4:3 aspect so contour unit coordinates
+    // The upright photo's full drawn extent, and the window it is seen through.
+    // They are equal in the default treatment (the whole photo, side gutters);
+    // attempt 2 makes `photo` taller than `box` so the clip crops top and
+    // bottom. Everything drawn over the photo is positioned against `photo`,
+    // never `box` — the unit square belongs to the whole image whether or not
+    // all of it is visible.
+    private struct PhotoGeometry {
+        let photo: CGSize
+        let box: CGSize
+    }
+
+    private func photoGeometry(in available: CGSize) -> PhotoGeometry {
+        if photoFillsWidth {
+            let width = available.width
+            return PhotoGeometry(
+                photo: CGSize(width: width, height: width / ReviewPhotoOrientation.displayAspect),
+                box: CGSize(width: width, height: available.height)
+            )
+        }
+        let size = ReviewPhotoOrientation.fittedBox(in: available)
+        return PhotoGeometry(photo: size, box: size)
+    }
+
+    // The photo area keeps the upright 3:4 aspect so contour unit coordinates
     // map linearly onto the frame; capped at ~40% of the surface height.
     private func photoSection(maxHeight: CGFloat) -> some View {
         GeometryReader { proxy in
-            let width = min(proxy.size.width, proxy.size.height * 4 / 3)
-            let size = CGSize(width: width, height: width * 3 / 4)
+            let geometry = photoGeometry(in: proxy.size)
+            let size = geometry.photo
             ZStack {
-                photoLayer
+                photoLayer(size: size)
                 if let contours {
                     overlayLayer(contours: contours, size: size)
                 }
             }
             .frame(width: size.width, height: size.height)
+            .frame(width: geometry.box.width, height: geometry.box.height)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -281,11 +320,18 @@ struct MealReviewView: View {
     }
 
     @ViewBuilder
-    private var photoLayer: some View {
+    private func photoLayer(size: CGSize) -> some View {
         if let photo {
+            // The asset is the landscape buffer, so it is laid out landscape at
+            // the transposed size and given the one display turn; the outer
+            // frame puts the result back in the portrait slot. No crop either
+            // way — 4:3 turned into a 3:4 box is an exact fit.
             Image(uiImage: photo)
                 .resizable()
                 .scaledToFill()
+                .frame(width: size.height, height: size.width)
+                .rotationEffect(ReviewPhotoOrientation.displayRotation)
+                .frame(width: size.width, height: size.height)
         } else {
             // Req 1.6: rows and total render without the photo; never an error.
             ZStack {
@@ -355,14 +401,18 @@ struct MealReviewView: View {
     // contours use. `cornersImagePx` is TL TR BR BL in the pixel space that
     // indexes the label raster directly (QuadExclusion clears the card by
     // those very coordinates), so the raster's own dimensions normalise it —
-    // no second coordinate mapping. nil when no card was picked.
+    // no second coordinate mapping. The contours were turned upright at load,
+    // so the normalised quad takes the SAME `displayPoint` turn to land in the
+    // same unit square. nil when no card was picked.
     private func cardQuad(_ set: MaskContourSet) -> [CGPoint]? {
         guard let px = model.cardCornersImagePx, px.count == 8,
               set.rasterWidth > 0, set.rasterHeight > 0 else { return nil }
         let width = Double(set.rasterWidth)
         let height = Double(set.rasterHeight)
         return stride(from: 0, to: 8, by: 2).map {
-            CGPoint(x: Double(px[$0]) / width, y: Double(px[$0 + 1]) / height)
+            ReviewPhotoOrientation.displayPoint(
+                CGPoint(x: Double(px[$0]) / width, y: Double(px[$0 + 1]) / height)
+            )
         }
     }
 
@@ -478,12 +528,16 @@ struct MealReviewView: View {
         // Emit contours only for classes present in macros.perClass (Req 2.8);
         // presentClassIds still reports every raster class for the banners.
         let included = Set(model.foods.compactMap { model.classIndex(for: $0.classId) })
+        // The one rotation boundary for contour geometry: the cache keeps the
+        // buffer-space set, and this screen holds only the upright one. Every
+        // later reader — outlines, dimming, badges, the accessibility shadow,
+        // `handlePhotoTap` — therefore needs no turn of its own.
         contours = await MaskContourCache.shared.contours(
             store: store,
             mealId: record.id,
             paletteVersion: record.paletteVersion,
             includedClassIds: included
-        )
+        )?.uprightForDisplay()
     }
 
     // MARK: - Total row (Req 1.4, 8.6)

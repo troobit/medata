@@ -39,12 +39,26 @@ nonisolated enum DeveloperFlags {
     /// and recorded exactly as before.
     static let unlockObliqueTiltKey = "medata.debug.unlockObliqueTilt"
 
+    /// Meal review photo, attempt 2. The photo is upright either way; this
+    /// chooses what the upright 3:4 photo does with a screen that is wider than
+    /// it is tall at the 40% height budget. Off (attempt 1) shows the WHOLE
+    /// photo, centred, with empty gutters at the sides. On (attempt 2) widens
+    /// the photo to the full column and lets the rounded clip crop the top and
+    /// bottom away, so the food is larger but the edges of the scene are gone.
+    /// Overlays follow the photo in both: the contour unit square is always the
+    /// whole image, visible or clipped.
+    static let reviewPhotoFillsWidthKey = "medata.debug.reviewPhotoFillsWidth"
+
     static var forceNonLiDAR: Bool {
         UserDefaults.standard.bool(forKey: forceNonLiDARKey)
     }
 
     static var unlockObliqueTilt: Bool {
         UserDefaults.standard.bool(forKey: unlockObliqueTiltKey)
+    }
+
+    static var reviewPhotoFillsWidth: Bool {
+        UserDefaults.standard.bool(forKey: reviewPhotoFillsWidthKey)
     }
 }
 
