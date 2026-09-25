@@ -49,7 +49,22 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private(set) var lastOutcome: FieldNoteMealLink?
     #endif
     let indicators: LiveIndicatorModel
-    let supportsLiDAR: Bool
+    // Depth capability as ARKit reported it at launch.
+    private let deviceSupportsLiDAR: Bool
+    // What the rest of the app treats as "this phone has depth". Identical to
+    // `deviceSupportsLiDAR` in Release; in Debug the no-depth switch reports
+    // false so the whole non-LiDAR path — default mode, mode lock, telemetry,
+    // distance gate, `LiDARStatus.available` — behaves as it does on a phone
+    // without a scanner (two-view-trust Req 4.5). Read live rather than frozen
+    // at init so flipping the switch in Settings and re-opening Capture is
+    // enough; it is deliberately not an observable stored property, because
+    // nothing is expected to change while the Capture cover is on screen.
+    var supportsLiDAR: Bool {
+        #if DEBUG
+        if DeveloperFlags.forceNonLiDAR { return false }
+        #endif
+        return deviceSupportsLiDAR
+    }
     // Per-capture reference-card override (fork sheet §3.2). Seeds from the
     // `alwaysIncludeCard` default when the fork sheet opens; the sheet mutates it
     // for the next capture only. NOT persisted — it drives card-placement
@@ -164,7 +179,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.store = store
         self.photoSaver = photoSaver
         self.indicators = indicators
-        self.supportsLiDAR = supportsLiDAR
+        self.deviceSupportsLiDAR = supportsLiDAR
         self.databaseEdition = databaseEdition
         self.paletteVersion = paletteVersion
         self.segmenterSource = segmenterSource
@@ -175,7 +190,14 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // the capability-aware default (Req 16.2). `hasLiDAR` captures the Bool
         // param, keeping the closure @Sendable.
         let hasLiDAR = supportsLiDAR
-        self.captureModeReader = captureModeReader ?? { defaultCaptureModeReader(hasLiDAR: hasLiDAR) }
+        self.captureModeReader = captureModeReader ?? {
+            #if DEBUG
+            // A phone rehearsing the no-depth path defaults to two-view, the
+            // same fork a real non-LiDAR device takes on a fresh install.
+            if DeveloperFlags.forceNonLiDAR { return .double }
+            #endif
+            return defaultCaptureModeReader(hasLiDAR: hasLiDAR)
+        }
 
         evaluatePermissions()
         observeInterruptions(stream: interruptions)
@@ -214,7 +236,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // `EstimationFailure.noFoodPixels`. The second tap (mask now ready)
             // succeeded. Gating here turns that failed first shot into the
             // existing disabled-shutter "waiting" UX instead of a refusal.
-            return hasUsablePreShutterMask
+            return hasUsablePreShutterMask && !cardGateBlocking
         default:
             return false
         }
@@ -246,13 +268,71 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         return ts.foodPixelCount == 0
     }
 
+    // MARK: - ID-1 card gate and reminder (two-view-trust Req 4.3)
+
+    // The mode the next shutter tap will run, resolved the same way
+    // `shutter()` resolves it. Not observable (it reads UserDefaults), but the
+    // capture view re-evaluates its body whenever its own `@AppStorage` mirror
+    // of the same key changes, so every derived value below refreshes with it.
+    private var liveMode: CaptureMode { inFlightMode ?? captureModeReader() }
+
+    // A card is MANDATORY in two-view without depth: `Pipeline.estimate` takes
+    // the card-only scale branch on `nadir.depth == nil`, and with no card
+    // there is nothing left to set scale with.
+    private var cardIsRequired: Bool { liveMode == .double && !supportsLiDAR }
+
+    // A card is REQUESTED when the developer turned the fork sheet's
+    // `Include card` toggle on (seeded from `Always include card`). This is the
+    // reader `includeCardThisCapture` never had: having said a card is part of
+    // this capture, arming without one in view would take a photo that quietly
+    // is not the capture they asked for.
+    private var cardIsRequested: Bool { liveMode == .double && includeCardThisCapture }
+
+    // True while the nadir shutter is held for a card that is not in view.
+    // Only the nadir stage is gated: the pipeline reads the card off the nadir
+    // frame, so by the oblique tap the card question is already settled.
+    var cardGateBlocking: Bool {
+        guard firstFrame == nil, cardIsRequired || cardIsRequested else { return false }
+        return !hasFreshCardSighting
+    }
+
+    // Whether the pre-shutter producer should be running the per-frame card
+    // check at all. Driven onto the producer by `CaptureFlowView`; off, Vision
+    // never runs and the mask cadence is exactly what it is today.
+    var needsLiveCardDetection: Bool { cardIsRequired || cardIsRequested }
+
+    // 1500 ms rather than the mask's 750 ms: a card on a table does not move,
+    // the verdict is produced on the same ~2-3.5 Hz cycle as the mask, and a
+    // tighter bound made the shutter flicker between armed and held between two
+    // consecutive cycles. As with the mask gate, a model built without a
+    // producer (tests / legacy) is never permanently disarmed.
+    private var hasFreshCardSighting: Bool {
+        guard let producer = preShutterSegmenter else { return true }
+        guard let sighting = producer.latestCardSighting, sighting.detected else { return false }
+        return millisecondsBetween(sighting.producedAt, ContinuousClock.now) <= 1500
+    }
+
+    // The single-line card reminder iphone-experience Req 6.1 promised and
+    // two-view-trust Req 4.3 reopened. Shown in Double mode only (Req 6.2), on
+    // the nadir stage only, and never as reassurance: either the shutter is
+    // held for a missing card (`card needed`, the copy-inventory chip for "No
+    // LiDAR, no card") or the card is optional here and this says to lay one
+    // down. When a required card IS in view there is nothing to say, so the
+    // line disappears rather than congratulating the user.
+    var cardReminder: String? {
+        guard case .ready = state, firstFrame == nil, liveMode == .double else { return nil }
+        if cardGateBlocking { return "card needed" }
+        if cardIsRequired || cardIsRequested { return nil }
+        return "Include an ID-1 card"
+    }
+
     // True iff the live tilt is within the oblique hard cap window
     // (|Δθ − 25°| ≤ 15° — closeout-trail Decision 1). Used both by `canShutter`
     // and by the inline above-shutter message that surfaces when the user is on
     // the oblique stage but outside the cap.
     var obliqueTiltMessage: String? {
         guard firstFrame != nil, case .ready = state else { return nil }
-        if obliqueTiltOk(degrees: indicators.liveTiltDegrees) { return nil }
+        if obliqueTiltInBand(degrees: indicators.liveTiltDegrees) { return nil }
         // Copy inventory §2.1 clause: oblique guidance above the shutter reads
         // `Target 25°` — the same string as the §4 tilt hint.
         return "Target 25°"
@@ -272,6 +352,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             if !distanceGateOK(snapshot) { return "too far" }
             if firstFrame == nil, !hasFreshPreShutterMask { return "wait" }
             if firstFrame == nil, preShutterMaskIsEmpty { return "no food in view" }
+            if cardGateBlocking { return "card needed" }
             return nil
         default:
             return nil
@@ -332,6 +413,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // button when `canShutter` is false; this is the matching command-side
         // guard, consistent with the distance / oblique-tilt re-checks above.
         if firstFrame == nil, !hasUsablePreShutterMask {
+            return
+        }
+        // Same shape for the card gate (two-view-trust Req 4.3): without depth
+        // the card is the only scale, so a nadir frame taken with no card in it
+        // can only end in `noScaleAvailable`.
+        if firstFrame == nil, cardGateBlocking {
             return
         }
 
@@ -463,6 +550,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // lifetime counter accumulated before this presentation belongs to
         // earlier sessions, not to this session's first attempt.
         preShutterErrorBaseline = preShutterSegmenter?.segmentationErrorCount ?? 0
+        // Seed the per-capture card override from the stored default here, not
+        // only when the fork sheet is opened: otherwise `Always include card`
+        // in Settings produced no guidance at all until the fork sheet had been
+        // visited once in that session.
+        includeCardThisCapture = UserDefaults.standard.bool(forKey: SettingsKeys.alwaysIncludeCard)
         evaluatePermissions()
     }
 
@@ -721,7 +813,14 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         let tiltAtShutterDeg = indicators.liveTiltDegrees
         do {
             log.info("event=capture.start stage=\(stage.name, privacy: .public)")
-            let frame = try await capture(stage: stage)
+            var frame = try await capture(stage: stage)
+            #if DEBUG
+            // Req 4.5: the one mutation the no-depth switch makes to the data.
+            // Applied here, before anything reads the frame, so the stashed
+            // nadir, the persisted bundle and `Pipeline.estimate` all see the
+            // same depth-free frame a phone without a scanner would produce.
+            if DeveloperFlags.forceNonLiDAR { frame = frame.clearingDepth() }
+            #endif
             log.info("event=capture.end stage=\(stage.name, privacy: .public) success=true width=\(frame.imageWidth) height=\(frame.imageHeight)")
             guard !Task.isCancelled else { return }
             guard case .capturing = state else { return }
@@ -932,6 +1031,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     private func distanceGateOK(_ snapshot: GatingSnapshot) -> Bool {
+        #if DEBUG
+        // A phone rehearsing the no-depth path must not keep the depth-derived
+        // distance gate a real non-LiDAR phone does not have: there, ARKit
+        // publishes no distance at all and the guard below returns true.
+        if DeveloperFlags.forceNonLiDAR { return true }
+        #endif
         // No LiDAR ⇒ distance is guidance-only and does not gate (§3.2).
         guard let cm = snapshot.distanceCm else { return true }
         return cm >= 25 && cm <= 50
@@ -943,8 +1048,27 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // the nadir tilt gate was removed. The window was narrowed from ±30° to ±15°
     // after three device trails fired the oblique at ~50° and refused with
     // noFoodVolumeRecovered.
-    private func obliqueTiltOk(degrees: Float) -> Bool {
+    private func obliqueTiltInBand(degrees: Float) -> Bool {
         abs(degrees - 25) <= 15
+    }
+
+    // The band as a SHUTTER GATE, which is the only thing the developer-phase
+    // unlock changes. Measurement, the bubble level, `obliqueTiltMessage` and
+    // the recorded `obliqueAngleAtCaptureDeg` all keep reading the band, so an
+    // unlocked capture is still guided towards 25° and still records the angle
+    // it was actually taken at. Why the unlock exists: a synthetic control
+    // (exact silhouettes, real intrinsics, real baseline) carves a 337 cm^3 box
+    // as 801 cm^3 at 26°, 712 at 40° and 552 at 60° — two silhouette cones only
+    // close the top of the hull once h*tan(theta) exceeds the object's extent
+    // along the tilt direction, about 74° for that roll. The shipped 10-40°
+    // band therefore guarantees the hull never closes, and without depth
+    // nothing else bounds height. Measuring what a wider band buys needs a
+    // capture outside the band, which today the shutter refuses to take.
+    private func obliqueTiltOk(degrees: Float) -> Bool {
+        #if DEBUG
+        if DeveloperFlags.unlockObliqueTilt { return true }
+        #endif
+        return obliqueTiltInBand(degrees: degrees)
     }
 
     // Retained for the gating log: indicates whether the *displayed* tilt is

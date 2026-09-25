@@ -1,4 +1,5 @@
 import CaptureKit
+import CardDetection
 import Foundation
 import Pipeline
 #if canImport(ARKit) && os(iOS)
@@ -46,8 +47,22 @@ import os
 protocol PreShutterMaskSource: AnyObject {
     var latest: PreShutterSegmenter.TimestampedMask? { get }
     var segmentationErrorCount: Int { get }
+    /// Most recent live ID-1 card verdict, or nil when card detection has never
+    /// run. Only produced while `setCardDetectionEnabled(true)` is in force.
+    var latestCardSighting: PreShutterSegmenter.CardSighting? { get }
+    /// Turn the per-frame card check on or off. Off is the default and clears
+    /// any sighting, so a stale verdict can never arm a later capture.
+    func setCardDetectionEnabled(_ enabled: Bool)
     func pause()
     func awaitPaused() async
+}
+
+// Defaulted so the card gate is inert for any source that does not implement
+// it (the documentation-contract spies in `MeData/Tests/`), rather than making
+// every conformer carry a member it has no use for.
+extension PreShutterMaskSource {
+    var latestCardSighting: PreShutterSegmenter.CardSighting? { nil }
+    func setCardDetectionEnabled(_ enabled: Bool) {}
 }
 
 @MainActor
@@ -67,6 +82,15 @@ final class PreShutterSegmenter: PreShutterMaskSource {
         let foodPixelCount: Int
     }
 
+    /// One frame's answer to "is an ID-1 card in view right now". `detected`
+    /// means a rectangle candidate survived `CardPoseSolver.pick` — a P4P solve
+    /// against the real intrinsics with the ID-1 aspect baked in — not merely
+    /// that Vision found a quadrilateral.
+    struct CardSighting: Sendable {
+        let detected: Bool
+        let producedAt: ContinuousClock.Instant
+    }
+
     enum Source: String, Sendable {
         case preShutterStub = "pre_shutter_stub"
         case preShutterCoreML = "pre_shutter_coreml"
@@ -77,6 +101,18 @@ final class PreShutterSegmenter: PreShutterMaskSource {
     /// has a fresh mask candidate, subject to the 750 ms staleness gate
     /// applied by the consumer (Req 1.2).
     private(set) var latest: TimestampedMask?
+
+    /// Live card verdict (two-view-trust Req 4.3). Written by the same
+    /// inference cycle that publishes `latest`, so the card check inherits the
+    /// producer's cadence, its latest-wins coalescing and its off-MainActor
+    /// threading instead of standing up a second per-frame pipeline.
+    private(set) var latestCardSighting: CardSighting?
+
+    // Card detection is off unless the capture flow asks for it: it is only
+    // meaningful in Double mode on a phone without depth, or when the developer
+    // has asked for a card, and running Vision on every frame otherwise would
+    // cost the mask cadence for nothing.
+    private var isCardDetectionEnabled = false
 
     /// Number of times a publication arrived more than 500 ms after the
     /// previous one. Mirrors the DEBUG-only `preshutter.cadence.miss` Logger
@@ -119,15 +155,32 @@ final class PreShutterSegmenter: PreShutterMaskSource {
     private let segmenter: CoreMLSegmenter
     private let palette: ClassPalette
     private let source: Source
+    // Same instance App.swift wires into `Pipeline`, so the live gate and the
+    // shutter-time solve agree and the Vision request is warmed once.
+    private let cardDetector: (any CardDetector)?
 
     #if DEBUG
     private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
     #endif
 
-    init(segmenter: CoreMLSegmenter, palette: ClassPalette, source: Source) {
+    init(
+        segmenter: CoreMLSegmenter,
+        palette: ClassPalette,
+        source: Source,
+        cardDetector: (any CardDetector)? = nil
+    ) {
         self.segmenter = segmenter
         self.palette = palette
         self.source = source
+        self.cardDetector = cardDetector
+    }
+
+    func setCardDetectionEnabled(_ enabled: Bool) {
+        guard enabled != isCardDetectionEnabled else { return }
+        isCardDetectionEnabled = enabled
+        // Drop the verdict on the way out: a sighting from a mode the user has
+        // since left must not satisfy the gate when they come back.
+        if !enabled { latestCardSighting = nil }
     }
 
     #if canImport(ARKit) && os(iOS)
@@ -156,6 +209,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                     continue
                 }
                 guard !Task.isCancelled else { return }
+                await self?.runCardCycle(raw: raw)
                 await MainActor.run { self?.inflightSegmentCycles += 1 }
                 let startedAt = ContinuousClock.now
                 let segmentResult = try? await segmenter.segment(raw)
@@ -212,6 +266,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                 guard !Task.isCancelled else { return }
                 let shouldProcess = await MainActor.run { self?.isPaused == false }
                 guard shouldProcess else { continue }
+                await self?.runCardCycle(raw: raw)
                 await MainActor.run { self?.inflightSegmentCycles += 1 }
                 let startedAt = ContinuousClock.now
                 let segmentResult = try? await segmenter.segment(raw)
@@ -219,6 +274,39 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                 self?.finishSegmentCycle(result: segmentResult, latencyMs: latencyMs)
             }
         }
+    }
+
+    /// One card check on the frame this cycle already converted, run before the
+    /// segmenter because the verdict is what arms the shutter and the segment
+    /// call is the long pole. Detection plus the P4P solve is milliseconds
+    /// against the ~300 ms segment, so the mask cadence is unaffected; nothing
+    /// here touches the 400 MB protobuf path. No-ops unless the flow asked for
+    /// card detection, so a Single-mode or LiDAR-scaled session pays nothing.
+    private func runCardCycle(raw: RawFrame) async {
+        guard isCardDetectionEnabled, let detector = cardDetector else { return }
+        let detected = await Self.detectCard(raw: raw, detector: detector)
+        latestCardSighting = CardSighting(detected: detected, producedAt: ContinuousClock.now)
+        #if DEBUG
+        log.debug("event=preshutter.card.update detected=\(detected, privacy: .public)")
+        #endif
+    }
+
+    // Off-MainActor, for the same reason `makeRawFrame` is: Vision's rectangle
+    // pass plus the P4P solve must not run on the main actor at the pre-shutter
+    // cadence. `pick` is the same arbitration the pipeline runs at shutter
+    // time, so the gate cannot arm on a rectangle the pipeline would reject.
+    // `lidarMmPerPx` is deliberately omitted — the gate exists for the path
+    // where there is no depth to cross-check against. A throw is the
+    // `cardTooOblique` case: a card that is present but unusable, which is not
+    // a sighting.
+    private nonisolated static func detectCard(
+        raw: RawFrame, detector: any CardDetector
+    ) async -> Bool {
+        let candidates = await detector.detect(in: raw)
+        let solved = (try? CardPoseSolver.pick(
+            candidates: candidates, intrinsics: raw.intrinsics
+        )) ?? nil
+        return solved != nil
     }
 
     /// Fire-and-forget pause for non-async state-machine callsites

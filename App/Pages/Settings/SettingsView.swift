@@ -83,6 +83,11 @@ struct SettingsView: View {
     @State private var showsGlucoseSources = false
     @State private var isSeeding = false
     #if DEBUG
+    // Developer-phase capture switches (two-view-trust Req 4.5 and the oblique
+    // band measurement). `DeveloperFlags` and these two properties compile in
+    // Debug only, so Release builds the Settings form it built before.
+    @AppStorage(DeveloperFlags.forceNonLiDARKey) private var forceNonLiDAR = false
+    @AppStorage(DeveloperFlags.unlockObliqueTiltKey) private var unlockObliqueTilt = false
     @State private var isClearing = false
     @State private var confirmsClear = false
     @State private var isSeedingMeal = false
@@ -233,6 +238,19 @@ struct SettingsView: View {
             }
 
             #if DEBUG
+            Section("Developer") {
+                // Clears depth from every captured frame and reports the phone
+                // as having none, so the two-view + ID-1 card path runs on a
+                // LiDAR device. Two-view is then forced and the nadir shutter
+                // waits for a card.
+                Toggle("Capture without depth", isOn: $forceNonLiDAR)
+                    .accessibilityIdentifier("settings.forceNonLiDAR")
+                // Lets the oblique shutter fire at any tilt. The bubble level,
+                // the 25° guidance and the recorded angle are unchanged.
+                Toggle("Oblique tilt unlocked", isOn: $unlockObliqueTilt)
+                    .accessibilityIdentifier("settings.unlockObliqueTilt")
+            }
+
             Section {
                 Button {
                     seedDemoGlucose()

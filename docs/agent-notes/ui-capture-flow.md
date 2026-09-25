@@ -214,6 +214,65 @@ composition only; all behaviour is in the model and is unit-tested.
   the colourised `MaskOverlayLoader` bitmap in a 64 pt thumbnail, where a label
   would be illegible — so the marker is review-only. nil corners draw nothing.
 
+- **The ID-1 card has a live shutter gate now, and it rides the pre-shutter
+  segmenter rather than a second per-frame pipeline** (two-view-trust Req 4.3,
+  which reopened iphone-experience Req 6.1 / task 23 — `includeCardThisCapture`
+  had existed since the fork sheet landed with *no readers at all*, so nothing
+  had ever shipped). `PreShutterSegmenter` now takes the same `VisionCardDetector`
+  instance App.swift hands `Pipeline`, and its existing inference loop runs
+  `detect(in:)` + `CardPoseSolver.pick(candidates:intrinsics:)` on the RawFrame it
+  has already converted, publishing `latestCardSighting`. Three things about that
+  are load-bearing. It reuses the loop's `bufferingNewest(1)` coalescing, its
+  pause/drain and its off-MainActor hop (`detectCard` is `nonisolated static`,
+  the same shape as `makeRawFrame`) — adding a second `engine.frames` subscriber
+  would have leaked a continuation per resume, which is smolspec H4 all over
+  again. It runs only while `setCardDetectionEnabled(true)`, driven from
+  `CaptureFlowView` off `model.needsLiveCardDetection`, so a 1-view or
+  LiDAR-scaled session pays nothing and the mask cadence is untouched. And the
+  verdict is `pick`, not "Vision found a quadrilateral": the gate must not arm on
+  a rectangle the shutter-time solve would then reject, and a `cardTooOblique`
+  throw is deliberately *not* a sighting. Model side: `cardIsRequired`
+  (Double + no depth — `Pipeline.estimate` branches on `nadir.depth == nil`, so
+  without a card there is no scale at all) or `cardIsRequested`
+  (`includeCardThisCapture`, finally its reader) arms `cardGateBlocking`, which
+  holds the NADIR shutter only — the card is read off the nadir frame, so by the
+  oblique tap the question is settled — and names itself `card needed` in
+  `failingShutterGate`. `cardReminder` is the one-line Double-mode surface
+  (`hint.card`): `card needed` while held, `Include an ID-1 card` when the card
+  is optional, and nothing once a required card is in view. Freshness is 1500 ms,
+  not the mask's 750 ms: a card on a table does not move and a tighter bound
+  flickered the shutter between two consecutive cycles. `capturePresented()` now
+  seeds `includeCardThisCapture` from `SettingsKeys.alwaysIncludeCard` — before,
+  the Settings default produced no guidance until the fork sheet had been opened
+  once.
+
+- **Two developer-phase capture switches live in `App/Shared/DeveloperFlags.swift`
+  and Settings › Developer, and the whole file plus every call site is `#if DEBUG`.**
+  They are `UserDefaults`-backed rather than compile-time flags on purpose:
+  `HARNESS_ENABLED` / `DEV_STUB_SEGMENTER` gate code that must not be *compiled*
+  into the shipping binary, whereas these are flipped between two captures while
+  standing over a plate, so Release compiles nothing at all and there is no
+  branch to fold. **`Capture without depth`** (Req 4.5) makes `supportsLiDAR` a
+  computed property that returns false, and `performFlow` calls
+  `RawFrame.clearingDepth()` on the captured frame before anything reads it —
+  that one mutation is what puts `Pipeline.estimate` on the card branch, and it
+  also forces two-view, locks the mode button, drops the depth-derived distance
+  gate (a real non-LiDAR phone publishes no distance) and sets
+  `LiDARStatus.available = false`. Without it the non-LiDAR path is simply
+  unreachable on an iPhone 16 Pro. **`Oblique tilt unlocked`** splits the old
+  `obliqueTiltOk` into `obliqueTiltInBand` (measurement / `obliqueTiltMessage` /
+  bubble level / the recorded `obliqueAngleAtCaptureDeg`, all unchanged) and
+  `obliqueTiltOk` (the shutter gate alone, the only thing the switch touches).
+  It exists because the shipped band is |Δθ − 25°| ≤ 15°, i.e. 10–40°, and a
+  synthetic control measured 2026-09-25 (exact silhouettes, real intrinsics,
+  real baseline) carves a 337 cm³ box as 801 cm³ at 26°, 712 at 40° and 552 at
+  60° — two silhouette cones close the top of the hull only once h·tan(θ)
+  exceeds the object's extent along the tilt direction, about 74° for that roll.
+  So the band guarantees the hull never closes and, with no depth, leaves height
+  unbounded; measuring what a wider band buys needs a capture the shutter
+  currently refuses to take. Do not read the switch as a decision to widen the
+  band — nothing about how the tilt is measured, shown or recorded moved.
+
 - **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
 
 
