@@ -26,6 +26,13 @@ public struct MetricScale: Sendable, Equatable, Codable {
 public enum MetricScaleResolver {
     // ε floor per Req 13.1 (sub-confidence floor used by σ_meal aggregation).
     public static let sigmaFloor: Float = 0.05
+    // A detected rectangle whose scale disagrees with LiDAR by more than this
+    // is not the card (two-view-trust Req 4.1): plate rims and packaging pass
+    // Vision's ID-1 aspect envelope and read 17–66 % off on the 2026-09-24
+    // bundles, where a real card on the table sits within a few per cent of
+    // the food plane. Such a rectangle is dropped and the result is the
+    // LiDAR-only one, so a false card can never raise σ_scale.
+    public static let maxCardLidarDisagreement: Float = 0.15
 
     // Both inputs are mm/pixel at the food plane. Pass nil for an unavailable signal.
     public static func resolve(
@@ -35,8 +42,10 @@ public enum MetricScaleResolver {
         switch (cardScaleMmPerPx, lidarScaleMmPerPx) {
         case let (s_card?, s_lidar?):
             // Symmetric-agreement form per §6.4 (M4 fix).
-            let avg = (s_card + s_lidar) / 2
-            let disagreement = avg > 0 ? abs(s_lidar - s_card) / avg : 1
+            let disagreement = Self.disagreement(s_card, s_lidar)
+            if disagreement > maxCardLidarDisagreement {
+                return try resolve(cardScaleMmPerPx: nil, lidarScaleMmPerPx: s_lidar)
+            }
             let a = 1 - min(1, disagreement)
             let sigma = clampSigma(0.85 + 0.15 * a)
             return MetricScale(
@@ -62,6 +71,13 @@ public enum MetricScaleResolver {
         case (nil, nil):
             throw MetricScaleError.noScaleAvailable
         }
+    }
+
+    /// Symmetric relative disagreement between two mm/px scales, 1 when
+    /// their mean is not positive.
+    public static func disagreement(_ a: Float, _ b: Float) -> Float {
+        let avg = (a + b) / 2
+        return avg > 0 ? abs(a - b) / avg : 1
     }
 
     @inline(__always)
