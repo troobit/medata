@@ -184,23 +184,28 @@ Why the class-count gate of Decision 5 was replaced: the segmenter splits
 one roll into bread_white + bread_wholemeal + unknown_food across one blob
 (`1790315734391` oblique: 31 k / 20 k / 22 k px in a single component).
 
-**The ID-1 card is the second object in every 2026-09-25 afternoon two-view
-capture.** On `1790315734391` and `1790315814452` each view has exactly two
-carvable components: the roll and a ~210 × 310 px `unknown_food` blob at the
-card's position (`HarnessCLI cards` picks the card there: residual 3.35 /
-1.13 px, disagreement 4 %). The largest component holds 74 % / 64 % and
-74 % / 90 % of the carvable pixels (nadir / oblique), unchanged up to a
-48 px dilation, so the gate correctly says "two objects". On device the
-picked card is cleared from the nadir (Req 4.6, nadir half) but not from
-the oblique (task 8), so the oblique stays two-object and the capture keeps
-its extra rows. The two-view replay in `FixtureRunner` runs no card
-exclusion at all, so replays of card captures differ from the device until
-that is mirrored. With the card box blanked in both views (scratch replay,
-β = 1) each bundle carves one row: bread_white 804 cm³ and bread_wholemeal
-770 cm³ (three rows before: 84 + 61 + 795 and 38 + 762 + 229); the plane fit
-also moves from `edgeBand` to `foodSupport` once the card pixels leave the
-mask. Single-view `1790315900185`: bread_wholemeal 289 + unknown_food 121 →
-bread_wholemeal 410 cm³ (growth leak still included).
+**The ID-1 card was the second object in every 2026-09-25 afternoon
+two-view capture.** On `1790315734391` and `1790315814452` each view had
+exactly two carvable components: the roll and a ~210 × 310 px `unknown_food`
+blob at the card's position (`HarnessCLI cards` picks the card there:
+residual 3.35 / 1.13 px, disagreement 4 %). The largest component held
+74 % / 64 % and 74 % / 90 % of the carvable pixels (nadir / oblique),
+unchanged up to a 48 px dilation, so the gate correctly said "two objects".
+The nadir quad was already cleared on device (Req 4.6, nadir half); the
+oblique half (task 8, 2026-09-25) now clears the card there too:
+`CardPose.cornersCameraMm` (the ISO 7810 model corners through R·X + t, mm,
+§6.0 nadir frame) go through `t1to2` and the oblique intrinsics in
+`PipelineBridges.projectToOblique`, and `excluding(quad:)` clears the
+result; the card block records `obliqueClearedPixels` and the Shutter log
+prints `event=card view=oblique`. `FixtureRunner` now runs the same card
+pick (`pickCard`: Vision on the stored nadir PNG, `CardPoseSolver.pick`
+with the LiDAR scale at the first plane) and the same nadir/oblique
+clearing on both replay paths; `run(cardExclusion: false)` replays without
+it. With it, each bundle is one carved row (β = 1): `1790315734391`
+bread_white 920 cm³ (was 90 + 63 + 1049), `1790315814452` bread_wholemeal
+930 cm³ (was 41 + 741 + 264), `1790310086654` bread_wholemeal 851 cm³ (was
+315 + 402 + 81). Single-view `1790315900185`: bread_wholemeal 289 +
+unknown_food 121 → bread_wholemeal 410 cm³ (growth leak still included).
 
 The carved numbers stay 2–3× the roll (~12 × 7 × 4 cm) because the nadir
 silhouette is wider than the roll and an oblique ~26° from vertical bounds

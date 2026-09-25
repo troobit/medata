@@ -56,7 +56,7 @@ final class EstimationAttemptRecordTests: XCTestCase {
                                 foodPixelsBefore: 13_824, foodPixelsAfter: 193_536,
                                 refitReference: "foodSupport", refitRefused: false),
             card: .init(pnpResidualPx: 1.4, distanceMm: 402.5, scaleMmPerPx: 0.21,
-                        lidarDisagreement: 0.05, clearedPixels: 38_210),
+                        lidarDisagreement: 0.05, clearedPixels: 38_210, obliqueClearedPixels: 41_006),
             cardCandidateCount: 3,
             twoViewReconciliation: .init(nadirClasses: [34], obliqueClasses: [3, 4, 34],
                                          nadirSingleObject: true, obliqueSingleObject: true,

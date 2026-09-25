@@ -38,6 +38,15 @@ public struct CardPose: Sendable, Equatable {
     public let cardNormalCameraFrame: Vec3   // r_3, oriented per §6.1 step 8
 }
 
+extension CardPose {
+    /// The four ISO 7810 model corners (TL, TR, BR, BL) mapped by the pose,
+    /// p = R·X + t, in mm in the §6.0 camera frame. The model order is fixed,
+    /// so this does not depend on the pixel-corner order `solve` normalised.
+    public var cornersCameraMm: [Vec3] {
+        ISO7810.cornersMm.map { CardPoseSolver.applyR(rotationColumnMajor, to: Vec3($0.x, $0.y, 0)) + translationMm }
+    }
+}
+
 public enum CardPoseSolver {
     // Mean reprojection error above which a rectangle is not an ID-1 card.
     // Harness `cards` on the corpus: real cards solve at 2.7–14 px, plate
