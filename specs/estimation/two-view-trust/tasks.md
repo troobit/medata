@@ -33,7 +33,7 @@ references:
 
 - [x] 12. The review outline shades the accepted card's quadrilateral as the reference, distinct from food (owner note 2026-09-25)
 
-- [ ] 13. A card-only capture that refuses for want of a support plane says so, not noScaleAvailable (Pipeline.swift:880)
+- [x] 13. A card-only capture that refuses for want of a support plane says so, not noScaleAvailable (Pipeline.swift:880)
 
 ## User-identified regions
 
@@ -47,7 +47,7 @@ references:
 
 - [x] 17. The carve's silhouette test agrees with the regularised argmax the rest of the pipeline uses (28 % halo, −217 cm³)
 
-- [ ] 18. A two-view estimate taken without depth is flagged degraded on the row and in review, and its carb figure is not offered for dosing (Decision 8)
+- [x] 18. A two-view estimate taken without depth is flagged degraded on the row and in review, and its carb figure is not offered for dosing (Decision 8)
 
 - [x] 19. Developer-phase shutter arms outside the 10–40° tilt band so a near-side-on oblique can be captured (Decision 8 experiment)
 
