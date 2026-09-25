@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+	/* Brand colours per constitution §10 */
+	--color-brand-accent: #63ff00;
+	--color-brand-background: #064e3b;
+	--color-primary-background: #0a0a0a;
+}

@@ -52,6 +52,9 @@ SYSTEM_DARK = {
 }
 
 _TOKEN = re.compile(r"^\s*static let (\w+)\s*=\s*(.+?)\s*$")
+# Every declaration, whether or not its value shares the line. Used only to
+# prove that _TOKEN did not silently skip one.
+_DECL = re.compile(r"^\s*static let (\w+)\b")
 _MARK = re.compile(r"^\s*// MARK: -\s*(.+?)\s*$")
 
 _CHANNEL = r"(?:0x([0-9A-Fa-f]{1,2})\s*/\s*255|([0-9.]+))"
@@ -141,9 +144,16 @@ def css_value(r: int, g: int, b: int, a: float) -> str:
 
 
 def parse(swift_text: str) -> list:
-    """Return an ordered list of ("mark", title) and ("token", ...) entries."""
+    """Return an ordered list of ("mark", title) and ("token", ...) entries.
+
+    A declaration whose right-hand side is wrapped onto the next line matches
+    `_DECL` but not `_TOKEN`, so it would silently yield no token and exit 0 —
+    the one failure mode that produces a wrong-but-green run in a generator
+    whose whole justification is that it cannot drift. Count both and refuse.
+    """
     entries = []
     known = {}
+    declared = [m.group(1) for m in (_DECL.match(l) for l in swift_text.splitlines()) if m]
     for line in swift_text.splitlines():
         mark = _MARK.match(line)
         if mark:
@@ -156,6 +166,15 @@ def parse(swift_text: str) -> list:
         r, g, b, a, note = resolve(expr, known)
         known[name] = (r, g, b, a, note)
         entries.append(("token", name, expr, css_value(r, g, b, a), note))
+
+    parsed = [e[1] for e in entries if e[0] == "token"]
+    if len(parsed) != len(declared):
+        missed = [n for n in declared if n not in set(parsed)]
+        raise UnknownForm(
+            "declared=%d parsed=%d missed=%s — a `static let` whose value is not "
+            "on the same line is not parsed; put it on one line"
+            % (len(declared), len(parsed), ",".join(missed) or "?")
+        )
     return entries
 
 

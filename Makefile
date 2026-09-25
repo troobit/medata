@@ -41,7 +41,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell surfaces worktree harness-accuracy
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell surfaces wireshot worktree harness-accuracy
 
 help:
 	@echo "MeData targets:"
@@ -53,7 +53,9 @@ help:
 	@echo "  surfaces             Surface catalogue lint (tools/check_surfaces.sh):"
 	@echo "                       design-system/surfaces.md vs the structs and state"
 	@echo "                       enums in App/ + MeData/MeDataWidgets/. Prints"
-	@echo "                       covered=N total=M and a report-only layer listing"
+	@echo "                       covered=N total=M and a report-only layer listing."
+	@echo "                       Also checks design-system/tokens.css is not stale"
+	@echo "                       against App/Colors.swift"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
 	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
@@ -108,6 +110,16 @@ spell:
 # advisory — it prints today's UI↔data imports and never fails the target.
 surfaces:
 	bash tools/check_surfaces.sh
+	python3 tools/design_tokens/tokens_to_css.py --check
+
+# Render a wireframe option to a PNG at true iPhone 16 Pro metrics, so the
+# person authoring an option can see it without a device build. This does not
+# replace the on-device gate — see the header of tools/wireshot.sh.
+#
+#   make wireshot SURFACE=insulin-dose [ATTEMPT=2] [OUT_DIR=tmp/wireshot]
+wireshot:
+	@SURFACE="$(SURFACE)" ATTEMPT="$(ATTEMPT)" OUT_DIR="$(or $(OUT_DIR),tmp/wireshot)" \
+	  bash tools/wireshot.sh
 
 # Replay recorded capture bundles through the offline accuracy harness.
 # Pull bundles off the device first (Files app, or the devicectl recipe in
