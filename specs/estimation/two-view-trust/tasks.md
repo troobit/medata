@@ -43,9 +43,9 @@ references:
 
 ## Carve height
 
-- [ ] 16. The voxel grid's vertical extent is bounded by the LiDAR-measured food height, not a constant (backlog 29)
+- [x] 16. The voxel grid's vertical extent is bounded by the LiDAR-measured food height, not a constant (backlog 29)
 
-- [ ] 17. The carve's silhouette test agrees with the regularised argmax the rest of the pipeline uses (28 % halo, −217 cm³)
+- [x] 17. The carve's silhouette test agrees with the regularised argmax the rest of the pipeline uses (28 % halo, −217 cm³)
 
 - [ ] 18. A two-view estimate taken without depth is flagged degraded on the row and in review, and its carb figure is not offered for dosing (Decision 8)
 
