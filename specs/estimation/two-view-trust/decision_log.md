@@ -145,3 +145,38 @@ One real capture with a known planar object in both views is the test the requir
 - The two-view label split (nadir wholemeal, oblique white on the same roll) is now the visible blocker on every two-view estimate.
 
 ---
+
+## Decision 5: Reconcile the two views to one class before the carve; a named class beats unknown, the nadir beats the oblique
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+With the transform verified (Decision 4) and the card cleared (Decision 3), every two-view capture of the roll still produced two rows: `1790310086654` gave bread_wholemeal (nadir) + bread_white (oblique), `1790313381100` gave unknown_food 1008 cm³ (nadir) + bread_wholemeal 289 cm³ (oblique). `MaskMatcher` matches classes by label only, so a roll the segmenter names differently in the two views never has a matched class, the carve has nothing to intersect, and each view's class is extruded alone at the 30 mm prior. The owner's note on the second: "1 seems correct, but is perhaps 100 % obscured by 2 unknown food."
+
+### Decision
+
+Before `MaskMatcher`, a reconciliation pass in Volume relabels both views to one carvable class when each view carries at most one named carvable class (unknown_food patches do not count): the chosen class is the named one when only one view has a name, the nadir's when both do, and the user's when Req 3 supplies one. Every carvable pixel in both views moves to that class, in the label map and in the probability tensor (mass of the other carvable channels added to the chosen channel), so the carve sees one matched class with both silhouettes. Views with two or more named classes are left alone (Req 2.3) and the row records `twoViewReconciliation {nadirClasses, obliqueClasses, chosenClass, applied}`.
+
+### Rationale
+
+The two-view path exists to carve, and the carve needs one class present in both views; on a single-food plate the two labels are the same object by construction, so unifying them is the honest reading of the photos. Preferring the named class over unknown_food keeps the nutrition lookup the segmenter did manage, and the user can still rename in review (unknown-food-nameable). Moving probability mass rather than only labels is required because the carve's silhouette test reads the background probability and its per-voxel class from the class channels. Relabelling in the tensors keeps `MaskMatcher` and `VoxelCarveEstimator` unchanged.
+
+### Alternatives Considered
+
+- **Take the nadir's class always (the original Req 2.1 wording)**: Rejected; on `1790313381100` the nadir said unknown_food and the oblique bread_wholemeal, so the rule would have thrown away the only name the segmenter produced.
+- **Match by projected silhouette overlap instead of class count**: Deferred; it is what multi-food plates need (Req 2.3), and it needs the transform in the matcher. The single-named-class gate covers every two-view capture in the corpus today.
+- **Carve class-agnostically and assign the class afterwards**: Rejected; a larger change to the carve for the same result on single-food plates.
+
+### Consequences
+
+**Positive:**
+- A single-food two-view capture yields one row from the carve, with both silhouettes, for the first time.
+- The row says what was reconciled, so a wrong merge is auditable.
+
+**Negative:**
+- Two named classes in one view disable the pass; a plate of roll plus butter still splits until instance matching exists.
+- A confidently wrong nadir name overrides a right oblique name; the review's rename is the remedy.
+
+---
