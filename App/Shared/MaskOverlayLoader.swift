@@ -250,7 +250,12 @@ enum MaskOverlayDecoder {
             }
             if !contours.isEmpty { byClass[classId] = contours }
         }
-        return MaskContourSet(presentClassIds: present, contoursByClassId: byClass)
+        return MaskContourSet(
+            presentClassIds: present,
+            contoursByClassId: byClass,
+            rasterWidth: full.width,
+            rasterHeight: full.height
+        )
     }
 
     // Nearest-neighbour downsample to <= `longEdge` on the long side. Class
@@ -464,6 +469,14 @@ nonisolated struct MaskContourSet: Sendable {
     // Boundary loops keyed by class index, only for the classes the caller
     // included (Req 2.8).
     let contoursByClassId: [Int: [MaskContour]]
+    // The FULL-resolution label raster's dimensions, before the contour
+    // downsample. This is the pixel space the pipeline's own image-pixel
+    // geometry is expressed in (`QuadExclusion` indexes the argmax with the
+    // card's `cornersImagePx` directly), so a caller holding such a quad
+    // normalises it with these and lands in the same unit square the contours
+    // already use (two-view-trust task 12).
+    let rasterWidth: Int
+    let rasterHeight: Int
 }
 
 // Off-MainActor decode with a per-meal cache for the contour path. The

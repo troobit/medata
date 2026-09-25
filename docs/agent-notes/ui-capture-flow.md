@@ -188,6 +188,32 @@ composition only; all behaviour is in the model and is unit-tested.
   `specs/ui/design-handoff-00/copy-inventory.md`) never defines a "too close"
   string to invert, so a mislabelled direction was never the right diagnosis
   here.
+- **The review outline marks the ID-1 card as a reference, and that marker is
+  driven off the OUTCOME ROW, not the mask.** An accepted card's quadrilateral is
+  cleared to background before volume (two-view-trust Req 4.6), so the mask
+  carries no trace of it — the outline just showed an unexplained hole. The quad
+  arrives instead as `EstimationAttemptRecord.CardMeasurements.cornersImagePx`
+  (eight floats, TL TR BR BL) inside the outcome row's `measurements` JSON;
+  `MealReviewModel.resolveOutcomeID()` decodes it into `cardCornersImagePx`, and
+  `MealReviewView.cardReference` draws a muted neutral fill with a DASHED neutral
+  edge plus a `Reference card` capsule. Two things make it non-obvious:
+  - **The coordinate space is the label raster's, not the photo's.**
+    `cornersImagePx` indexes the argmax directly (`QuadExclusion` clears by those
+    very pixel coordinates), so it is normalised by `MaskContourSet.rasterWidth/
+    rasterHeight` — added for exactly this — and then lands in the same unit
+    square the contours already use. Do NOT normalise by the displayed photo or
+    by a hard-coded 1920x1440.
+  - **The outcome row is written by a detached task**, so on a just-captured meal
+    it can still be in flight when the review appears. `resolveOutcomeID()` now
+    retries once after 500 ms; without it both the card marker and the capture
+    bundle link intermittently resolved to nothing on the first push.
+  The distinctness is by construction, not by taste: every food colour comes off
+  `ClassColourTable` at saturation 0.62, so the desaturated `Color.referenceMarker`
+  cannot collide with any of the 35, and every food edge is solid, so the dash is a
+  second independent channel. `ResultView` does NOT share this overlay — it stacks
+  the colourised `MaskOverlayLoader` bitmap in a 64 pt thumbnail, where a label
+  would be illegible — so the marker is review-only. nil corners draw nothing.
+
 - **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
 
 

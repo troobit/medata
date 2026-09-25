@@ -336,6 +336,9 @@ struct MealReviewView: View {
                         )
                 }
             }
+            if let quad = cardQuad(set) {
+                cardReference(quad: quad, size: size)
+            }
             // VoiceOver shadow layer (Req 2.6): one element per detected food,
             // focus ring following the contour rather than a bounding box.
             accessibilityShadow(items: items)
@@ -346,6 +349,56 @@ struct MealReviewView: View {
                 handlePhotoTap(at: value.location, items: items, size: size)
             }
         )
+    }
+
+    // The accepted ID-1 card's quadrilateral in the same unit square the
+    // contours use. `cornersImagePx` is TL TR BR BL in the pixel space that
+    // indexes the label raster directly (QuadExclusion clears the card by
+    // those very coordinates), so the raster's own dimensions normalise it —
+    // no second coordinate mapping. nil when no card was picked.
+    private func cardQuad(_ set: MaskContourSet) -> [CGPoint]? {
+        guard let px = model.cardCornersImagePx, px.count == 8,
+              set.rasterWidth > 0, set.rasterHeight > 0 else { return nil }
+        let width = Double(set.rasterWidth)
+        let height = Double(set.rasterHeight)
+        return stride(from: 0, to: 8, by: 2).map {
+            CGPoint(x: Double(px[$0]) / width, y: Double(px[$0 + 1]) / height)
+        }
+    }
+
+    // The card marked as the REFERENCE it is, not as a detected food
+    // (two-view-trust task 12, owner note 2026-09-25). Its pixels are cleared
+    // to background before volume, so without this the outline shows an
+    // unexplained hole where the card lay. Muted neutral fill plus a dashed
+    // neutral edge: every food colour comes off the ClassColourTable wheel at
+    // saturation 0.62, and every food edge is solid, so neither channel can be
+    // confused with a region. Purely informational — no tap target, so a tap
+    // over the card still deselects like any other empty area.
+    private func cardReference(quad: [CGPoint], size: CGSize) -> some View {
+        let centroid = CGPoint(
+            x: quad.reduce(0) { $0 + $1.x } / Double(quad.count),
+            y: quad.reduce(0) { $0 + $1.y } / Double(quad.count)
+        )
+        return ZStack {
+            CardQuadShape(unitPoints: quad)
+                .fill(Color.referenceMarkerFill)
+            CardQuadShape(unitPoints: quad)
+                .stroke(
+                    Color.referenceMarker,
+                    style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+                )
+            Text("Reference card")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.referenceMarker)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.captureScrim, in: Capsule())
+                // Pinned to photo geometry, which does not scale with type
+                // size — the same cap the contour badge takes.
+                .dynamicTypeSize(...DynamicTypeSize.large)
+                .position(x: centroid.x * size.width, y: centroid.y * size.height)
+        }
+        .allowsHitTesting(false)
     }
 
     private func strokeColour(for food: ReviewFood) -> Color {
@@ -1062,6 +1115,23 @@ struct MaskContourShape: Shape {
             x: rect.minX + point.x * rect.width,
             y: rect.minY + point.y * rect.height
         )
+    }
+}
+
+// A closed quadrilateral from four unit-square points, scaled onto the drawn
+// rect with the same mapping MaskContourShape uses — so the card marker moves
+// and scales with the photo exactly as the food outlines do.
+struct CardQuadShape: Shape {
+    let unitPoints: [CGPoint]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard unitPoints.count >= 3 else { return path }
+        path.addLines(unitPoints.map {
+            CGPoint(x: rect.minX + $0.x * rect.width, y: rect.minY + $0.y * rect.height)
+        })
+        path.closeSubpath()
+        return path
     }
 }
 

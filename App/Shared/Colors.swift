@@ -46,6 +46,16 @@ extension Color {
     static let placeholderBG = Color(uiColor: .systemYellow)
     static let placeholderFG = Color.black
 
+    // MARK: - Reference marker (two-view-trust task 12)
+
+    // The accepted ID-1 card on the review outline. Every food colour comes
+    // off the ClassColourTable wheel at a fixed saturation 0.62 / brightness
+    // 0.90, so a DESATURATED marker is distinct from all 35 of them by
+    // construction — no hue can collide. It also reads as chrome rather than
+    // as a detected region, which is exactly what the card is.
+    static let referenceMarker = Color(white: 0.92)
+    static let referenceMarkerFill = Color.white.opacity(0.14)
+
     // MARK: - Trends chart (Decision 12, design-handoff-00)
 
     // Glucose line series on the Trends chart — sensor readings only, since
