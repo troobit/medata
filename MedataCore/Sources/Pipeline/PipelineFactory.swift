@@ -33,7 +33,8 @@ extension Pipeline {
         cardDetector: any CardDetector,
         palette: ClassPalette = .standard,
         supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
-        bundleRecorder: CaptureBundleRecorder? = nil
+        bundleRecorder: CaptureBundleRecorder? = nil,
+        obliqueTiltCapDeg: Float = Pipeline.defaultObliqueTiltCapDeg
     ) throws -> Pipeline {
         let foods = try GRDBFoodDatabase.bundled()
         let segmenter = try makeSegmenter(palette: palette)
@@ -44,7 +45,8 @@ extension Pipeline {
             store: store,
             supportPlaneFitter: supportPlaneFitter,
             segmenterSource: segmenterSourceTag(for: segmenter),
-            bundleRecorder: bundleRecorder
+            bundleRecorder: bundleRecorder,
+            obliqueTiltCapDeg: obliqueTiltCapDeg
         )
     }
 

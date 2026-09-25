@@ -148,10 +148,18 @@ struct MedataApp: App {
         let capturesDir = URL.documentsDirectory.appendingPathComponent(
             "captures", isDirectory: true
         )
+        // The shutter's tilt unlock is useless on its own: the pipeline refuses
+        // |oblique − 25°| > 30° after the fact, which is how a 71° capture was
+        // thrown away on 2026-09-25. The switch lifts both or neither.
+        var obliqueTiltCap = Pipeline.defaultObliqueTiltCapDeg
+        #if FIELD_LOOP
+        if DeveloperFlags.unlockObliqueTilt { obliqueTiltCap = 90 }
+        #endif
         let pipeline = try! Pipeline.makeForDevice(
             store: store,
             cardDetector: cardDetector,
-            bundleRecorder: CaptureBundleRecorder(directoryURL: capturesDir)
+            bundleRecorder: CaptureBundleRecorder(directoryURL: capturesDir),
+            obliqueTiltCapDeg: obliqueTiltCap
         )
         #if FIELD_LOOP
         // The note window is outside AppRoot's view tree, so the store and the
