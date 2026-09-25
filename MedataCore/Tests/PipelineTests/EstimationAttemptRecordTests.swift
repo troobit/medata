@@ -58,7 +58,8 @@ final class EstimationAttemptRecordTests: XCTestCase {
             card: .init(pnpResidualPx: 1.4, distanceMm: 402.5, scaleMmPerPx: 0.21,
                         lidarDisagreement: 0.05, clearedPixels: 38_210),
             cardCandidateCount: 3,
-            twoViewReconciliation: .init(nadirClasses: [34], obliqueClasses: [4],
+            twoViewReconciliation: .init(nadirClasses: [34], obliqueClasses: [3, 4, 34],
+                                         nadirSingleObject: true, obliqueSingleObject: true,
                                          chosenClass: 4, applied: true)
         )
     }

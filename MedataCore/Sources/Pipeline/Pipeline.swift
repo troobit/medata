@@ -394,6 +394,12 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.lidarUnavailableMidCapture
             }
+            // One connected object with unknown patches or a split name is
+            // one row (two-view-trust Req 2.1). The bundle keeps the raw map.
+            let reconciled = ObjectReconciler.reconcile(nadir: nadirSeg, palette: palette, userClass: nil)
+            Self.logReconciliation(reconciled.reconciliation, diagnostics: diagnostics)
+            let nadirSeg = reconciled.nadir
+            measuredArgmax = nadirSeg.argmax
             // Depth-grown food region (depth-grown-food-region Req 1–4): grow
             // the segmenter's food-like regions into the raised slab around
             // them, then refit the plane from the grown mask so the contact
@@ -556,18 +562,9 @@ public struct Pipeline: Sendable {
             // Both views relabelled to one carvable class so the carve has a
             // matched class with both silhouettes (two-view-trust Req 2.1).
             // The bundle keeps the raw segmenter outputs assigned above.
-            let reconciled = TwoViewReconciler.reconcile(
+            let reconciled = ObjectReconciler.reconcile(
                 nadir: nadirSeg, oblique: rawObliqueSeg, palette: palette, userClass: nil)
-            let reconciliation = reconciled.reconciliation
-            diagnostics.recordTwoViewReconciliation(reconciliation)
-            supportPlaneLog.info(
-                """
-                event=two_view.reconcile applied=\(reconciliation.applied, privacy: .public) \
-                nadir=\(reconciliation.nadirClasses, privacy: .public) \
-                oblique=\(reconciliation.obliqueClasses, privacy: .public) \
-                chosen=\(String(describing: reconciliation.chosenClass), privacy: .public)
-                """
-            )
+            Self.logReconciliation(reconciled.reconciliation, diagnostics: diagnostics)
             let nadirSeg = reconciled.nadir
             let obliqueSeg = reconciled.oblique
             let matching = MaskMatcher.match(
@@ -911,6 +908,20 @@ public struct Pipeline: Sendable {
     // behaviour). `nil` cannot occur when `estimate` is nil per the
     // VolumeOutcome contract; noFoodVolumeRecovered is the conservative
     // fallback if it ever does.
+    private static func logReconciliation(_ r: TwoViewReconciliation, diagnostics: PipelineDiagnostics) {
+        diagnostics.recordTwoViewReconciliation(r)
+        supportPlaneLog.info(
+            """
+            event=object.reconcile applied=\(r.applied, privacy: .public) \
+            nadir=\(r.nadirClasses, privacy: .public) \
+            nadirSingle=\(r.nadirSingleObject, privacy: .public) \
+            oblique=\(String(describing: r.obliqueClasses), privacy: .public) \
+            obliqueSingle=\(String(describing: r.obliqueSingleObject), privacy: .public) \
+            chosen=\(String(describing: r.chosenClass), privacy: .public)
+            """
+        )
+    }
+
     private static func estimationFailure(fromVolumeRefusal refusal: VolumeError?) -> any Error {
         switch refusal {
         case .lidarCoverageTooLow(let classes):

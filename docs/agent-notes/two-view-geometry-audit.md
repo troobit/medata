@@ -161,27 +161,48 @@ Vision returns on the device path to the pixel. What it measured on the two
   `FixtureRunner` requires depth. Card *detection* replays (above); the
   card-only plane fit and the carve it would feed do not.
 
-## 5. Cross-view reconciliation (2026-09-25, two-view-trust Decision 5)
+## 5. Object reconciliation before volume (2026-09-25, two-view-trust Decisions 5–6)
 
-`TwoViewReconciler.reconcile` (Volume) runs in `Pipeline` and in
-`FixtureRunner.runVoxelCarve` right before `MaskMatcher`: when each view
-carries at most one named carvable class, every carvable pixel in both views
-is relabelled to one class (user's > named over `unknown_food` > nadir over
-oblique), in the argmax and in the probability tensor (the other carvable
-channels' mass is added to the chosen channel and zeroed). The row records
-`twoViewReconciliation {nadirClasses, obliqueClasses, chosenClass, applied}`
-and the Shutter log prints `event=two_view.reconcile`. The bundle keeps the
-raw segmenter outputs. `FixtureRunner.run(twoViewReconciliation: false)`
-replays the raw labels for comparison.
+`ObjectReconciler` (Volume, one file) runs on both paths before volume: in
+`Pipeline` at the top of the single-view branch (before growth) and after
+the oblique is segmented on two-view, and in the matching places of
+`FixtureRunner`. Per view it takes the carvable mask (`isCarvableClass`),
+dilates it 3 px, and labels 4-connected components; the view is ONE object
+when the largest component holds ≥ 90 % of the carvable pixels. A single
+object takes one class — the user's when given, else the named class with
+the most pixels (the nadir's over the oblique's on two-view), else
+`unknown_food` — in the argmax and in the probability tensor (the other
+carvable channels' mass is added to the chosen channel and zeroed). A view
+that is not one object is left alone. The row records
+`twoViewReconciliation {nadirClasses, obliqueClasses?, nadirSingleObject,
+obliqueSingleObject?, chosenClass, applied}` (oblique fields nil on
+single-view) and the Shutter log prints `event=object.reconcile`. The
+bundle keeps the raw segmenter outputs. `FixtureRunner.run(reconciliation:
+false)` replays the raw labels.
 
-First carved numbers on real bundles (replay, β = 1): `1790313381100` went
-from unknown_food 1043 + bread_wholemeal 290 (two extrusions) to
-bread_wholemeal 1055 cm³ (one carved row); `1790310086654` from bread_white
-315 + bread_wholemeal 402 + unknown_food 81 to bread_wholemeal 935 cm³. The
-roll is ~12 × 7 × 4 cm (≈ 300 cm³ on the single-view path). The hull is
-large because the nadir silhouette is the plate-sized region the segmenter
-labelled (348 cm² and 161 cm² footprints) and an oblique ~26° from vertical
-bounds height only near its far edge; the grid's 120 mm vertical extent
-(`VoxelGridSizer.verticalExtentMm`) is the other cap. Tighter silhouettes
-(Req 3, the user's tap) and a wider baseline are the levers, not the
-reconciler.
+Why the class-count gate of Decision 5 was replaced: the segmenter splits
+one roll into bread_white + bread_wholemeal + unknown_food across one blob
+(`1790315734391` oblique: 31 k / 20 k / 22 k px in a single component).
+
+**The ID-1 card is the second object in every 2026-09-25 afternoon two-view
+capture.** On `1790315734391` and `1790315814452` each view has exactly two
+carvable components: the roll and a ~210 × 310 px `unknown_food` blob at the
+card's position (`HarnessCLI cards` picks the card there: residual 3.35 /
+1.13 px, disagreement 4 %). The largest component holds 74 % / 64 % and
+74 % / 90 % of the carvable pixels (nadir / oblique), unchanged up to a
+48 px dilation, so the gate correctly says "two objects". On device the
+picked card is cleared from the nadir (Req 4.6, nadir half) but not from
+the oblique (task 8), so the oblique stays two-object and the capture keeps
+its extra rows. The two-view replay in `FixtureRunner` runs no card
+exclusion at all, so replays of card captures differ from the device until
+that is mirrored. With the card box blanked in both views (scratch replay,
+β = 1) each bundle carves one row: bread_white 804 cm³ and bread_wholemeal
+770 cm³ (three rows before: 84 + 61 + 795 and 38 + 762 + 229); the plane fit
+also moves from `edgeBand` to `foodSupport` once the card pixels leave the
+mask. Single-view `1790315900185`: bread_wholemeal 289 + unknown_food 121 →
+bread_wholemeal 410 cm³ (growth leak still included).
+
+The carved numbers stay 2–3× the roll (~12 × 7 × 4 cm) because the nadir
+silhouette is wider than the roll and an oblique ~26° from vertical bounds
+height only near its far edge; the grid's 120 mm `verticalExtentMm` is the
+other cap. Tighter silhouettes (Req 3) and a wider baseline are the levers.

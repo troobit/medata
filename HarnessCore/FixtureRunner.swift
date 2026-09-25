@@ -50,7 +50,7 @@ public enum FixtureRunner {
         voxelEdgeMm: Float = 3.0,
         regularisation: MaskRegularisationConfig = .standard,
         growth: FoodRegionGrowthConfig = .standard,
-        twoViewReconciliation: Bool = true
+        reconciliation: Bool = true
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -89,6 +89,10 @@ public enum FixtureRunner {
                 throw Error.missingDepthForSingleView(fixture.fixtureID)
             }
             let depth = DepthMap(pb: fixture.nadirDepth)
+            // Same per-view pass as Pipeline, before growth (two-view-trust Req 2.1).
+            let nadirSeg = reconciliation
+                ? ObjectReconciler.reconcile(nadir: nadirSeg, palette: palette, userClass: nil).nadir
+                : nadirSeg
             // Req 5.1: one implementation for device and replay. Both the legacy
             // whole-frame fit and the N5k plate-region flood fill are gone from this
             // branch — the estimator_path stamp no longer selects a fitter here. The
@@ -190,7 +194,7 @@ public enum FixtureRunner {
                 t1to2: t1to2, plane: plane, gravity: gravity,
                 beta: unityBeta, palette: palette,
                 voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID,
-                reconcile: twoViewReconciliation
+                reconcile: reconciliation
             )
             perClassVolumesCm3 = est.perClassVolumesCm3
         }
@@ -552,7 +556,7 @@ public enum FixtureRunner {
         // raw labels for comparison.
         var nadirSeg = nadirSeg, obliqueSeg = obliqueSeg
         if reconcile {
-            let r = TwoViewReconciler.reconcile(
+            let r = ObjectReconciler.reconcile(
                 nadir: nadirSeg, oblique: obliqueSeg, palette: palette, userClass: nil)
             nadirSeg = r.nadir
             obliqueSeg = r.oblique
