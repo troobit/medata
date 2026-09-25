@@ -78,35 +78,111 @@ Growth raises carb MAE by 0.18 g and MAPE by 7.7 points, so the "carb MAE must n
 
 ---
 
-## Decision 2: The constants are set by a corpus sweep that gates the merge to main, not the device pass
+## Decision 2: The corpus sweep gates the merge, and the shipped constants pass it
 
-**Date**: 2026-09-24
+**Date**: 2026-09-25
 **Status**: accepted
 
 ### Context
 
-The developer is running an on-device loop and wants the fix on the phone today. The corpus holds 144 captures with depth, enough to measure how often growth adds area on already well-segmented plates (where it should add little), how often the cap trips, and whether 4 mm cuts real food. That measurement takes a harness run, not a device sitting.
+The merge of `research` into `main` is gated on a corpus sweep rather than on a device sitting: the device pass answers whether the roll is measured whole, and only a sweep answers whether the rule harms plates it should not touch. Decision 1's sweep was meant to be that gate, but Decision 3 found it had run on a divergent replay path — `FixtureRunner` fitted the first support plane from the argmax while the device fits it from the pre-shutter mask — so its table does not describe the shipped pipeline. Two constants have moved since as well: the floor rose to 5 mm and a table refit is never adopted (Decision 3), and a seed-relative band of 10 mm was added (Decision 4).
+
+The gate was therefore standing on stale numbers. This entry replaces them with a sweep run on the corrected path over the corpus's single-view successes, including the 2026-09-24 and 2026-09-25 roll bundles that did not exist when Decision 1 was written.
 
 ### Decision
 
-Ship the starting constants (cliff 4 mm, cap 0.35) for the device pass. The sweep over the corpus captures runs as its own task, its table is appended to Decision 1, and the merge of `research` into `main` waits on it. This mirrors unknown-food-nameable Decision 4.
+The corpus sweep, not the device pass, gates the merge of `research` into `main`, and its table lives in this entry. Re-run on the corrected replay path at commit `a785187`, the shipped constants — cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm — **pass the Req 8 rule**, so the gate is met and the merge is unblocked on area. The carb cost measured against the corpus's weighed plates is recorded here as a known regression, not as a blocker.
 
 ### Rationale
 
-The device pass answers whether the roll is measured whole; the sweep answers whether the rule harms plates it should not touch. Neither answer needs the other first, and sequencing the sweep before the device pass would cost the sitting.
+Req 8's rule has three clauses and the shipped setting meets all three. On the 11 captures whose ungrown food-like area is at least 5 % of the frame, growth adds **+0.5 % at the median**, well inside the 20 % bar. The **cap trips on none** — and that is a measurement, not an inference: every setting that showed no growth was re-run at `--growth-cap 1.0` and still showed none, so the eight no-growth rows are cases where the fill found nothing, not cases where the cap discarded a fill. On `1790223818017-success` the region grows from 0.49 % to 7.45 % of the frame with a `foodSupport` refit, which is the roll's footprint in the photo, so the grown region covers the raised slab.
+
+The rule's *selection* clause — "the largest cliff value and smallest floor that meet the rule ship" — does not name the shipped floor. Floor 3 with the band also passes (median +5.5 %), so read mechanically the rule selects floor 3 mm. The shipped floor is one notch above it, adopted in Decision 3 on device evidence (a contiguous plate blob to the rim on both 2026-09-25 roll captures). The corpus does not contradict that choice and supports it on the two figures the median hides: the largest single addition halves (+72 % at floor 3 against +36 % at floor 5), and the refit lands `foodSupport` on 13 of 19 bundles at floor 5 against 11 of 19 at floor 3, with 7 table refits at floor 3 that Decision 3's guard has to throw away. Floor 8 buys nothing over floor 5 on the median and costs the well-segmented plates volume. The band at 10 mm beats both 0 and 15 on every column.
+
+What the sweep does **not** support is the claim that growth improves accuracy. On the three weighed plates in the corpus the carb mean absolute error **rises from 33.2 g ungrown to 40.4 g at the shipped setting**. Two of the three are under-reads that growth moves 0.1–1.8 g toward truth; the third (`1785901032716`, 80 g of multigrain bread) was already reading 3.2× over and growth adds 36 % more area and flips its plane from the table to a `foodSupport` refit, taking it from +74.5 g to +97.7 g of carbohydrate. That is the same direction as the Nutrition5k result recorded in Decision 1 and the same mechanism: on a plate the segmenter already covers, growth can only add area, and area on a plate whose plane is wrong is added error. The case growth exists for — a food the model barely recognises — has no weighed truth in the corpus at all. Growth is accepted on that asymmetry, with eyes open: it fixes a 4 g reading of a whole roll and it makes an already-bad flat-bread over-read worse.
+
+### The sweep (re-run 2026-09-25, commit `a785187`)
+
+**Route.** `HarnessCLI volumes`, one bundle per invocation, not `HarnessCLI accuracy`: device bundles record ground truth as zero, so `accuracy` reports every meal as UNSCORED and exits non-zero, and its loader holds a whole directory of ~200 MB bundles in memory at once. `volumes` reports the same growth diagnostics plus the per-class volumes and the plane the volume used. The binary was built from committed `HEAD` (`a785187`) in a scratch copy of the tree, because other agents were editing `MedataCore/Sources` and `HarnessCore/` while the sweep ran; the numbers therefore describe the committed path and nothing else.
+
+**Corpus.** Every single-view LiDAR success stamped `ab812dc3aa9d`: 11 pre-2026-09-24 bundles plus `1790223818017` and `1790232681422` (2026-09-24) and the seven single-view bundles under `pulls/20260925-*/captures/`. 20 bundles, of which `1785125982524` refuses `noFoodVolumeRecovered` before and after growth, leaving 19 scored. Two exclusions recorded in Decision 1 are stale: `captures/1786450130307-success.fixture` is the truncated 170,000,000-byte copy, but `pulls/20260827-3/captures/1786450130307-success.fixture` is intact and loads; and `1785054950406` (the 208 g rice plate) now loads and replays at 636 cm³ rather than yielding zero meals.
+
+Cliff 3 mm and cap 0.35 throughout. "Added" is the food-like pixel count after growth over before, on the 11 captures whose ungrown food-like area is at least 5 % of the frame (1920 × 1440).
+
+| floor mm | band mm | median added | largest added | cap trips | roll `1790223818017` after (refit) | refits `foodSupport` / `edgeBand` / none |
+|---|---|---|---|---|---|---|
+| 3 | 0 | +32.9 % | +72 % | 0 | 7.69 % (foodSupport) | 11 / 7 / 1 |
+| 3 | 10 | +5.5 % | +72 % | 0 | 7.66 % (foodSupport) | 11 / 7 / 1 |
+| 3 | 15 | +11.2 % | +72 % | 0 | 7.69 % (foodSupport) | 11 / 7 / 1 |
+| 5 | 0 | +11.7 % | +64 % | 0 | 7.45 % (foodSupport) | 13 / 3 / 3 |
+| **5** | **10** | **+0.5 %** | **+36 %** | **0** | **7.45 % (foodSupport)** | **13 / 3 / 3** |
+| 5 | 15 | +0.5 % | +51 % | 0 | 7.45 % (foodSupport) | 13 / 3 / 3 |
+| 8 | 0 | +11.7 % | +60 % | 0 | 7.25 % (foodSupport) | 11 / 4 / 4 |
+| 8 | 10 | +0.1 % | +34 % | 0 | 7.25 % (foodSupport) | 11 / 4 / 4 |
+| 8 | 15 | +0.1 % | +52 % | 0 | 7.25 % (foodSupport) | 11 / 4 / 4 |
+
+n = 19 scored on every row; the refit column counts the reference the refit returned, not the plane adopted — an `edgeBand` refit is never adopted (Decision 3), and "none" means the fill added nothing so no refit was attempted. The largest addition at floor 3 is `1786322188388` (+72 %, 9.55 % → 16.38 % of the frame, 51.5 → 172.3 cm³), which floor 5 removes entirely.
+
+Per bundle at the shipped setting (cliff 3, floor 5, cap 0.35, band 10):
+
+| bundle | ungrown px (% frame) | first fit | ungrown cm³ | after px (% frame) | refit | adopted plane | cm³ | added |
+|---|---|---|---|---|---|---|---|---|
+| 1785054950406 | 435,165 (15.74 %) | edgeBand | 636.1 | 435,165 (15.74 %) | none | edgeBand | 636.1 | +0 % |
+| 1785055060603 | 447,855 (16.20 %) | edgeBand | 600.7 | 447,855 (16.20 %) | none | edgeBand | 600.7 | +0 % |
+| 1785062411645 | 315,076 (11.40 %) | edgeBand | 1470.3 | 315,076 (11.40 %) | edgeBand | edgeBand | 1470.3 | +0 % |
+| 1785125982524 | — | — | refuses `noFoodVolumeRecovered` | — | — | — | — | — |
+| 1785135663727 | 332,859 (12.04 %) | edgeBand | 683.0 | 375,686 (13.59 %) | foodSupport | foodSupport | 672.8 | +13 % |
+| 1785901032716 | 482,388 (17.45 %) | edgeBand | 713.8 | 654,111 (23.66 %) | foodSupport | foodSupport | 866.4 | +36 % |
+| 1786322188388 | 263,919 (9.55 %) | edgeBand | 51.5 | 263,919 (9.55 %) | none | edgeBand | 51.5 | +0 % |
+| 1786439141215 | 95,781 (3.46 %) | foodSupport | 72.5 | 115,055 (4.16 %) | foodSupport | foodSupport | 83.9 | +20 % |
+| 1786450130307 | 271,669 (9.83 %) | foodSupport | 77.5 | 272,944 (9.87 %) | foodSupport | foodSupport | 78.0 | +0 % |
+| 1786844576261 | 232,720 (8.42 %) | edgeBand | 188.9 | 233,416 (8.44 %) | edgeBand | edgeBand | 189.6 | +0 % |
+| 1786845356405 | 79,785 (2.89 %) | edgeBand | 81.7 | 192,353 (6.96 %) | foodSupport | foodSupport | 85.7 | +141 % |
+| 1790223818017 | 13,571 (0.49 %) | edgeBand | 25.6 | 205,945 (7.45 %) | foodSupport | foodSupport | 230.7 | +1418 % |
+| 1790232681422 | 146,278 (5.29 %) | foodSupport | 261.6 | 152,460 (5.51 %) | foodSupport | foodSupport | 283.5 | +4 % |
+| 1790242780378 | 341,043 (12.34 %) | edgeBand | 253.7 | 423,548 (15.32 %) | edgeBand | edgeBand | 308.6 | +24 % |
+| 1790310107431 | 112,439 (4.07 %) | foodSupport | 176.9 | 155,916 (5.64 %) | foodSupport | foodSupport | 219.4 | +39 % |
+| 1790313330330 | 185,281 (6.70 %) | foodSupport | 253.4 | 206,481 (7.47 %) | foodSupport | foodSupport | 274.6 | +11 % |
+| 1790315865030 | 121,881 (4.41 %) | edgeBand | 388.6 | 137,871 (4.99 %) | foodSupport | foodSupport | 309.5 | +13 % |
+| 1790315900185 | 88,513 (3.20 %) | edgeBand | 171.3 | 141,758 (5.13 %) | foodSupport | foodSupport | 298.9 | +60 % |
+| 1790318604792 | 124,022 (4.49 %) | edgeBand | 393.0 | 144,120 (5.21 %) | foodSupport | foodSupport | 272.0 | +16 % |
+| 1790318616477 | 126,823 (4.59 %) | edgeBand | 429.6 | 143,328 (5.18 %) | foodSupport | foodSupport | 266.9 | +13 % |
+
+The three roll bundles that motivated Decisions 3 and 4 (`1790310107431`, `1790315865030`, `1790315900185`) reproduce those entries' figures exactly, which is the check that this sweep and those decisions ran the same path.
+
+**Against weighed truth.** The corpus holds three weighed plates on the single-view path (`docs/agent-notes/field-truth-sessions.md`, the 2026-08-05 and 2026-08-11 sittings). Carbohydrate, ungrown against the shipped setting:
+
+| bundle | truth | ungrown cm³ / carbs | shipped cm³ / carbs | carb error before → after |
+|---|---|---|---|---|
+| 1785901032716 (80 g multigrain, 2 slices) | 34 g | 713.8 / 108.5 g | 866.4 / 131.7 g | +74.5 g → **+97.7 g** |
+| 1786439141215 (58 g bread slice) | 24 g | 72.5 / 11.0 g | 83.9 / 12.8 g | −13.0 g → **−11.2 g** |
+| 1786450130307 (same slice, re-shoot) | 24 g | 77.5 / 11.8 g | 78.0 / 11.9 g | −12.2 g → **−12.1 g** |
+| **mean absolute error** | | **33.2 g** | **40.4 g** | **+7.2 g** |
 
 ### Alternatives Considered
 
-- **Sweep first**: Rejected as costing the sitting for a question the sitting cannot answer.
-- **Ship without a sweep**: Rejected because a leak on well-segmented plates would over-read every meal silently.
+- **Re-run through `HarnessCLI accuracy`, as Decision 1 did**: The command Req 8 names - Rejected because field bundles carry zero ground truth, so it scores nothing and exits non-zero, and its loader holds every fixture in the directory in memory at once; `volumes` reports the same growth and plane diagnostics per bundle plus the volumes, one bundle per invocation.
+- **Drop the floor to 3 mm, which Req 8's selection clause names**: The smallest floor that passes the rule - Rejected because it doubles the largest single addition (+72 % against +36 %), adds 121 cm³ to a plate the segmenter had already covered (`1786322188388`), and returns a table refit on 7 of 19 bundles that the Decision 3 guard then discards; Decision 3's device evidence against it stands.
+- **Block the merge on the weighed-truth carb regression**: The gate could be read as covering accuracy - Rejected because Req 8's rule is about added area and cap trips, the regression is one plate whose ungrown reading was already 3.2× over, and the defect behind it is the support plane, not the growth pass (`specs/estimation/support-plane-reference`).
+- **Ship without a sweep**: Rejected because a leak on well-segmented plates would over-read every meal silently — which is exactly what the floor-3 rows show.
+- **Sweep before the 2026-09-24 device pass**: Rejected at the time as costing the sitting for a question the sitting could not answer; the sitting is also what produced three of the bundles this sweep measures.
 
 ### Consequences
 
 **Positive:**
-- The device loop keeps moving; the evidence still lands before main.
+- The merge gate now rests on numbers from the shipped replay path, reproduced against the two decisions taken since Decision 1.
+- The cap is measured, not assumed, to trip on nothing across the whole grid.
+- Floor 5 with the 10 mm band is the best cell in the grid on every column the rule cares about, so the constants on the phone need not move.
 
 **Negative:**
-- The constants on the phone today may move after the sweep.
+- Growth costs 7.2 g of carbohydrate mean absolute error on the corpus's three weighed plates, all of it on one flat-bread plate that already over-read 3.2×; the sweep buys confidence about area, not about accuracy.
+- The founding case has no weighed truth, so the benefit side of that trade is still judged by eye.
+- The shipped floor is not the value Req 8's selection clause mechanically names; it is one notch above, carried by device evidence the corpus can only corroborate.
+- Cliff was not re-swept: Decision 1 found it moved only the largest single addition, and 3 mm ships.
+
+### Impact
+
+Unblocks the merge of `research` into `main` for `specs/estimation/depth-grown-food-region`. No code change: `FoodRegionGrowthConfig.standard` keeps cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm.
 
 ---
 

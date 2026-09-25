@@ -65,6 +65,38 @@ fixture on stderr. Only 10 single-view successes on `ab812dc3aa9d` load from
 the corpus; `1786450130307-success.fixture` is truncated at exactly
 170,000,000 bytes and must be excluded or the loader refuses the directory.
 
+## The sweep that gates the merge (Decision 2, re-run 2026-09-25)
+
+Decision 1's table came from the divergent replay path and is superseded by
+the re-run in Decision 2, over 20 single-view `ab812dc3aa9d` bundles (19
+scored) at commit `a785187`. Headline: at the shipped cliff 3 / floor 5 /
+cap 0.35 / band 10 the median added area on the 11 captures with at least
+5 % ungrown food-like area is **+0.5 %**, the largest single addition is
+**+36 %**, the **cap trips on nothing** anywhere in the grid (verified by
+re-running every no-growth cell at `--growth-cap 1.0`), and the roll
+`1790223818017` grows 0.49 % → 7.45 % of the frame with a `foodSupport`
+refit. That passes Req 8. Floor 3 with the band also passes (+5.5 % median),
+so the rule's "smallest floor" clause names floor 3 and the shipped floor 5
+is one notch above it, carried by Decision 3's device evidence and backed by
+the corpus on the two figures the median hides (largest addition halves;
+13 of 19 refits land `foodSupport` against 11 of 19). Against the corpus's
+three weighed plates, growth **costs** accuracy: carb mean absolute error
+rises 33.2 g → 40.4 g, all of it on `1785901032716`, an 80 g flat-bread plate
+that already read 3.2× over.
+
+Two practical corrections to the paragraph above. `HarnessCLI accuracy` is
+the wrong command for field bundles — they carry zero ground truth, so every
+meal is UNSCORED and it exits non-zero, and its loader holds the whole
+directory in memory; use `HarnessCLI volumes` one bundle at a time, which
+reports `foodPixelsBefore/After`, `refitReference`, `planeReference` and the
+per-class volumes as JSON. And the corpus has more than 10 loadable
+single-view successes: `captures/1786450130307-success.fixture` is the
+truncated copy, but `pulls/20260827-3/captures/1786450130307-success.fixture`
+is intact and loads, and `1785054950406` (the 208 g rice plate that once
+yielded zero meals) now replays at 636 cm³. Build the harness from a scratch
+copy of committed `HEAD` when other agents are editing the tree, or a
+mid-sweep rebuild will mix two binaries into one table.
+
 ## Gotchas
 
 - The bundle keeps the segmenter's (ungrown) argmax; replay re-grows. The
