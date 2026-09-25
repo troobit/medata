@@ -42,11 +42,11 @@ public final class VisionCardDetector: CardDetector, @unchecked Sendable {
         qos: .userInitiated
     )
 
-    // `maximumObservations` is 1 in production (brightest / largest single match
-    // wins, multi-card frames are out of scope). The harness raises it to list
-    // every quad Vision ranks, because on the 2026-08-11 real-card bundles the
-    // single pick was a bread slice or a phantom on the plate, not the card.
-    public init(maximumObservations: Int = 1) {
+    // Vision's top-ranked rectangle was never the card on the 2026-08-11
+    // real-card bundles (a bread slice, a phantom on the plate); the card was
+    // candidate 2 of 3. So every ranked quad is returned and
+    // `CardPoseSolver.pick` chooses by ID-1 reprojection residual.
+    public init(maximumObservations: Int = 8) {
         let r = VNDetectRectanglesRequest()
         // ID-1 short/long ≈ 0.631. Vision's `minimumAspectRatio` / `maximumAspectRatio`
         // are the short-over-long ratio of the candidate quad; ±10 % absorbs
@@ -79,14 +79,10 @@ public final class VisionCardDetector: CardDetector, @unchecked Sendable {
         }
     }
 
-    public func detect(in frame: RawFrame) async -> [PixelCorner]? {
-        await detectCandidates(in: frame).first
-    }
-
     // Every rectangle Vision returned, in its ranking order, up to
     // `maximumObservations`. Empty when nothing was found or the buffer could
-    // not be read. `detect(in:)` is the first of these.
-    public func detectCandidates(in frame: RawFrame) async -> [[PixelCorner]] {
+    // not be read.
+    public func detect(in frame: RawFrame) async -> [[PixelCorner]] {
         let bytes = frame.imageBytes
         let width = frame.imageWidth
         let height = frame.imageHeight

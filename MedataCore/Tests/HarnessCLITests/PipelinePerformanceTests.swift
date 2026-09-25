@@ -117,7 +117,7 @@ final class PipelinePerformanceTests: XCTestCase {
 // MARK: - Stubs
 
 private struct NoOpCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }
 }
 
 private struct EmptyFoodDB: FoodDatabase {

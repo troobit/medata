@@ -21,7 +21,7 @@ references:
 
 - [x] 6. An accepted card's quadrilateral is cleared from the nadir probabilities and labels before volume (Req 4.6, nadir half)
 
-- [ ] 7. Card detection replays in the harness (macOS Vision) and the bound is set from real-card and no-card bundles (Req 4.5, harness half)
+- [x] 7. Card detection replays in the harness (macOS Vision) and the bound is set from real-card and no-card bundles (Req 4.5, harness half)
 
 - [ ] 8. The card's projection into the oblique view is cleared once the Req 1.3 transform is verified (Req 4.6, oblique half)
 

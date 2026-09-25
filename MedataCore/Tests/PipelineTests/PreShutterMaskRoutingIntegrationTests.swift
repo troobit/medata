@@ -81,7 +81,7 @@ private final class ProbeFitter: SupportPlaneFitter, @unchecked Sendable {
 }
 
 private struct LocalNoOpCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }
 }
 
 private struct NoOpPersistenceStore: PersistenceStore {

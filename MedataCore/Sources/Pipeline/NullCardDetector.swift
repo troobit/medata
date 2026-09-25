@@ -8,5 +8,5 @@ import Foundation
 // local mock conformances (the established pattern in `EstimationFailureTests`
 // and `PipelinePerformanceTests`) and cannot import this type.
 struct NullCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    func detect(in frame: RawFrame) async -> [[PixelCorner]] { [] }
 }

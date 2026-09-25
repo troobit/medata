@@ -28,7 +28,7 @@ struct Args {
     var fixturePaths: [String] = []
     // `cards`: how many ranked rectangles Vision may return per frame. 1 is
     // what the device runs; more lists the candidates the single pick hides.
-    var maxObservations: Int = 1
+    var maxObservations: Int = 8
     var checkpointSHA256: String = ""
     var outputPath: String = ""
     var voxelEdgeMm: Float = 3.0
@@ -591,8 +591,10 @@ func runCards(args: Args) throws {
         guard !candidates.isEmpty else {
             print(line + " corners=none"); continue
         }
+        // The candidate the pipeline would take (CardPoseSolver.pick).
+        let picked = (try? CardPoseSolver.pick(candidates: candidates, intrinsics: k))??.corners
         for (index, corners) in candidates.enumerated() {
-            var row = line + " candidate=\(index + 1)/\(candidates.count)"
+            var row = line + " candidate=\(index + 1)/\(candidates.count) picked=\(corners == picked)"
             let labels = ["tl", "tr", "br", "bl"]
             for (label, c) in zip(labels, corners) {
                 row += " \(label)=(\(fmt(c.u, 1)),\(fmt(c.v, 1)))"
@@ -619,7 +621,7 @@ func runCards(args: Args) throws {
     }
 }
 
-// `detectCandidates(in:)` is async and this is a synchronous command-line
+// `detect(in:)` is async and this is a synchronous command-line
 // tool: run it on a task and block the main thread until the continuation
 // resumes off the detector's own queue.
 func detectSync(_ detector: VisionCardDetector, frame: RawFrame) -> [[PixelCorner]] {
@@ -627,7 +629,7 @@ func detectSync(_ detector: VisionCardDetector, frame: RawFrame) -> [[PixelCorne
     let box = Box()
     let done = DispatchSemaphore(value: 0)
     Task {
-        box.candidates = await detector.detectCandidates(in: frame)
+        box.candidates = await detector.detect(in: frame)
         done.signal()
     }
     done.wait()

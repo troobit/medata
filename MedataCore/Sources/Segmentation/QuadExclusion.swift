@@ -26,8 +26,7 @@ extension SegmentationResult {
             labels.withUnsafeMutableBytes { l in
                 let lab = l.bindMemory(to: UInt8.self).baseAddress!
                 for y in yLo...yHi {
-                    guard let (xLo, xHi) = Self.span(of: quad, atRow: Float(y), width: w) else { continue }
-                    for x in xLo...xHi {
+                    for x in 0..<w where Self.contains(quad, x: Float(x) + 0.5, y: Float(y) + 0.5) {
                         let i = y * w + x
                         if lab[i] != UInt8(bg) { cleared += 1; lab[i] = UInt8(bg) }
                         for c in 0..<k { q[i * k + c] = c == bg ? 1 : 0 }
@@ -44,19 +43,14 @@ extension SegmentationResult {
         return (result, cleared)
     }
 
-    /// Inclusive pixel columns covered by the quad on one scanline, from the
-    /// crossings of its four edges with the row's centre line.
-    private static func span(of quad: [SIMD2<Float>], atRow y: Float, width: Int) -> (Int, Int)? {
-        let yc = y + 0.5
-        var lo = Float.infinity, hi = -Float.infinity
+    /// Even-odd crossing test of a pixel centre against the quad's edges.
+    private static func contains(_ quad: [SIMD2<Float>], x: Float, y: Float) -> Bool {
+        var inside = false
         for i in 0..<4 {
             let a = quad[i], b = quad[(i + 1) % 4]
-            guard (a.y <= yc) != (b.y <= yc) else { continue }
-            let x = a.x + (yc - a.y) / (b.y - a.y) * (b.x - a.x)
-            lo = min(lo, x); hi = max(hi, x)
+            guard (a.y <= y) != (b.y <= y) else { continue }
+            if x < a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x) { inside.toggle() }
         }
-        guard lo <= hi else { return nil }
-        let xLo = max(0, Int(lo.rounded())), xHi = min(width - 1, Int(hi.rounded()) - 1)
-        return xLo <= xHi ? (xLo, xHi) : nil
+        return inside
     }
 }

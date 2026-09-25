@@ -39,6 +39,33 @@ public struct CardPose: Sendable, Equatable {
 }
 
 public enum CardPoseSolver {
+    // Mean reprojection error above which a rectangle is not an ID-1 card.
+    // Harness `cards` on the corpus: the real card solves at 2.7 px, the
+    // false picks (bread, plate phantoms) at 12–145 px (two-view-trust
+    // Decision 3).
+    public static let maxResidualPx: Float = 6
+
+    /// The first candidate, in the detector's ranking, that solves as an ID-1
+    /// card within `maxResidualPx`; nil when none does. When no candidate
+    /// solves at all, the first solve error is rethrown so the card-only
+    /// path keeps its `degenerateCardPose` / `cardTooOblique` refusals.
+    public static func pick(candidates: [[PixelCorner]],
+                            intrinsics: CameraIntrinsics) throws -> (corners: [PixelCorner], pose: CardPose)? {
+        var firstError: Error?
+        var solvedAny = false
+        for corners in candidates {
+            do {
+                let pose = try solve(corners: corners, intrinsics: intrinsics)
+                solvedAny = true
+                if pose.pnpResidualPx <= maxResidualPx { return (corners, pose) }
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        if !solvedAny, let firstError { throw firstError }
+        return nil
+    }
+
     // P4P specialisation per design §6.1. Single entry point so callers and tests
     // share one numerical pathway. Solver is stateless and pure.
     public static func solve(

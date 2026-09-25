@@ -170,3 +170,38 @@ final class CardPoseSolverTests: XCTestCase {
         }
     }
 }
+
+// two-view-trust Decision 3: the card is the ranked candidate that reprojects
+// as an ID-1 card, not the detector's first pick.
+final class CardPoseSolverPickTests: XCTestCase {
+    private let k = CameraIntrinsics(fx: 1500, fy: 1500, cx: 960, cy: 720, distortion: [], imageWidth: 1920, imageHeight: 1440)
+    private var card: [PixelCorner] {
+        projectCard(rotation: rotation(yaw: 0.2, pitch: 0.1), translation: Vec3(20, -30, -420), k: k)
+    }
+    // A card-ish quad that is not an ID-1 rectangle: one corner pulled in.
+    private var notACard: [PixelCorner] {
+        var c = card
+        c[2] = PixelCorner(c[2].u - 40, c[2].v + 25)
+        return c
+    }
+    private let collinear = [PixelCorner(100, 100), PixelCorner(200, 100), PixelCorner(300, 100), PixelCorner(400, 100)]
+
+    func testPicksTheCandidateThatReprojectsAsACard() throws {
+        let picked = try XCTUnwrap(CardPoseSolver.pick(candidates: [notACard, card], intrinsics: k))
+        XCTAssertEqual(picked.corners, card)
+        XCTAssertLessThanOrEqual(picked.pose.pnpResidualPx, CardPoseSolver.maxResidualPx)
+        XCTAssertGreaterThan(try CardPoseSolver.solve(corners: notACard, intrinsics: k).pnpResidualPx,
+                             CardPoseSolver.maxResidualPx)
+    }
+
+    func testNoCandidateWithinResidualIsNoCard() throws {
+        XCTAssertNil(try CardPoseSolver.pick(candidates: [notACard], intrinsics: k))
+        XCTAssertNil(try CardPoseSolver.pick(candidates: [], intrinsics: k))
+    }
+
+    func testSolveErrorSurfacesOnlyWhenNothingSolved() throws {
+        XCTAssertThrowsError(try CardPoseSolver.pick(candidates: [collinear], intrinsics: k))
+        XCTAssertNotNil(try CardPoseSolver.pick(candidates: [collinear, card], intrinsics: k))
+        XCTAssertNil(try CardPoseSolver.pick(candidates: [collinear, notACard], intrinsics: k))
+    }
+}
