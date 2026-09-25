@@ -49,6 +49,14 @@ public struct Pipeline: Sendable {
     // Depth-grown food region constants (depth-grown-food-region Decision 2);
     // `.disabled` reproduces the ungrown single-view estimate.
     private let regionGrowth: FoodRegionGrowthConfig
+
+    // Hard cap on |oblique tilt − 25°| (Decision 43). Beyond it the visual
+    // hull is unreliable enough to refuse rather than report a degraded
+    // estimate. Configurable only so the field build can measure what a
+    // wider band buys (two-view-trust Decision 8); the default is the
+    // shipped value and nothing in a product build changes it.
+    public static let defaultObliqueTiltCapDeg: Float = 30
+    private let obliqueTiltCapDeg: Float
     // Stamped onto every MealRecord this pipeline produces (Decision 42, Req §23.6):
     // "dev_stub" for Phase 1 device-MVP builds, "coreml_<modelVersion>" for Phase 3.
     // Public so the App layer can stamp the same lineage tag onto the slim
@@ -69,7 +77,8 @@ public struct Pipeline: Sendable {
         supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
         segmenterSource: String = "",
         bundleRecorder: CaptureBundleRecorder? = nil,
-        regionGrowth: FoodRegionGrowthConfig = .standard
+        regionGrowth: FoodRegionGrowthConfig = .standard,
+        obliqueTiltCapDeg: Float = Self.defaultObliqueTiltCapDeg
     ) {
         self.cardDetector = cardDetector
         self.segmenter = segmenter
@@ -79,6 +88,7 @@ public struct Pipeline: Sendable {
         self.segmenterSource = segmenterSource
         self.bundleRecorder = bundleRecorder
         self.regionGrowth = regionGrowth
+        self.obliqueTiltCapDeg = obliqueTiltCapDeg
     }
 
     // Main entry point per design §2.4.
@@ -197,7 +207,7 @@ public struct Pipeline: Sendable {
         let deltaThetaObliqueDeg: Float?
         if let obliqueAngle = captureResult.obliqueAngleAtCaptureDeg, capturePath == .twoViewSfS {
             let delta = abs(obliqueAngle - 25)
-            if delta > 30 {
+            if delta > obliqueTiltCapDeg {
                 throw EstimationFailure.obliqueTiltOutOfRange
             }
             deltaThetaObliqueDeg = delta
