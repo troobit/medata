@@ -108,6 +108,10 @@ final class MealReviewModel {
     // (Req 3.1, Decision 18). Loaded by openAlternatives.
     private(set) var alternativesFor: String?
     private(set) var shortlist: [FoodCandidate] = []
+    // The accepted ID-1 card's nadir quadrilateral, TL TR BR BL in nadir image
+    // pixels (two-view-trust Req 4.2, task 12). Read off this meal's outcome
+    // row; nil whenever no card was picked, so the review draws nothing extra.
+    private(set) var cardCornersImagePx: [Float]?
 
     let record: MealRecord
     private let store: any PersistenceStore
@@ -703,8 +707,30 @@ final class MealReviewModel {
         // The outcome row for this meal joins the record to a capture bundle
         // where one survives (Req 8.3). Newest first; the just-captured meal
         // sits at or near the top.
+        //
+        // The row is written by a DETACHED task off the estimation path, so on
+        // a just-captured meal it can still be in flight when this surface
+        // appears — hence one retry before giving up. A history meal whose row
+        // has aged out simply resolves to nothing, on a background task that
+        // blocks no UI.
+        var outcome = await findOutcome()
+        if outcome == nil {
+            try? await Task.sleep(for: .milliseconds(500))
+            outcome = await findOutcome()
+        }
+        outcomeID = outcome?.id.uuidString ?? ""
+        // The card's quad rides in the same measurements payload (task 12).
+        // `try?` throughout: a row that will not decode costs the reference
+        // shading, never the review.
+        cardCornersImagePx = outcome
+            .flatMap { try? JSONDecoder().decode(
+                EstimationAttemptRecord.self, from: Data($0.measurementsJSON.utf8)) }?
+            .card?.cornersImagePx
+    }
+
+    private func findOutcome() async -> EstimationOutcome? {
         let outcomes = (try? await store.estimationOutcomes(limit: 100)) ?? []
-        outcomeID = outcomes.first { $0.mealID == record.id }?.id.uuidString ?? ""
+        return outcomes.first { $0.mealID == record.id }
     }
 
     // Adopts rows already in the store — the re-presentation case: created_at
