@@ -40,30 +40,56 @@ public struct CardPose: Sendable, Equatable {
 
 public enum CardPoseSolver {
     // Mean reprojection error above which a rectangle is not an ID-1 card.
-    // Harness `cards` on the corpus: the real card solves at 2.7 px, the
-    // false picks (bread, plate phantoms) at 12–145 px (two-view-trust
-    // Decision 3).
-    public static let maxResidualPx: Float = 6
+    // Harness `cards` on the corpus: real cards solve at 2.7–14 px, plate
+    // phantoms at 44–158 px; but food can solve at 12–15 px too, so with
+    // LiDAR the scale agreement decides between the survivors
+    // (two-view-trust Decision 3).
+    public static let maxResidualPx: Float = 20
+    // Symmetric relative disagreement with the LiDAR scale beyond which a
+    // rectangle is not the card: real cards 2–9 %, food and rims 25–94 %.
+    // `MetricScaleResolver` applies the same bound.
+    public static let maxLidarDisagreement: Float = 0.15
 
-    /// The first candidate, in the detector's ranking, that solves as an ID-1
-    /// card within `maxResidualPx`; nil when none does. When no candidate
-    /// solves at all, the first solve error is rethrown so the card-only
-    /// path keeps its `degenerateCardPose` / `cardTooOblique` refusals.
-    public static func pick(candidates: [[PixelCorner]],
-                            intrinsics: CameraIntrinsics) throws -> (corners: [PixelCorner], pose: CardPose)? {
+    /// Symmetric relative disagreement between two mm/px scales, 1 when
+    /// their mean is not positive.
+    public static func disagreement(_ a: Float, _ b: Float) -> Float {
+        let avg = (a + b) / 2
+        return avg > 0 ? abs(a - b) / avg : 1
+    }
+    /// The candidate that best solves as an ID-1 card: residual within
+    /// `maxResidualPx` and, when a LiDAR scale is given, scale within
+    /// `maxLidarDisagreement` of it; the smallest disagreement wins with
+    /// LiDAR, the smallest residual without. nil when none qualifies. When no
+    /// candidate solves at all, the first solve error is rethrown so the
+    /// card-only path keeps its `degenerateCardPose` / `cardTooOblique` refusals.
+    public static func pick(candidates: [[PixelCorner]], intrinsics: CameraIntrinsics,
+                            lidarMmPerPx: Float? = nil) throws -> (corners: [PixelCorner], pose: CardPose)? {
         var firstError: Error?
         var solvedAny = false
+        var best: (corners: [PixelCorner], pose: CardPose, score: Float)?
         for corners in candidates {
             do {
                 let pose = try solve(corners: corners, intrinsics: intrinsics)
                 solvedAny = true
-                if pose.pnpResidualPx <= maxResidualPx { return (corners, pose) }
+                guard pose.pnpResidualPx <= maxResidualPx else { continue }
+                var score = pose.pnpResidualPx
+                if let lidarMmPerPx {
+                    score = disagreement(pose.scaleAtCardPlaneMmPerPx, lidarMmPerPx)
+                    guard score <= maxLidarDisagreement else { continue }
+                }
+                if best == nil || score < best!.score { best = (corners, pose, score) }
             } catch {
                 firstError = firstError ?? error
             }
         }
         if !solvedAny, let firstError { throw firstError }
-        return nil
+        return best.map { ($0.corners, $0.pose) }
+    }
+
+    static func longEdgeFirst(_ c: [PixelCorner]) -> [PixelCorner] {
+        let e0 = hypot(c[1].u - c[0].u, c[1].v - c[0].v)
+        let e1 = hypot(c[2].u - c[1].u, c[2].v - c[1].v)
+        return e0 >= e1 ? c : [c[1], c[2], c[3], c[0]]
     }
 
     // P4P specialisation per design §6.1. Single entry point so callers and tests
@@ -73,6 +99,11 @@ public enum CardPoseSolver {
         intrinsics: CameraIntrinsics
     ) throws -> CardPose {
         guard corners.count == 4 else { throw CardPoseError.wrongCornerCount }
+        // The model's first edge is the 85.60 mm side. A portrait card
+        // (2026-09-25 bundle 1790306988367) arrives with its short edge first
+        // and solved at 86 px residual; rotating the order by one corner is
+        // the same rectangle with the long edge first.
+        let corners = Self.longEdgeFirst(corners)
 
         let fx = intrinsics.fx
         let fy = intrinsics.fy

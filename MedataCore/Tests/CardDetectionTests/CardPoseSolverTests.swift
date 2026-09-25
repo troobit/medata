@@ -199,9 +199,36 @@ final class CardPoseSolverPickTests: XCTestCase {
         XCTAssertNil(try CardPoseSolver.pick(candidates: [], intrinsics: k))
     }
 
+    func testLidarScaleArbitratesBetweenSolvableCandidates() throws {
+        let near = projectCard(rotation: rotation(yaw: 0.1, pitch: 0.05), translation: Vec3(-40, 60, -300), k: k)
+        let far = projectCard(rotation: rotation(yaw: 0.1, pitch: 0.05), translation: Vec3(-40, 60, -450), k: k)
+        let farScale = try CardPoseSolver.solve(corners: far, intrinsics: k).scaleAtCardPlaneMmPerPx
+        // Both solve cleanly; only the one whose scale matches LiDAR is the card.
+        let picked = try XCTUnwrap(CardPoseSolver.pick(candidates: [near, far], intrinsics: k, lidarMmPerPx: farScale * 1.03))
+        XCTAssertEqual(picked.corners, far)
+        // Neither matches a LiDAR scale far from both: no card.
+        XCTAssertNil(try CardPoseSolver.pick(candidates: [near, far], intrinsics: k, lidarMmPerPx: farScale * 2))
+    }
+
     func testSolveErrorSurfacesOnlyWhenNothingSolved() throws {
         XCTAssertThrowsError(try CardPoseSolver.pick(candidates: [collinear], intrinsics: k))
         XCTAssertNotNil(try CardPoseSolver.pick(candidates: [collinear, card], intrinsics: k))
         XCTAssertNil(try CardPoseSolver.pick(candidates: [collinear, notACard], intrinsics: k))
+    }
+}
+
+// A portrait card is the same rectangle with its corner list rotated by one;
+// the solve must not depend on which edge the detector listed first.
+final class CardPoseSolverOrientationTests: XCTestCase {
+    func testPortraitCornerOrderSolvesLikeLandscape() throws {
+        let k = CameraIntrinsics(fx: 1500, fy: 1500, cx: 960, cy: 720, distortion: [], imageWidth: 1920, imageHeight: 1440)
+        let landscape = projectCard(rotation: rotation(yaw: 0.1, pitch: 0.05), translation: Vec3(-40, 60, -400), k: k)
+        let portrait = [landscape[1], landscape[2], landscape[3], landscape[0]]
+        let a = try CardPoseSolver.solve(corners: landscape, intrinsics: k)
+        let b = try CardPoseSolver.solve(corners: portrait, intrinsics: k)
+        XCTAssertLessThan(b.pnpResidualPx, 1.5)
+        // The model origin moves to a different physical corner, so the
+        // translation differs; the scale at the card plane must not.
+        XCTAssertEqual(a.scaleAtCardPlaneMmPerPx, b.scaleAtCardPlaneMmPerPx, accuracy: 1e-3)
     }
 }

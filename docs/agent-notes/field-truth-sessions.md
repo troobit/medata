@@ -5,6 +5,15 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
+
+Two-view capture `1790306988367` (outcome 681F8E4C), gold portrait card flat on the table beside the plate, roll on the plate. Field note: "Unknown food registered here - that is the reference card". Row: `scaleSource=lidar`, no `card` block, bread_white 534.5 cm³ + unknown_food 1103.8 cm³; nadir argmax is unknown_food over the whole roll and over the card's printed panel, oblique is bread_white with unknown patches (two-view label mismatch, Req 2, unchanged).
+
+Readings:
+
+- **Vision found the card but the solver rejected it.** Harness `cards` on the bundle: candidate 2 of 3 is the card (186 × 299 px, portrait). It solved at 86 px residual because `CardPoseSolver` mapped the first listed edge onto the 85.60 mm side; with the corner order rotated it solves at 14 px, 2.2 % off LiDAR. The bread on the same frame solves at 15 px, 57 % off LiDAR. Residual alone does not separate card from food; LiDAR scale does. Fixed the same afternoon (Decision 3 revised): the pick runs after the plane fit and the LiDAR scale arbitrates.
+- **The 5-minute log collection carried no estimate lines**, only `event=launch` and the field-note save on the Shutter channel; the outcome row carried everything needed instead (`twoViewPoses` present, transform rotation ≈ 24° about y, translation (−91, −4, −36) mm).
+
 ## 2026-09-24 — the same sesame roll, no truth taken: the depth-grown food region measures it whole, model `coreml_ab812dc3aa9d`, builds `365aff0-20260924-130129` (morning) and `4feedd1-20260924-164906` (afternoon), both Release
 
 **Morning (build 365aff0, unknown-food-nameable tasks 1–7 on the phone).** Three captures, no refusals now that the shutter needs food-like pixels. The model labelled two specks of the roll as bread on a roll that fills 7 % of the frame (bundle `1790223818017-success`: bread_white 0.16 % + bread_wholemeal 0.33 % of the frame, no `unknown_food` at all), the plane fell back to `edgeBand` (ring median 19.7 mm), and the record read 4.2 g of carbohydrate (9.6 + 16.0 cm³). Outcome `72B75CD0`. The two-view capture (`1790223844719-success`, outcome `FE37458C`) read bread_white 286 cm³ plus an `unknown_food` row of 1148 cm³ from a nadir mask with no unknown pixels — BACKLOG 24. The LiDAR depth showed the whole roll as one raised slab (`bundle_view.py` overlay in the session scratchpad). That gap is what `specs/estimation/depth-grown-food-region` closes.

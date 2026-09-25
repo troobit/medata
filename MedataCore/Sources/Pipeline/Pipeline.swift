@@ -195,39 +195,18 @@ public struct Pipeline: Sendable {
         let cardStartedAt = ContinuousClock.now
         let cardInterval = pipelineSignposter.beginInterval("CardDetection")
         #endif
-        // Every ranked rectangle is a candidate; the one that reprojects as
-        // an ID-1 card is the card (two-view-trust Decision 3).
+        // Every ranked rectangle is a candidate (two-view-trust Decision 3).
+        // With LiDAR the pick waits for stage E, where the LiDAR scale can
+        // arbitrate; without it the card is the only scale and must be
+        // chosen now, and a candidate that cannot solve refuses as before.
         let candidates = await cardDetector.detect(in: nadir)
         var corners: [PixelCorner]?
         var cardPose: CardPose?
-        if !candidates.isEmpty {
+        if nadir.depth == nil, !candidates.isEmpty {
             do {
                 if let card = try CardPoseSolver.pick(candidates: candidates, intrinsics: nadir.intrinsics) {
                     (corners, cardPose) = card
                 }
-            } catch CardPoseError.degenerateCardPose where nadir.depth != nil {
-                // LiDAR-first fallback (Decision 1): a degenerate card read does
-                // not abort the estimate when LiDAR depth is present — LiDAR
-                // supplies both scale and support plane. Continue with cardPose
-                // absent; the post-block logStageEnd fires the single stage-end.
-                // The fallback flag is recorded in Release too (Req 3.2).
-                diagnostics.recordCardFallback()
-                #if DEBUG
-                supportPlaneLog.info("event=scale.card_fallback reason=degenerateCardPose")
-                #endif
-            } catch CardPoseError.cardTooOblique where nadir.depth != nil {
-                // LiDAR-first fallback (Decision 1): same as above for an oblique
-                // card. Continue on the LiDAR-only path.
-                diagnostics.recordCardFallback()
-                #if DEBUG
-                supportPlaneLog.info("event=scale.card_fallback reason=cardTooOblique")
-                #endif
-            } catch CardPoseError.degenerateCardPose {
-                #if DEBUG
-                logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
-                pipelineSignposter.endInterval("CardDetection", cardInterval)
-                #endif
-                throw EstimationFailure.degenerateCardPose
             } catch CardPoseError.cardTooOblique {
                 #if DEBUG
                 logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
@@ -235,9 +214,8 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.cardTooOblique
             } catch {
-                // Generic (unexpected) card-solve errors stay fail-closed
-                // (Decision 2): refuse regardless of LiDAR depth so unknown
-                // failures stay surfaced rather than masked behind a LiDAR fit.
+                // degenerateCardPose and any unexpected solve error stay
+                // fail-closed (Decision 2).
                 #if DEBUG
                 logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
                 pipelineSignposter.endInterval("CardDetection", cardInterval)
@@ -305,6 +283,20 @@ public struct Pipeline: Sendable {
         } else {
             lidarMmPerPx = nil
         }
+        if let lidarMmPerPx, !candidates.isEmpty {
+            // LiDAR-first (Decision 1): a candidate set that cannot solve is
+            // a fallback, not a refusal, and the LiDAR scale arbitrates
+            // between the rectangles that do solve.
+            do {
+                if let card = try CardPoseSolver.pick(
+                    candidates: candidates, intrinsics: nadir.intrinsics, lidarMmPerPx: lidarMmPerPx) {
+                    (corners, cardPose) = card
+                }
+            } catch {
+                diagnostics.recordCardFallback()
+                supportPlaneLog.info("event=scale.card_fallback reason=\(String(describing: error), privacy: .public)")
+            }
+        }
         var scale: MetricScale
         do {
             scale = try MetricScaleResolver.resolve(
@@ -319,8 +311,8 @@ public struct Pipeline: Sendable {
             throw EstimationFailure.noScaleAvailable
         }
         diagnostics.recordScale(source: Self.scaleSourceLabel(scale), cardFallback: false)
-        // A rectangle the resolver dropped (two-view-trust Req 4.1) is not the
-        // card: it neither scales nor masks anything downstream.
+        // The pick already applied the LiDAR bound; the resolver's own gate
+        // is the same number, so this only differs on the card-only path.
         let cardAccepted = cardPose != nil && scale.cardScaleAvailable
         #if DEBUG
         logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
@@ -360,7 +352,7 @@ public struct Pipeline: Sendable {
             if cardAccepted, let corners {
                 (nadirSeg, clearedPixels) = segmented.excluding(quad: corners.map { SIMD2($0.u, $0.v) })
             }
-            let disagreement = lidarMmPerPx.map { MetricScaleResolver.disagreement(cardPose.scaleAtCardPlaneMmPerPx, $0) }
+            let disagreement = lidarMmPerPx.map { CardPoseSolver.disagreement(cardPose.scaleAtCardPlaneMmPerPx, $0) }
             diagnostics.recordCard(.init(
                 pnpResidualPx: cardPose.pnpResidualPx, distanceMm: cardPose.translationMm.z.magnitude,
                 scaleMmPerPx: cardPose.scaleAtCardPlaneMmPerPx, lidarDisagreement: disagreement,
