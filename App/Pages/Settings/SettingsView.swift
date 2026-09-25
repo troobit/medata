@@ -220,7 +220,7 @@ struct SettingsView: View {
             }
 
             Section {
-                // Outside #if DEBUG deliberately: Req 2.3 requires the
+                // Outside the developer guard deliberately: Req 2.3 requires the
                 // estimation log (and the benchmark that reads it) to
                 // operate in Release builds.
                 NavigationLink("Estimation log") {
@@ -239,7 +239,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.about")
             }
 
-            #if DEBUG
+            #if FIELD_LOOP
             Section("Developer") {
                 // Clears depth from every captured frame and reports the phone
                 // as having none, so the two-view + ID-1 card path runs on a
@@ -259,6 +259,7 @@ struct SettingsView: View {
             }
 
             Section {
+                #if DEBUG
                 Button {
                     seedDemoGlucose()
                 } label: {
@@ -318,6 +319,7 @@ struct SettingsView: View {
                 }
                 .disabled(isClearing)
                 .accessibilityIdentifier("settings.clearAllData")
+                #endif
             }
             #endif
         }
