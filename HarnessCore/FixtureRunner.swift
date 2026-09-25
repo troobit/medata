@@ -1,7 +1,9 @@
 #if HARNESS_ENABLED
 import CaptureKit
+import CoreGraphics
 import Foods
 import Foundation
+import ImageIO
 import Macros
 import PortableContracts
 import Segmentation
@@ -27,6 +29,9 @@ public enum FixtureRunner {
         // be a skipped fixture with a message, not a crash that loses the
         // report for every other bundle in the directory.
         case probsSizeMismatch(String, expected: Int, got: Int)
+        // The stored nadir PNG did not decode, or its pixel grid is not the one
+        // the nadir intrinsics declare.
+        case nadirImageUnusable(String, detail: String)
     }
 
     // Run the volume + macros pipeline (β = 1) on one fixture.
@@ -388,6 +393,48 @@ public enum FixtureRunner {
         } catch {
             throw Error.volumeEstimationFailed(fixtureID, error)
         }
+    }
+
+    // MARK: - Nadir frame (card-detection replay)
+
+    // The stored nadir PNG (RGB8 sRGB, top-left origin — the
+    // `CaptureBundleRecorder.encodeRGB8PNG` contract) decoded back into the
+    // BGRA8 `RawFrame` the device handed `VisionCardDetector`. Depth stays nil
+    // and the pose identity: the detector reads image bytes and nothing else.
+    public static func nadirFrame(fixture: PbMealFixture) throws -> RawFrame {
+        let intrinsics = CameraIntrinsics(pb: fixture.nadirIntrinsics)
+        guard let source = CGImageSourceCreateWithData(fixture.nadirImage as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw Error.nadirImageUnusable(fixture.fixtureID, detail: "PNG did not decode")
+        }
+        let w = image.width
+        let h = image.height
+        guard w == intrinsics.imageWidth, h == intrinsics.imageHeight else {
+            throw Error.nadirImageUnusable(
+                fixture.fixtureID,
+                detail: "PNG is \(w)x\(h), intrinsics say \(intrinsics.imageWidth)x\(intrinsics.imageHeight)")
+        }
+        // Same CG mapping `VisionCardDetector` uses to read the bytes back
+        // (kCVPixelFormatType_32BGRA: byteOrder32Little + premultipliedFirst).
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                    data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                    bytesPerRow: w * 4, space: space,
+                    bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue
+                        | CGImageAlphaInfo.premultipliedFirst.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else {
+            throw Error.nadirImageUnusable(fixture.fixtureID, detail: "BGRA8 context creation failed")
+        }
+        return RawFrame(
+            imageBytes: Data(bytes), pixelFormat: .bgra8, colourSpace: .sRGB,
+            orientation: 1, imageWidth: w, imageHeight: h, timestampMonotonicNs: 0,
+            intrinsics: intrinsics, gravity: Vec3(pb: fixture.gravity),
+            worldFromCamera: .identity, depth: nil)
     }
 
     // MARK: - Private helpers

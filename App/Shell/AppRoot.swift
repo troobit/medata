@@ -1,4 +1,5 @@
 import CaptureKit
+import CardDetectionVision
 import Persistence
 import SwiftUI
 

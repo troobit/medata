@@ -1,11 +1,12 @@
 import CaptureKit
 import CardDetection
+import CardDetectionVision
 import Foundation
 import PortableContracts
 import Testing
 @testable import MeData
 
-// Tests for the App-target VisionCardDetector per spec
+// Tests for the CardDetectionVision-target VisionCardDetector per spec
 // `pipeline-real-device-correctness` design §VisionCardDetector and Reqs 5.1, 5.4,
 // 5.6, 8.5. The synthetic fixture is a 1920×1440 BGRA buffer with a single bright
 // ID-1-aspect rectangle on a black background — exactly the shape Vision is asked
