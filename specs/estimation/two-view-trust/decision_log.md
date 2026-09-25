@@ -215,3 +215,57 @@ Class counts cannot distinguish "one roll with three labels" from "three foods",
 - The 90 % and the dilation width are set by hand on today's captures.
 
 ---
+
+## Decision 7: One tap per view seeds the silhouette; the tap selects and re-seeds, and never gates the estimate
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+The two-view carve now runs end to end — the transform is verified (Decision 4), the card is cleared from both views (Decision 3, task 8), and the two views reconcile to one class (Decision 6) — and it over-reads. The 2026-09-25 evening bundles carve the same sesame roll at 851, 920, 926.9 and 930 cm³ against 266.9–272.0 cm³ from the single-view LiDAR path on the same roll minutes apart, a factor of about 3.4. Three terms are suspected: the nadir silhouette is wider than the roll (the same growth leak the fifth sitting showed as "the highlighted regions show the plate as food items", 89 k → 242 k px before the Decision 4 height band), an oblique only 26° from vertical bounds the height near its far edge alone, and the grid's 120 mm `verticalExtentMm` caps nothing useful. A separate investigation is measuring the split.
+
+The product owner's original proposal for this spec was that the user identifies the food in both photos. Req 3 was a stub. It is also the only lever a phone without LiDAR has, and that path is retained rather than descoped (segmenter-foundation Decision 26), so whatever is built has to work with no depth at all.
+
+### Decision
+
+The identification is **one tap per view on the frozen frame**, taken between the shots for the nadir and after the oblique shutter for the oblique, and nothing else — no drag, box, pinch, lasso, brush or boundary handle. The tap is a point in sensor-buffer coordinates, and it does two things at once: every carvable connected component that does not contain it is cleared from that view's silhouette, and the region growth's seed set is restricted to the component that survives. The oblique seed is projected from the nadir seed through the verified transform whenever the geometry can place it, so the common case costs one tap, and the user can override it. A seeded view bypasses Decision 6's connectivity gate — the tap is the object declaration. Skipping is one control, leaves the proposal untouched and never refuses the estimate. Seeds that disagree between the views refuse the carve and fall back to the flagged nadir extrusion rather than carving a mismatch. Both seeds, their sources and the resulting pixel counts go on the outcome row and into the fixture, so the harness replays a tap from the record and can be given one on the command line for a bundle captured before the feature.
+
+### Rationale
+
+The carve needs a tighter silhouette, and the cheapest honest way to get one is to fix what seeds the region rather than to have the user draw its boundary. The growth leak has a single root cause: the seed set is every pixel the segmenter called food-like, which on these captures includes speckles out on the plate, so the fill starts on the plate and the height band is anchored to plate height. One user point replaces that seed set with a point that is certainly on the food, which makes the already-shipped floor and seed-height-band rules (depth-grown-food-region Decisions 3–4) bite for the first time. The component rule handles the other shape of excess — a second blob such as the card or a neighbouring item — with the same gesture and no extra interaction.
+
+A point is also the only input that survives replay cleanly. Storing a mask would freeze a silhouette against a growth rule that is still moving; storing two integers lets every future build re-derive the region from the same user intent, and lets the four existing bundles be re-carved from a hand-placed seed before any UI is written. That offline replay is the cheapest possible test of the whole premise, and Req 3.15 makes it the gate: if hand-placed seeds do not move 851–930 cm³ materially toward 267–272 cm³, the silhouette is not the dominant term and this decision is wrong in its main claim, not merely in its interaction.
+
+Making the tap optional keeps Decision 6's rejection of "ask the user before reconciling" intact: a single roll on a clean plate already carves unaided, and taxing it would make the path unusable one-handed over a plate.
+
+### Alternatives Considered
+
+- **Tap to select one connected component, with no re-seeding**: The smallest possible change and enough to drop the card and a second food - Rejected as sufficient: the over-wide nadir region is one component that contains the roll, so on a contiguous excess selection changes nothing. It is kept as half of the chosen interaction, not as the whole of it.
+- **Drag a box round the food**: Bounds extent directly, even a contiguous excess - Rejected: it imposes a rectangle on a 12 × 7 × 4 cm roll, asks the user to guess a boundary at arm's length instead of pointing at a thing they can see, and still leaves the silhouette inside the box as loose as it was. The carve's error is shape as well as extent.
+- **Pinch to size a circular region**: One gesture, gives a radius - Rejected: a two-finger gesture on a phone held over a plate, a disc prior on an oblong food, and the same boundary-guessing problem as the box.
+- **Freehand paint or lasso**: The most expressive silhouette a user can give - Rejected on measurement: meal-review Decision 4 recorded ~79 s per hand-painted mask and ~4 mm touch error, which is slower than a retake and less accurate than a depth grow from a correct seed. Req 3.1 restates the ban.
+- **Confirm or retake, with no region input at all**: Zero new interaction surface, and honest about what the user can judge - Rejected: a confirmation with no lever cannot change a number. The user would confirm 927 cm³ and the over-read would survive intact.
+- **Ask only on the view where the masks disagree**: Targets the interaction at the observed failure - Rejected as the trigger: label disagreement between views is what Decision 6 already absorbs, and the over-read appears on captures where the two views agree on the class. Disagreement is the wrong signal to key a prompt on.
+- **Require the tap before any two-view estimate**: Guarantees a good seed on every capture - Rejected: it contradicts Decision 6, which carves a single roll with no input, and makes the common case worse to fix the uncommon one.
+
+### Consequences
+
+**Positive:**
+- One gesture addresses both shapes of silhouette excess: a separate blob is cleared by the component rule, a contiguous leak is cut by anchoring the height band to a seed that is certainly on the food.
+- The interaction is replayable: two integers per view reproduce the silhouette on any later build, and the four existing bundles can be re-carved from hand-placed seeds before a line of UI exists.
+- The estimate never depends on the user, so Decision 6's unaided path stands and a one-handed capture is still possible.
+- The non-LiDAR phone gets the same interaction with a colour/edge grow in place of the depth grow, so the retained path is not a second design.
+
+**Negative:**
+- The preview outline is grown at preview resolution while the estimate re-grows at full resolution, so the user can accept an outline that differs slightly from the one carved; the row carries both pixel counts, but the discrepancy is real.
+- One seed per view cannot describe two foods, so a multi-food plate is unchanged and still waits on instance matching (Req 2.3).
+- A seed on a highlight, a shadow or a sesame seed can under-grow on a phone without depth, where there is no height to stop the fill; the only remedy offered is another tap.
+- A wrong tap is now a silent input to the geometry: nothing on screen says the number moved because of where the finger landed, and only the outcome row records it.
+- The central claim — that a tighter silhouette halves the over-read — is unmeasured. If the pending split attributes the excess to the oblique's weak height bound or to the grid's vertical extent, Requirements 3.1–3.6 are correct interaction design solving the wrong term, and Req 3.15's gate is what catches that before the UI is built.
+
+### Impact
+
+`CaptureFlowModel` / `CapturedFramesView` (the per-view tap step and the frozen-frame outline), `ObjectReconciler` (the connectivity-gate bypass and the seeded class order), `FoodRegionGrowth` (seed-set restriction), `SegmentationResult.excluding` (component clearing, reused from the card path), `PipelineBridges` (projecting the nadir seed into the oblique), `PipelineDiagnostics` (the `userRegion` block and the hull extent), `PbMealFixture` (two seed fields), `FixtureRunner` / `HarnessCLI volumes` (seed replay and command-line seeds), `meal_artefacts` (per-view `user_confirmed` silhouettes).
+
+---
