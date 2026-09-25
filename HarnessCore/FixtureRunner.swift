@@ -402,8 +402,17 @@ public enum FixtureRunner {
     // BGRA8 `RawFrame` the device handed `VisionCardDetector`. Depth stays nil
     // and the pose identity: the detector reads image bytes and nothing else.
     public static func nadirFrame(fixture: PbMealFixture) throws -> RawFrame {
-        let intrinsics = CameraIntrinsics(pb: fixture.nadirIntrinsics)
-        guard let source = CGImageSourceCreateWithData(fixture.nadirImage as CFData, nil),
+        try frame(png: fixture.nadirImage, intrinsics: CameraIntrinsics(pb: fixture.nadirIntrinsics), fixture: fixture)
+    }
+
+    /// The oblique twin of `nadirFrame`; gravity is the nadir's, which the
+    /// detector never reads.
+    public static func obliqueFrame(fixture: PbMealFixture) throws -> RawFrame {
+        try frame(png: fixture.obliqueImage, intrinsics: CameraIntrinsics(pb: fixture.obliqueIntrinsics), fixture: fixture)
+    }
+
+    private static func frame(png: Data, intrinsics: CameraIntrinsics, fixture: PbMealFixture) throws -> RawFrame {
+        guard let source = CGImageSourceCreateWithData(png as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw Error.nadirImageUnusable(fixture.fixtureID, detail: "PNG did not decode")
         }

@@ -11,7 +11,7 @@ references:
 
 - [x] 2. Both poses and the mm transform are recorded on every two-view outcome; cross-generation pairs refuse (Req 1.4, 1.5)
 
-- [ ] 3. Device verification: card or checkerboard corners back-project between views within 10 px (Req 1.3)
+- [x] 3. Device verification: card or checkerboard corners back-project between views within 10 px (Req 1.3)
 
 ## Card path
 

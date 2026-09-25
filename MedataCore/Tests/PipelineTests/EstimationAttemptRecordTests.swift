@@ -56,7 +56,8 @@ final class EstimationAttemptRecordTests: XCTestCase {
                                 foodPixelsBefore: 13_824, foodPixelsAfter: 193_536,
                                 refitReference: "foodSupport", refitRefused: false),
             card: .init(pnpResidualPx: 1.4, distanceMm: 402.5, scaleMmPerPx: 0.21,
-                        lidarDisagreement: 0.05, accepted: true, clearedPixels: 38_210)
+                        lidarDisagreement: 0.05, clearedPixels: 38_210),
+            cardCandidateCount: 3
         )
     }
 

@@ -24,9 +24,10 @@ Req 4; audit of its history in `two-view-geometry-audit.md` §3.
    coverage, growth and volume. The bundle keeps the raw segmenter output
    (`diagnostics.debugNadirSegmentation`), so a harness replay must apply the
    exclusion itself.
-4. Every detected rectangle lands on the outcome row as `card {...}` with
-   `accepted` and `clearedPixels`; `event=card` on the support-plane log channel
-   carries the same in Release builds.
+4. A picked card lands on the outcome row as `card {...}` with
+   `clearedPixels`; every row carries `cardCandidateCount`. `event=card
+   candidates=N picked=bool clearedPixels=M` on the support-plane log channel
+   says the same in Release builds.
 
 ## Gotchas
 

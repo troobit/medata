@@ -200,6 +200,7 @@ public struct Pipeline: Sendable {
         // arbitrate; without it the card is the only scale and must be
         // chosen now, and a candidate that cannot solve refuses as before.
         let candidates = await cardDetector.detect(in: nadir)
+        diagnostics.recordCardCandidates(candidates.count)
         var corners: [PixelCorner]?
         var cardPose: CardPose?
         if nadir.depth == nil, !candidates.isEmpty {
@@ -311,9 +312,6 @@ public struct Pipeline: Sendable {
             throw EstimationFailure.noScaleAvailable
         }
         diagnostics.recordScale(source: Self.scaleSourceLabel(scale), cardFallback: false)
-        // The pick already applied the LiDAR bound; the resolver's own gate
-        // is the same number, so this only differs on the card-only path.
-        let cardAccepted = cardPose != nil && scale.cardScaleAvailable
         #if DEBUG
         logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
         pipelineSignposter.endInterval("MetricScale", scaleInterval)
@@ -347,18 +345,16 @@ public struct Pipeline: Sendable {
         // the nadir (two-view-trust Req 4.6): an out-of-palette object the
         // segmenter calls food, whose extent the pose solve already fixed.
         var nadirSeg = segmented
-        if let cardPose {
-            var clearedPixels = 0
-            if cardAccepted, let corners {
-                (nadirSeg, clearedPixels) = segmented.excluding(quad: corners.map { SIMD2($0.u, $0.v) })
-            }
+        var clearedPixels = 0
+        if let cardPose, let corners {
+            (nadirSeg, clearedPixels) = segmented.excluding(quad: corners.map { SIMD2($0.u, $0.v) })
             let disagreement = lidarMmPerPx.map { CardPoseSolver.disagreement(cardPose.scaleAtCardPlaneMmPerPx, $0) }
             diagnostics.recordCard(.init(
                 pnpResidualPx: cardPose.pnpResidualPx, distanceMm: cardPose.translationMm.z.magnitude,
                 scaleMmPerPx: cardPose.scaleAtCardPlaneMmPerPx, lidarDisagreement: disagreement,
-                accepted: cardAccepted, clearedPixels: clearedPixels))
-            supportPlaneLog.info("event=card accepted=\(cardAccepted, privacy: .public) disagreement=\(disagreement ?? -1, privacy: .public) clearedPixels=\(clearedPixels, privacy: .public)")
+                clearedPixels: clearedPixels))
         }
+        supportPlaneLog.info("event=card candidates=\(candidates.count, privacy: .public) picked=\(cardPose != nil, privacy: .public) clearedPixels=\(clearedPixels, privacy: .public)")
         let palette = nadirSeg.probabilities.palette
 
         // Fail-closed gate on the nadir argmax, guarding both capture paths —
@@ -443,7 +439,7 @@ public struct Pipeline: Sendable {
                     // length (stage E); it follows the plane the volume uses.
                     let fMean = (nadir.intrinsics.fx + nadir.intrinsics.fy) / 2
                     if let rescaled = try? MetricScaleResolver.resolve(
-                        cardScaleMmPerPx: cardAccepted ? cardPose?.scaleAtCardPlaneMmPerPx : nil,
+                        cardScaleMmPerPx: cardPose?.scaleAtCardPlaneMmPerPx,
                         lidarScaleMmPerPx: abs(plane.distanceMm) / fMean) {
                         scale = rescaled
                     }
