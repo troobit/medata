@@ -7,6 +7,52 @@ import PortableContracts
 // map, the food-region mask resampled to the colour grid, the camera intrinsics, and
 // gravity. RNG is seeded by hashing the depth bytes (per §6.0) so two runs on the
 // same fixture produce identical inliers.
+// Gravity-locked hypothesis normals, and the switch that measures them.
+//
+// THE DEFECT (`docs/agent-notes/support-plane-fit.md`, 2026-09-25). Both fitters sample a
+// minimal triple, take its cross-product normal, and score by inlier count. Around a plate
+// the candidate set holds two parallel surfaces 11-20 mm apart — the table and the plate
+// top — and a plane tilted 4-6 deg THREADS BOTH and collects 2-11 % more inliers than either
+// surface alone. RANSAC maximises that count, so it takes the tilt, at 20-30 mm of height
+// error across the frame. Measured independently over 31 single-view bundles, the table
+// itself is 0.76 deg from gravity at 1.34 mm planar RMS, so the tilt is in the FIT, not in
+// ARKit's depth.
+//
+// THE LOCK. Use gravity as the hypothesis normal and fit only the offset. A hypothesis's
+// inlier set then becomes a height BAND, which cannot span two surfaces 11-20 mm apart, so
+// the mechanism is removed rather than masked. Everything downstream is unchanged: the 5 mm
+// inlier band, connected-component scoring, sequential extraction, the ring ladder.
+//
+// NOT `gravityAngleMaxRad`. Decision 55 measured that tightening the cone starves the
+// hypothesis pool and leaves the violation LARGER in units of its own bar. The defect is not
+// that tilted hypotheses are admitted; it is that they are generated and then win on count.
+public enum SupportPlaneGravityLock {
+    // The shipped setting. Flip it only on a corpus measurement of the VOLUMES, not of the
+    // geometry: a cleaner plane that moves the carb numbers the wrong way is a regression.
+    static let shippedDefault = false
+
+    // `MEDATA_GRAVITY_LOCK=1` / `=0` overrides the default for one process, so both arms can
+    // be measured over the same corpus in one session without a rebuild. Read once, so it is
+    // immutable and therefore concurrency-safe; nothing in the estimation path may depend on
+    // an environment variable at run time on device, which is why the DEFAULT — not the
+    // override — is what ships.
+    public static let enabled: Bool = {
+        switch ProcessInfo.processInfo.environment["MEDATA_GRAVITY_LOCK"] {
+        case "1": return true
+        case "0": return false
+        default: return shippedDefault
+        }
+    }()
+
+    // The escape. A genuinely tilted support surface (a tray on a lap, a propped board) must
+    // not be forced flat, and on such a scene the locked fit loses inliers outright rather
+    // than trading a few. On everything measured the locked count is within 2-11 % of the
+    // free one, so a fit that keeps at least this share of the free fit's inliers is the
+    // straddling case and the lock is right; below it, the surface is the tilted one and the
+    // free fit is kept. The bar is set from that 11 % worst case with room, not derived.
+    static let escapeInlierRatio: Float = 0.8
+}
+
 public enum LiDARPlaneFitter {
     // Tunable parameters per design §6.2 ("Parameter justification").
     //
@@ -366,7 +412,10 @@ public enum LiDARPlaneFitter {
         throw outcome.refusal ?? SupportPlaneError.noLidarPoints
     }
 
-    public static func fitOutcome(_ inputs: Inputs) -> SupportPlaneFitOutcome {
+    public static func fitOutcome(
+        _ inputs: Inputs,
+        gravityLocked: Bool = SupportPlaneGravityLock.enabled
+    ) -> SupportPlaneFitOutcome {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
         // Counters accumulate into `stats`, returned on both exits (snaq-parity
         // Req 3.1 — previously the `debugLast*` statics).
@@ -381,30 +430,41 @@ public enum LiDARPlaneFitter {
         let seed = Fnv1a64.hash(inputs.depth.depthBytesMm)
         var rng = SplitMix64(seed: seed)
         let gravity = inputs.gravityCamera.normalised()
-        let (bestNormal, _, bestInliers) = ransac(
+        let fit = ransac(
             points: points,
             gravity: gravity,
-            rng: &rng
+            rng: &rng,
+            gravityLocked: gravityLocked
         )
+        let bestNormal = fit.normal
+        let bestInliers = fit.inliers
         stats.inlierCount = bestInliers.count
 
         guard bestInliers.count >= minPoints else {
             return SupportPlaneFitOutcome(plane: nil, stats: stats, refusal: .noLidarPoints)
         }
 
-        // Step 3 + 5: least-squares refinement on inliers; stability gate σ_min/σ_max.
+        // Step 3 + 5: least-squares refinement on inliers; stability gate on the free leg. A
+        // gravity-locked fit refines the offset only — running the full least-squares step
+        // would hand the straddling tilt straight back.
         let refinedNormal: Vec3
         let refinedD: Float
-        do {
-            (refinedNormal, refinedD) = try refine(
-                inliers: bestInliers.map { points[$0] },
-                seedNormal: bestNormal
+        if fit.gravityLocked {
+            (refinedNormal, refinedD) = refineOffsetOnly(
+                inliers: bestInliers.map { points[$0] }, normal: bestNormal
             )
-        } catch {
-            return SupportPlaneFitOutcome(
-                plane: nil, stats: stats,
-                refusal: (error as? SupportPlaneError) ?? .lidarFitDegenerate
-            )
+        } else {
+            do {
+                (refinedNormal, refinedD) = try refine(
+                    inliers: bestInliers.map { points[$0] },
+                    seedNormal: bestNormal
+                )
+            } catch {
+                return SupportPlaneFitOutcome(
+                    plane: nil, stats: stats,
+                    refusal: (error as? SupportPlaneError) ?? .lidarFitDegenerate
+                )
+            }
         }
 
         // Step 3b (additive robustness, estimation-runtime-consistency): consensus
@@ -431,10 +491,19 @@ public enum LiDARPlaneFitter {
                 reselected.append(idx)
             }
             if reselected == polishedInliers || reselected.count < minPoints { break }
-            guard let (nextNormal, nextD) = try? refine(
-                inliers: reselected.map { points[$0] },
-                seedNormal: polishedNormal
-            ) else { break }
+            let nextNormal: Vec3
+            let nextD: Float
+            if fit.gravityLocked {
+                (nextNormal, nextD) = refineOffsetOnly(
+                    inliers: reselected.map { points[$0] }, normal: polishedNormal
+                )
+            } else {
+                guard let refined = try? refine(
+                    inliers: reselected.map { points[$0] },
+                    seedNormal: polishedNormal
+                ) else { break }
+                (nextNormal, nextD) = refined
+            }
             let angle = acos(max(-1, min(1, nextNormal.dot(gravity))))
             if angle > gravityAngleMaxRad { break }
             polishedInliers = reselected
@@ -566,7 +635,87 @@ public enum LiDARPlaneFitter {
         return points
     }
 
+    // The winning hypothesis, and which search produced it. `gravityLocked` decides how the
+    // plane is refined downstream: a locked fit keeps gravity as its normal and refines the
+    // OFFSET ONLY, or the least-squares step would hand the tilt straight back.
+    struct RansacFit {
+        let normal: Vec3
+        let d: Float
+        let inliers: [Int]
+        let gravityLocked: Bool
+    }
+
+    // Free search plus, when locked, the gravity-locked search and the escape between them.
+    // With the lock off nothing here runs but `freeRansac`, and the RNG sequence, the inlier
+    // set and the plane are bit-for-bit what they were.
     static func ransac(
+        points: [Vec3],
+        gravity: Vec3,
+        rng: inout SplitMix64,
+        gravityLocked: Bool = SupportPlaneGravityLock.enabled
+    ) -> RansacFit {
+        let free = freeRansac(points: points, gravity: gravity, rng: &rng)
+        guard gravityLocked else {
+            return RansacFit(normal: free.normal, d: free.d, inliers: free.inliers,
+                             gravityLocked: false)
+        }
+        let locked = lockedRansac(points: points, gravity: gravity)
+        let floor = Float(free.inliers.count) * SupportPlaneGravityLock.escapeInlierRatio
+        guard Float(locked.inliers.count) >= floor else {
+            return RansacFit(normal: free.normal, d: free.d, inliers: free.inliers,
+                             gravityLocked: false)
+        }
+        return RansacFit(normal: gravity, d: locked.d, inliers: locked.inliers,
+                         gravityLocked: true)
+    }
+
+    // The gravity-locked search. With the normal fixed the hypothesis has ONE free parameter,
+    // so the sampling loop collapses to an exact 1-D mode search over h = g_hat . p: for every
+    // sample taken as p_1 (which is every offset the sampling loop could ever have drawn),
+    // count the heights inside the +/-5 mm band. Sorting once makes each count two binary
+    // searches, so the exhaustive answer costs less than 256 sampled ones — and it is
+    // deterministic without touching the RNG, which is why `rng` is not a parameter.
+    static func lockedRansac(points: [Vec3], gravity: Vec3) -> (d: Float, inliers: [Int]) {
+        let n = points.count
+        guard n > 0 else { return (0, []) }
+        let heights = points.map { gravity.dot($0) }
+        let sorted = heights.sorted()
+
+        var bestD = sorted[0]
+        var bestCount = -1
+        for d in sorted {
+            // Inliers are |h - d| < band, matching the free path's strict comparison.
+            let lower = lowerBound(sorted, d - inlierBandMm, strict: true)
+            let upper = lowerBound(sorted, d + inlierBandMm, strict: false)
+            let count = upper - lower
+            if count > bestCount {
+                bestCount = count
+                bestD = d
+            }
+        }
+
+        // Ascending original-index order, as the free path produces, so the consensus polish's
+        // fixed-point comparison is like-for-like.
+        var inliers: [Int] = []
+        inliers.reserveCapacity(bestCount)
+        for idx in 0..<n where abs(heights[idx] - bestD) < inlierBandMm {
+            inliers.append(idx)
+        }
+        return (bestD, inliers)
+    }
+
+    // First index whose value is >= `value` (strict: > `value` for the exclusive lower edge).
+    private static func lowerBound(_ sorted: [Float], _ value: Float, strict: Bool) -> Int {
+        var lo = 0, hi = sorted.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            let before = strict ? (sorted[mid] <= value) : (sorted[mid] < value)
+            if before { lo = mid + 1 } else { hi = mid }
+        }
+        return lo
+    }
+
+    static func freeRansac(
         points: [Vec3],
         gravity: Vec3,
         rng: inout SplitMix64
@@ -615,6 +764,22 @@ public enum LiDARPlaneFitter {
             }
         }
         return (bestNormal, bestD, bestInliers)
+    }
+
+    // Offset-only refinement for a gravity-locked fit: the normal is given, so the
+    // least-squares plane through the inliers is g_hat . centroid and nothing is solved.
+    //
+    // Accumulated in DOUBLE, unlike `refine` below. Decision 58 measures that file's Float
+    // `reduce(0, +)` centroid drifting 0.724 and 1.184 mm at the 1e6 inlier counts the
+    // fallback leg reaches, and declines to fix it there because the fix MOVES the shipped
+    // plane. This path ships no plane yet, so it starts correct. Never throws: three
+    // collinear points still define an offset along a known normal, which is the whole
+    // degeneracy `refine`'s stability gate exists to catch.
+    static func refineOffsetOnly(inliers: [Vec3], normal: Vec3) -> (Vec3, Float) {
+        guard !inliers.isEmpty else { return (normal, 0) }
+        var sum = 0.0
+        for p in inliers { sum += Double(normal.dot(p)) }
+        return (normal, Float(sum / Double(inliers.count)))
     }
 
     static func refine(inliers: [Vec3], seedNormal: Vec3) throws -> (Vec3, Float) {

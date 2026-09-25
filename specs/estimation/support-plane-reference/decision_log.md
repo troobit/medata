@@ -3097,8 +3097,26 @@ On the capture carrying the corpus's only intended-correct fit the polish remove
 
 ## Decision 55: The gravity cone is read at four gates, enforced at two, and bounds nothing
 
-**Date**: 2026-08-06
+**Date**: 2026-09-25
 **Status**: accepted
+
+> **Amended 2026-09-25** (Decision 78's pass). Every measurement below is reproduced and nothing
+> in the decision changes: `gravityAngleMaxRad` is still `[owed]`, still 15°, still not repaired.
+> Two readings gain a successor, both recorded in place rather than appended, per this repo's
+> `decision_mode: overwrite`:
+>
+> 1. **The two fallback tilts are confirmed independently.** 1.742° on `1785135663727` and
+>    0.579° on `1785901032716` reproduce to the decimal under
+>    `LiDARSupportPlaneFitter.fitFromDepth` two months and many constants later.
+> 2. **The 6.3° disagreement is still unexplained.** `docs/agent-notes/support-plane-fit.md`
+>    (2026-09-25) proposed that the 8.309° plate top is a straddling artefact — a plane threading
+>    the plate top and the table at once — and offered a far-field RANSAC reading of 0.61° over
+>    99.7 % of the frame as the resolution. That reading was taken on `1785901032716`, whose
+>    selected candidate is the TABLE (Decision 18's silent failure); the 8.309° plate top is
+>    `1785135663727`'s. The evidence is therefore about a different capture and does not settle
+>    this one. The straddling explanation remains plausible and unmeasured, and the capture that
+>    would settle it is an empty rimmed plate on a table, where the plate top's tilt must equal
+>    the table's by construction.
 
 ### Context
 
@@ -3162,7 +3180,7 @@ Not repaired.
 - Task 26 gains an owed constant for the fifth pass running, and this one the corpus cannot bound from above at all — even the gate switched off reads identically.
 - The floor rests on a single plate at a single tilt, so it is a property of one capture rather than of the scene class.
 - The guard is now known to be non-enforcing at every value and is documented rather than repaired for the third decision running.
-- The 6.3° disagreement between the plate top and its own table is unexplained. It could be the plate, the fit, or the recorded gravity, and the corpus cannot separate them.
+- The 6.3° disagreement between the plate top and its own table is unexplained. It could be the plate, the fit, or the recorded gravity, and the corpus cannot separate them. Still true as of 2026-09-25: the straddling explanation offered for it was measured on the wrong capture (see the amendment note above), and the plate-top hypothesis on `1785135663727` has never been read against a known-level surface.
 - Every plane figure this feature quotes is a reading at a cone that admits planes outside itself, so the candidate set behind them has never been bounded by the thing that is supposed to bound it.
 
 ### Impact
@@ -6516,5 +6534,114 @@ existing helper or reading is modified, `subsampled`, `orderReading`,
 `decomposeZSum` and `attainableZCeilingMm` are reused unchanged, and Decision
 76's 32 seeds are reproduced inside the new reading as its own 32-prefix. No
 shipped code changes.
+
+---
+
+## Decision 78: Gravity-locking the hypothesis normal fixes the tilt and loses the surface, so it ships off
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Both fitters sample a minimal triple, take its cross-product normal, and score by inlier count.
+`docs/agent-notes/support-plane-fit.md` (2026-09-25) measured, over 31 single-view bundles, that
+the depth field over a table is planar and perpendicular to gravity — median tilt 0.76°, planar
+RMS 1.34 mm — so the 4–6° support planes the pipeline produces are made by the **fit**, not by
+the sensor. The mechanism is straddling: a plate top sits 11–20 mm above the table, and when the
+candidate band holds both surfaces in comparable numbers a tilted plane threads both and wins on
+inlier count by 2–11 %, at 20–30 mm of height error across the frame. On `1790315900185` that
+leaves the plate's ceiling above the food's floor, so no height floor can bound a region grow —
+which is the open cause `depth-grown-food-region` Decision 4 named and masked.
+
+The remedy that investigation proposed is to lock the hypothesis normal to gravity and fit only
+the offset, so a hypothesis's inlier set is a height band that cannot span two surfaces 11–20 mm
+apart. It explicitly does not tighten `gravityAngleMaxRad`: Decision 55 measured that a tighter
+cone starves the hypothesis pool and leaves the violation larger in units of its own bar.
+
+The question this decision answers is not whether the lock produces a better plane. It is whether
+it produces a better **carbohydrate number**, which is the only thing the pipeline ships.
+
+### Decision
+
+Build the lock behind `SupportPlaneGravityLock`, and **ship it disabled**. `shippedDefault` is
+`false`; `MEDATA_GRAVITY_LOCK=1` enables it for one process so both arms can be measured over the
+same corpus without a rebuild. Nothing in the estimation path reads the environment on device —
+the default is what ships.
+
+Locked, `LiDARPlaneFitter.ransac` and `SupportRegion.ccRansac` use gravity as the normal and draw
+only the offset, and `refineOffsetOnly` replaces the least-squares `refine` in both the winner's
+refinement and the consensus polish. The inlier band, connected-component scoring, sequential
+extraction and the ring ladder are unchanged. The escape is `escapeInlierRatio = 0.8`: the locked
+fit is adopted only while it keeps at least 0.8× the free fit's winning count on the same sample
+set, so a genuinely tilted surface keeps its free fit.
+
+### Rationale
+
+**The geometry does what was predicted.** Over the 11 bundles carrying a pre-shutter mask the
+locked tilt is 0.000° by construction and the escape fires once, on `1790232681422`, which reads
+identically in both arms. On `1790315900185` — the capture the investigation named — tilt goes
+5.959° → 0.000° and fit RMS 2.554 → **1.231** mm. The predicted 1.34 → 2.43 mm residual cost does
+not transfer: it was measured over a far-field RANSAC's own inliers, not over the shipped
+candidate set.
+
+**The volumes get worse.** Over the 19 scored single-view bundles the median volume change is
++1.1 % but the mean absolute change is **33.1 %**, and all three moves above 20 % are upward. On
+the three weighed plates carbohydrate mean absolute error rises from **40.4 g to 43.2 g**: two of
+the three are unchanged to 0.1 g, and the third (`1785901032716`, already reading 3.2× over) goes
+from +97.7 g to +106.2 g. The 2026-09-25 sesame roll, which the owner judged good at about
+280 cm³, reads 219–310 cm³ free and 237–407 cm³ locked.
+
+**The mechanism of the regression is the point.** The lock picks the *dominant* surface in the
+band, and around a plate that is the table. `1790315900185` locked has a ring median of 20.40 mm
+against 1.05 mm free — a cleaner fit to a surface the food is not resting on. The ring ladder
+then correctly rejects such a candidate, `fitFoodSupportPlane` returns nil, and the pipeline falls
+back to `edgeBand` with no offset. That is exactly Decision 3 of `depth-grown-food-region`
+arriving by a new route, and it is the whole of `1786845356405` (85.7 → 282.1 cm³) and
+`1790315865030` (309.5 → 407.3 cm³).
+
+So the straddling diagnosis is correct and the lock is the wrong remedy for it. Removing the tilt
+does not tell the fitter which of the two straddled surfaces the food rests on; it makes it
+choose the larger one. Selecting the right surface is the ring measure's job, and these locked
+planes are rejected by it correctly.
+
+**It is kept rather than reverted** because it is the measured control for every future attempt
+at this defect, because it costs nothing with the flag off — the free arm reproduces
+`depth-grown-food-region` Decision 4's per-bundle volumes and its 40.4 g MAE exactly — and
+because the empty-plate capture that would settle Decision 55's 6.3° is precisely the scene where
+the locked and free arms must agree.
+
+### Alternatives Considered
+
+- **Flip the default to on, on the geometry**: The tilt goes to zero, the RMS often falls, and the plate/food height overlap that motivated `depth-grown-food-region` Decision 4 is removed - Rejected because it costs 2.8 g of carbohydrate mean absolute error on the corpus's only weighed truth and widens the sesame roll's band from 219–310 to 237–407 cm³. A cleaner plane that moves the carb number the wrong way is a regression however good the geometry looks.
+- **Lock only the promoted leg (`SupportRegion`), leaving the fallback free**: The two regressions both arrive as a lost `foodSupport` candidate, so the promoted leg is where the damage is - Rejected because it is the opposite of the fix: the promoted leg is the one whose locked candidates the ring ladder rejects, so locking it alone produces the fallback more often, not less.
+- **Raise `escapeInlierRatio` above 0.8 so the lock fires less often**: Tuning the escape until the regressions stop - Rejected as fitting a constant to three bundles. The escape is a guard against a tilted surface, not a dial for how much straddling correction to apply, and the bundles that regress do not regress because the locked fit was marginal — `1790315865030`'s locked fit wins comfortably.
+- **Tighten `gravityAngleMaxRad` instead**: The obvious lever, and the one already in the code - Rejected on Decision 55, which measured that a tighter cone starves the hypothesis pool, moves the answer, and leaves the worst violation larger in units of its own bar.
+- **Revert the lock entirely**: Less code, no dead flag - Rejected because the arms must stay runnable: the empty-plate and propped-surface captures the investigation asks for are only interpretable if both arms can be replayed over them, and rebuilding the lock to read them would re-open every question this pass closed.
+
+### Consequences
+
+**Positive:**
+- The straddling defect now has a measured remedy and a measured verdict, rather than an untested proposal in an agent note.
+- The free arm is proven bit-identical to the shipped path on 19 bundles, which makes it the reference the next attempt is scored against.
+- The regression's mechanism is understood and named — the lock chooses the dominant surface, the ring ladder rejects it, the table plane is adopted — so the next attempt knows it must select a surface, not only level one.
+- `refineOffsetOnly` accumulates in Double, so the new path does not inherit the centroid drift Decision 58 measured at 0.724 and 1.184 mm on the fallback leg.
+- `LiDARPlaneFitter`'s locked search is exact rather than sampled, which makes the iteration-budget questions of Decisions 51 and 57 inapplicable to it.
+
+**Negative:**
+- A flag ships disabled, and dead-by-default code is a maintenance cost until the next attempt either adopts or removes it.
+- The 6.3° question Decision 55 left open is still open; this pass narrowed it by disproving the evidence offered for its resolution, not by answering it.
+- `SupportRegion.ccRansac` runs twice per pass when the flag is on, roughly doubling extraction cost in that arm.
+- The geometry arm covers 11 of the 20 bundles, because the nine oldest carry no pre-shutter mask and this test target cannot reach `ClassPalette.isVolumetricClass` to derive one.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`SupportPlaneGravityLock`, `ransac`
+split into `freeRansac` / `lockedRansac`, `refineOffsetOnly`, `fitOutcome`),
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ccRansac`, `extractCandidates`,
+`fitFoodSupportPlane`), `MedataCore/Sources/SupportPlane/SupportPlaneFitter.swift`
+(`fitFromDepth`), `MedataCore/Tests/SupportPlaneTests/GravityLockMeasurementTests.swift` (new,
+`MEDATA_CORPUS=1`), `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**:
+with the default off the corpus reads the same planes and the same volumes it did before.
 
 ---

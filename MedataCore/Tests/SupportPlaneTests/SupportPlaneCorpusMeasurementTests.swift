@@ -6258,8 +6258,14 @@ struct SupportPlaneCorpusMeasurementTests {
 
         var rng = SplitMix64(seed: Fnv1a64.hash(inputs.depth.depthBytesMm))
         let gravity = inputs.gravityCamera.normalised()
-        let (bestNormal, _, bestInliers) = LiDARPlaneFitter.ransac(
-            points: points, gravity: gravity, rng: &rng)
+        // Pinned to the FREE leg: every owed-constant bracket in Decisions 40-57 is a
+        // reading of the shipped free fit, and Decision 61 froze that reading frame so the
+        // numbers stay comparable. The gravity lock is measured separately, in
+        // `gravityLockCorpusComparison` below.
+        let fallbackFit = LiDARPlaneFitter.ransac(
+            points: points, gravity: gravity, rng: &rng, gravityLocked: false)
+        let bestNormal = fallbackFit.normal
+        let bestInliers = fallbackFit.inliers
         guard bestInliers.count >= LiDARPlaneFitter.minPoints else { return nil }
         guard let refined = try? LiDARPlaneFitter.refine(
             inliers: bestInliers.map { points[$0] }, seedNormal: bestNormal) else { return nil }

@@ -2542,3 +2542,183 @@ the reproduced candidate set, not the shipped 4.2° — the agreement is in mech
 magnitude, not to the decimal. Plate and food regions are defined by height above the true table
 plane, which is a clean separation on these captures (a trimodal histogram: table 0 ± 3 mm,
 plate 12–26 mm, food 32–52 mm, with a clear valley between) but is not available at run time.
+
+## The lock fixes the plane and costs the volumes, so it ships OFF (2026-09-25, later)
+
+The section above proposed gravity-locking the hypothesis normal in both fitters. It is now
+built, behind `SupportPlaneGravityLock` in `LiDARPlaneFitter.swift`, and measured both ways over
+the same corpus. **The geometry improves exactly as predicted and the volumes get worse, so the
+default stays `false`.** Read this before proposing the lock again.
+
+### What shipped
+
+`LiDARPlaneFitter.ransac` and `SupportRegion.ccRansac` take a `gravityLocked` flag. Locked, the
+hypothesis normal is gravity and only the offset is drawn, and `refineOffsetOnly` replaces the
+least-squares `refine` in the winner's refinement AND in the consensus polish — running the full
+LSQ step would hand the tilt straight back. The inlier band, the connected-component scoring,
+sequential extraction and the ring ladder are untouched, and `gravityAngleMaxRad` is NOT
+tightened (Decision 55's finding stands: a tighter cone starves the pool).
+
+Two details worth keeping:
+
+- In `LiDARPlaneFitter` the locked search is **exact, not sampled**. With the normal fixed the
+  hypothesis has one free parameter, so the sampling loop collapses to a 1-D mode search over
+  ĝ·p: sort the heights once, and every sample's offset costs two binary searches. That is every
+  offset the loop could ever have drawn, deterministically, without touching the RNG.
+- `SupportRegion.ccRansac` keeps its sampling loop, because its objective is the largest
+  8-connected component and not the inlier count, and a component cannot be read off a sorted
+  1-D array. It draws three indices unconditionally in both modes so the generator sequence stays
+  independent of rejections (Req 7.7); the locked leg ignores p₂ and p₃.
+
+The escape is `escapeInlierRatio = 0.8`: both searches run over the same sample set and the
+locked one is adopted only while it keeps ≥ 0.8× the free fit's winning count. It **fires on real
+data** — `1790232681422` reads identically in both arms (tilt 2.967°, RMS 2.133, ring −0.30), so
+a genuinely non-level surface is not forced flat.
+
+With the flag off, the RNG sequence, the inlier set and the plane are bit-for-bit what they were:
+the free arm below reproduces `depth-grown-food-region` Decision 4's per-bundle volumes exactly,
+including its 40.4 g weighed-plate MAE.
+
+### How to re-run it
+
+```
+# volumes, one bundle per invocation, from a scratch worktree at committed HEAD
+MEDATA_GRAVITY_LOCK=0|1 .build/release/HarnessCLI volumes \
+  --fixtures-dir <dir with one .fixture> --checkpoint-sha256 ab812dc3aa9d --output <json>
+
+# geometry, both arms in one process
+swift build -c release -Xswiftc -enable-testing --target SupportPlaneTests
+MEDATA_CORPUS=1 MEDATA_BUNDLE_DIR=<dir of .fixture> \
+  xcrun xctest .build/out/Products/Release/SupportPlaneTests.xctest
+```
+
+`swift test -c release` does **not** work on this package — release builds the library modules
+without `-enable-testing`, so every `@testable import` fails to resolve and `Dosing`,
+`GlucoseWidgetShared` and `Persistence` fail outright. Build the one test target with
+`-Xswiftc -enable-testing` and run its own `.xctest` bundle. In Debug the fit over a full
+1920×1440 bundle is far too slow to sweep.
+
+### 1. The plane: the lock does what it said it would
+
+`LiDARSupportPlaneFitter.fitFromDepth`, first fit, pre-shutter mask, 11 of the 20 single-view
+bundles (the other nine predate the pre-shutter mask and this target cannot derive the argmax one
+— `ClassPalette.isVolumetricClass` lives in `Foods`). Tilt in degrees to gravity, RMS in mm.
+
+| bundle | free ref / tilt / RMS / ring | locked ref / tilt / RMS / ring |
+|---|---|---|
+| 1786844576261 | edgeBand 0.626 / 2.047 / 5.15 | edgeBand 0.000 / 1.963 / 4.77 |
+| 1786845356405 | edgeBand 3.348 / 2.237 / 23.30 | edgeBand 0.000 / 2.666 / 30.91 |
+| 1790223818017 | edgeBand 1.196 / 1.512 / 19.69 | edgeBand 0.000 / 2.310 / 21.51 |
+| 1790232681422 | foodSupport 2.967 / 2.133 / −0.30 | **escape fired** — identical |
+| 1790242780378 | edgeBand 2.380 / 2.569 / −0.02 | **foodSupport** 0.000 / 2.582 / −1.54 |
+| 1790310107431 | foodSupport 2.327 / 2.643 / −0.20 | **edgeBand** 0.000 / 2.466 / 20.19 |
+| 1790313330330 | foodSupport 1.375 / 2.195 / 0.14 | foodSupport 0.000 / 2.422 / −0.97 |
+| 1790315865030 | edgeBand 0.360 / 1.790 / 12.90 | edgeBand 0.000 / 1.562 / 11.79 |
+| **1790315900185** | edgeBand **5.959** / 2.554 / 1.05 | edgeBand **0.000** / **1.231** / 20.40 |
+| 1790318604792 | edgeBand 0.606 / 1.432 / 15.04 | edgeBand 0.000 / 1.609 / 16.34 |
+| 1790318616477 | edgeBand 0.586 / 2.983 / 17.40 | edgeBand 0.000 / 1.806 / 15.14 |
+
+And the five committed depth slices, which carry the three weighed plates:
+
+| slice | free ref / tilt / RMS / ring | locked ref / tilt / RMS / ring |
+|---|---|---|
+| 1785054950406 | edgeBand 2.150 / 1.780 / 99.08 | edgeBand 0.000 / 2.201 / 94.20 |
+| 1785135663727 | edgeBand 1.742 / 1.954 / 3.78 | edgeBand 0.000 / 2.626 / 6.35 |
+| 1785901032716 | edgeBand 0.579 / 1.928 / 6.64 | edgeBand 0.000 / 1.912 / 6.24 |
+| 1786439141215 | foodSupport 0.758 / 1.690 / −0.11 | foodSupport 0.000 / 1.888 / 0.02 |
+| 1786450130307 | foodSupport 0.918 / 1.921 / −0.10 | foodSupport 0.000 / 2.170 / 0.20 |
+
+The free tilts 1.742° and 0.579° are Decision 55's own two fallback readings to the decimal,
+which is the check that this pass and that one fit the same planes.
+
+`1790315900185` is the capture the investigation named, and on it the prediction holds in full:
+5.959° → 0.000° and RMS 2.554 → **1.231** mm. The lock does not cost residual there, it halves
+it — the 1.34 → 2.43 mm figure in the section above was measured over a far-field RANSAC's own
+inliers, not over the shipped candidate set, and it does not transfer.
+
+### 2. The volume: the lock is a regression
+
+`HarnessCLI volumes` over all 20 single-view bundles stamped `ab812dc3aa9d`, the corpus of
+`depth-grown-food-region` Decision 4. `1785125982524` refuses before and after, leaving 19.
+Reference and residual here are the plane the volume actually used, after the growth refit.
+
+| bundle | free ref | locked ref | free cm³ | locked cm³ |
+|---|---|---|---|---|
+| 1785054950406 | edgeBand | edgeBand | 636.1 | 588.9 |
+| 1785055060603 | edgeBand | edgeBand | 600.7 | 615.4 |
+| 1785062411645 | edgeBand | edgeBand | 1470.3 | 1497.2 |
+| 1785135663727 | foodSupport | foodSupport | 672.8 | **807.2** |
+| 1785901032716 | foodSupport | foodSupport | 866.4 | **922.6** |
+| 1786322188388 | edgeBand | edgeBand | 51.5 | **197.5** |
+| 1786439141215 | foodSupport | foodSupport | 83.9 | 84.0 |
+| 1786450130307 | foodSupport | foodSupport | 78.0 | 78.8 |
+| 1786844576261 | edgeBand | edgeBand | 189.6 | 188.5 |
+| 1786845356405 | foodSupport | **edgeBand** | 85.7 | **282.1** |
+| 1790223818017 | foodSupport | foodSupport | 230.7 | 233.1 |
+| 1790232681422 | foodSupport | foodSupport | 283.5 | 267.2 |
+| 1790242780378 | edgeBand | **foodSupport** | 308.6 | 265.3 |
+| 1790310107431 | foodSupport | foodSupport | 219.4 | 237.2 |
+| 1790313330330 | foodSupport | foodSupport | 274.6 | 266.2 |
+| 1790315865030 | foodSupport | **edgeBand** | 309.5 | **407.3** |
+| 1790315900185 | foodSupport | foodSupport | 298.9 | 267.0 |
+| 1790318604792 | foodSupport | foodSupport | 272.0 | 273.5 |
+| 1790318616477 | foodSupport | foodSupport | 266.9 | 268.1 |
+
+Median change +1.1 %, mean absolute change **33.1 %**. Three bundles move more than 20 %, all
+upward, and two of the three are the reference flipping from `foodSupport` to the table.
+
+**The weighed plates.** Truth from `field-truth-sessions.md`, the 2026-08-05 and 2026-08-11
+sittings; carbohydrate in grams.
+
+| bundle | truth | free cm³ / carbs / error | locked cm³ / carbs / error |
+|---|---|---|---|
+| 1785901032716 (80 g multigrain, 2 slices) | 34 g | 866.4 / 131.7 / **+97.7** | 922.6 / 140.2 / **+106.2** |
+| 1786439141215 (58 g bread slice) | 24 g | 83.9 / 12.8 / −11.2 | 84.0 / 12.8 / −11.2 |
+| 1786450130307 (same slice, re-shoot) | 24 g | 78.0 / 11.9 / −12.1 | 78.8 / 12.0 / −12.0 |
+| **mean absolute error** | | **40.4 g** | **43.2 g** |
+
+**The 2026-09-25 sesame roll**, which the owner judged good at about 280 cm³ by eye:
+
+| | 1790310107431 | 1790313330330 | 1790315865030 | 1790315900185 | 1790318604792 | 1790318616477 |
+|---|---|---|---|---|---|---|
+| free | 219.4 | 274.6 | 309.5 | 298.9 | 272.0 | 266.9 |
+| locked | 237.2 | 266.2 | **407.3** | 267.0 | 273.5 | 268.1 |
+
+The band 219–310 becomes 237–407. Five of the six move by less than 20 cm³ or toward 280; the
+sixth is `1790315865030`, whose refit loses its `foodSupport` candidate under the lock and adopts
+the table instead.
+
+### 3. Why a better plane makes a worse volume
+
+The lock picks the *dominant* surface in the band, and around a plate that is the table, not the
+plate top. `1790315900185` is the clearest case: locked, its tilt goes to zero and its RMS halves
+— and its ring median goes from 1.05 mm to **20.40 mm**, which says the plane it found sits 20 mm
+below the food's contact ring. It is a better fit to a surface the food is not resting on.
+
+Downstream that is not neutral. The ring admissibility ladder rejects a candidate whose ring
+median exceeds `ringMedianMaxMm = 5`, so a locked extraction that lands on the table produces no
+admissible candidate, `fitFoodSupportPlane` returns nil, and the pipeline falls back to
+`edgeBand` — the table again, with no offset. That is the whole of `1786845356405` (85.7 → 282.1)
+and `1790315865030` (309.5 → 407.3), and it is Decision 3's failure mode arriving by a new route.
+
+So the straddling diagnosis is right and the lock is the wrong remedy for it. Removing the tilt
+does not tell the fitter *which* of the two surfaces it straddled is the one the food rests on;
+it just makes it pick the bigger one. What the ring measure is for is exactly that question, and
+the locked planes it rejects are rejected correctly.
+
+### 4. A correction to the section above
+
+The counter-argument paragraph ("The counter-argument, and why it is answerable") attributes
+Decision 55's intended-correct plate-top fit at **8.309°** to capture `1785901032716`. That is
+wrong. Decision 55 and `SupportPlaneCorpusMeasurementTests` both put the 8.309° plate top on
+**`1785135663727`**; `1785901032716` is the capture that selects its TABLE, which is Decision 18's
+silent failure. The free tilts measured here, 1.742° on `1785135663727` and 0.579° on
+`1785901032716`, match Decision 55's two fallback readings exactly, so the attribution in that
+log is the sound one.
+
+This matters because the "0.61° over 99.7 % of the far field" reading that was offered as
+resolving Decision 55's unexplained 6.3° was taken on `1785901032716` — a capture whose selected
+candidate is the table and which therefore says nothing about the plate-top hypothesis on
+`1785135663727`. The mixing explanation for the 8.309° may well still be right; it is not
+*measured*, and Decision 55's "unexplained" stands until the empty-plate capture at the end of
+that section is taken.

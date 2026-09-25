@@ -183,11 +183,13 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
     // gains a `HARNESS_ENABLED` dependency.
     public static func fitFromDepth(
         depth: DepthMap, intrinsics: CameraIntrinsics,
-        mask: BinaryMask, gravity: Vec3
+        mask: BinaryMask, gravity: Vec3,
+        gravityLocked: Bool = SupportPlaneGravityLock.enabled
     ) -> SupportPlaneFitOutcome {
         if let fit = SupportRegion.fitFoodSupportPlane(
             depth: depth, colourIntrinsics: intrinsics,
-            foodRegionMask: mask, gravityCamera: gravity
+            foodRegionMask: mask, gravityCamera: gravity,
+            gravityLocked: gravityLocked
         ) {
             return SupportPlaneFitOutcome(
                 plane: fit.plane,
@@ -208,7 +210,7 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
             colourIntrinsics: intrinsics,
             foodRegionMask: mask,
             gravityCamera: gravity
-        ))
+        ), gravityLocked: gravityLocked)
         var stats = outcome.stats
         stats.reference = .edgeBand
         // Req 6.1: the ring measure lands on the fallback attempt too, which is what
