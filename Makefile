@@ -47,7 +47,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test test-corpus food-db build-app build-release-check deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
+.PHONY: help build test test-corpus device-reset food-db build-app build-release-check deploy-device logs-device deploy-release deploy-release-stub build-product deploy-product spell worktree harness-accuracy field-pull field-notes field-triage field-diagnose field-report field-close field-derive field-test
 
 help:
 	@echo "MeData targets:"
@@ -352,6 +352,14 @@ logs-device:
 deploy-release:
 	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
 	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release.sh
+
+# Dev-loop reset: pull everything off the phone into the corpus (with prune),
+# then remove the app and its data container (captures, meals DB, notes,
+# settings) and install a fresh Release. The Mac corpus is the only copy of
+# field data, so the pull comes first and a failed pull stops the reset.
+device-reset: field-pull
+	xcrun devicectl device uninstall app --device $(DEVICE_UDID) $(BUNDLE_ID)
+	$(MAKE) deploy-release
 
 # ProductRelease: Release minus FIELD_LOOP (ml-feedback-loop Req 9). Debug and
 # Release both carry FIELD_LOOP — field is the daily default, matching the

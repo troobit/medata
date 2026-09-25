@@ -467,3 +467,14 @@ placeholder runnable in Release is the opposite of the less-is-more ethos: it is
 throwaway scaffolding around a stub that Track 3 deletes outright. The correct fix
 is the real model, not more flags. When in doubt, do not add a gate — ship the
 thing the gate was working around.
+
+## Resetting the phone during the dev loop
+
+`make device-reset` = `make field-pull` (copies new bundles and notes into
+`medata-corpus`, pushes the manifest so the app prunes pulled bundles), then
+`devicectl device uninstall app` (removes the data container: captures,
+`meals.sqlite`, notes, settings), then `make deploy-release`. Use it when the
+phone's history is slowing the app or muddying a session. The corpus is the
+only copy of field data (single_copy_accepted), so never uninstall without
+the pull. Ordinary pulls already prune pulled bundles from the phone; only
+the DB rows and notes accumulate between resets.
