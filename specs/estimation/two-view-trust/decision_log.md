@@ -180,3 +180,38 @@ The two-view path exists to carve, and the carve needs one class present in both
 - A confidently wrong nadir name overrides a right oblique name; the review's rename is the remedy.
 
 ---
+
+## Decision 6: One connected object is one class; the class-count gate is replaced
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Decision 5 gated reconciliation on each view carrying at most one named class. The first captures on that build failed the gate: the segmenter labelled the single roll `bread_white` + `bread_wholemeal` + `unknown_food` in the oblique (`1790315734391`, `1790315814452`), and the single-view path split it into `bread_wholemeal` 289 cm³ + `unknown_food` 121 cm³ (`1790315900185`). The owner's review notes: the unknown row hides the bread rows that are right; one roll is three rows.
+
+### Decision
+
+The gate becomes geometric: a view whose carvable pixels form one connected object (largest component at least 90 % of them after a small dilation that bridges speckle gaps) is a single object, and all its carvable pixels take the object's dominant class, the named class with the most pixels, else `unknown_food`. Cross-view choice then follows Decision 5's order (user, nadir's name, oblique's name, unknown). The same per-view step runs on the single-view path before region growth. A view with two or more separate objects is left alone. The record carries each view's classes, whether it was a single object, and the chosen class.
+
+### Rationale
+
+Class counts cannot distinguish "one roll with three labels" from "three foods", but connectivity can on the plates in the corpus: a roll is one blob whatever the segmenter calls its parts, while two foods on a plate are two blobs. Absorbing the scattered classes into the dominant name is what the owner does by eye and what the nutrition lookup needs. Running it on the single-view path too keeps the review consistent between modes and removes the phantom unknown row that made growth's seeds and the review's rows disagree.
+
+### Alternatives Considered
+
+- **Keep the class-count gate and widen it to "all bread classes"**: Rejected; a palette-specific list that fails on the next food the segmenter splits.
+- **Instance matching by projected silhouette overlap across views**: Deferred; still the right tool for multi-food plates (Req 2.3), and it needs the per-view object step anyway.
+- **Ask the user to tap the object (Req 3) before reconciling**: Rejected as the only path; the tap should refine, not be required for a single roll.
+
+### Consequences
+
+**Positive:**
+- One roll is one row in both modes; the unknown row no longer hides the bread rows.
+- The gate no longer depends on which classes the segmenter happens to emit.
+
+**Negative:**
+- Two foods that touch (a roll against a sausage) become one object under the dominant name until instance matching exists; the review's split and rename are the remedy.
+- The 90 % and the dilation width are set by hand on today's captures.
+
+---

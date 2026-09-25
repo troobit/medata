@@ -17,7 +17,7 @@ This spec orders the work so each step is verifiable on the phone within a sitti
 
 ### 2. Cross-view reconciliation before the carve
 
-2.1 When the nadir and the oblique each contain at most one named food-like class (with or without `unknown_food` patches) and the classes differ, the system MUST treat them as the same object and carve with both silhouettes under one class: a named class wins over `unknown_food`, the nadir's named class wins over the oblique's, and the user's choice (Req 3) wins over both. The reconciliation MUST be recorded on the outcome row (both views' classes and the chosen one).
+2.1 When a view's food-like pixels form one connected object (the largest connected component holds at least 90 % of them after a small dilation), every class the segmenter scattered over that object MUST be read as one class: the named class with the most pixels, or `unknown_food` when none is named. In two-view capture the two objects MUST then be carved under one class: the nadir's named class wins over the oblique's, a named class wins over `unknown_food`, and the user's choice (Req 3) wins over both. The same single-object rule applies to the single-view path before region growth. The reconciliation MUST be recorded on the outcome row (each view's classes, whether it was a single object, and the chosen class).
 2.2 A class present in only one view MUST NOT be extruded from the oblique view alone (kept from bugfix two-view-unknown-carve); extrusion from the nadir alone MUST be flagged degraded on the row.
 2.3 On multi-food plates the reconciliation MUST NOT merge regions across a real boundary: it applies only to the single-region case until instance matching exists.
 
