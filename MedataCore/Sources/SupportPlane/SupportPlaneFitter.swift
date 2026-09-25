@@ -152,9 +152,9 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
         // could see.
         //
         // `noLowerSilhouetteEdges` is the honest name for it: the fitter has no
-        // food lower-silhouette edges, only card corners. Reusing the existing
-        // case also keeps the Pipeline's exhaustive `SupportPlaneError` switch
-        // (which maps it to `EstimationFailure.noScaleAvailable`) unchanged.
+        // food lower-silhouette edges, only card corners. The Pipeline maps it
+        // to `EstimationFailure.noSupportPlaneWithoutDepth` — on such a capture
+        // the card usually gives scale; it is the plane that is missing.
         //
         // What would make this branch work: the food's lower silhouette edges,
         // taken from the nadir food mask (pipeline Req 4.3), back-projected at
