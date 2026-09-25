@@ -21,11 +21,30 @@ final class MetricScaleResolverTests: XCTestCase {
         )
         XCTAssertEqual(close.sigmaScale, 0.85 + 0.15 * (1 - 0.01 / 0.205), accuracy: 1e-5)
 
-        // Maximum disagreement (>100% relative) → a = 0 → σ_s = 0.85.
+        // Beyond the bound the rectangle is not the card: LiDAR-only result.
         let far = try MetricScaleResolver.resolve(
             cardScaleMmPerPx: 0.10, lidarScaleMmPerPx: 1.0
         )
         XCTAssertEqual(far.sigmaScale, 0.85, accuracy: 1e-6)
+        XCTAssertFalse(far.cardScaleAvailable)
+    }
+
+    // two-view-trust Req 4.1: a rectangle whose scale disagrees with LiDAR by
+    // more than the bound is dropped, so it can never raise σ_s; just inside
+    // the bound it is kept and raises σ_s by its agreement.
+    func testDisagreementBeyondBoundDropsCard() throws {
+        let bound = MetricScaleResolver.maxCardLidarDisagreement
+        let lidar: Float = 0.20
+        let justIn = try MetricScaleResolver.resolve(
+            cardScaleMmPerPx: lidar * (1 + bound - 0.02), lidarScaleMmPerPx: lidar)
+        XCTAssertTrue(justIn.cardScaleAvailable)
+        XCTAssertGreaterThan(justIn.sigmaScale, 0.85)
+
+        let justOut = try MetricScaleResolver.resolve(
+            cardScaleMmPerPx: lidar * (1 + bound + 0.02), lidarScaleMmPerPx: lidar)
+        XCTAssertFalse(justOut.cardScaleAvailable)
+        XCTAssertEqual(justOut.metresPerVoxelEdgeMm, lidar)
+        XCTAssertEqual(justOut.sigmaScale, 0.85, accuracy: 1e-6)
     }
 
     // M4 fix: swapping inputs gives identical σ_s (symmetric agreement formula).

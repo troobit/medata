@@ -318,6 +318,9 @@ public struct Pipeline: Sendable {
             throw EstimationFailure.noScaleAvailable
         }
         diagnostics.recordScale(source: Self.scaleSourceLabel(scale), cardFallback: false)
+        // A rectangle the resolver dropped (two-view-trust Req 4.1) is not the
+        // card: it neither scales nor masks anything downstream.
+        let cardAccepted = cardPose != nil && scale.cardScaleAvailable
         #if DEBUG
         logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
         pipelineSignposter.endInterval("MetricScale", scaleInterval)
@@ -329,9 +332,9 @@ public struct Pipeline: Sendable {
         let segStartedAt = ContinuousClock.now
         let segInterval = pipelineSignposter.beginInterval("Segmentation")
         #endif
-        let nadirSeg: SegmentationResult
+        let segmented: SegmentationResult
         do {
-            nadirSeg = try await segmenter.segment(nadir)
+            segmented = try await segmenter.segment(nadir)
         } catch SegmentationError.noFoodPixels {
             #if DEBUG
             logStageEnd(name: "Segmentation", startedAt: segStartedAt)
@@ -343,8 +346,26 @@ public struct Pipeline: Sendable {
         logStageEnd(name: "Segmentation", startedAt: segStartedAt)
         pipelineSignposter.endInterval("Segmentation", segInterval)
         #endif
-        diagnostics.recordSegmentation(view: .nadir, measurements: Self.segmentationMeasurements(nadirSeg))
-        diagnostics.debugNadirSegmentation = nadirSeg
+        diagnostics.recordSegmentation(view: .nadir, measurements: Self.segmentationMeasurements(segmented))
+        // The bundle keeps the segmenter's own output; the card exclusion below
+        // is a pipeline step the harness replays, not a segmenter property.
+        diagnostics.debugNadirSegmentation = segmented
+        // An accepted card is cleared to background before anything measures
+        // the nadir (two-view-trust Req 4.6): an out-of-palette object the
+        // segmenter calls food, whose extent the pose solve already fixed.
+        var nadirSeg = segmented
+        if let cardPose {
+            var clearedPixels = 0
+            if cardAccepted, let corners {
+                (nadirSeg, clearedPixels) = segmented.excluding(quad: corners.map { SIMD2($0.u, $0.v) })
+            }
+            let disagreement = lidarMmPerPx.map { MetricScaleResolver.disagreement(cardPose.scaleAtCardPlaneMmPerPx, $0) }
+            diagnostics.recordCard(.init(
+                pnpResidualPx: cardPose.pnpResidualPx, distanceMm: cardPose.translationMm.z.magnitude,
+                scaleMmPerPx: cardPose.scaleAtCardPlaneMmPerPx, lidarDisagreement: disagreement,
+                accepted: cardAccepted, clearedPixels: clearedPixels))
+            supportPlaneLog.info("event=card accepted=\(cardAccepted, privacy: .public) disagreement=\(disagreement ?? -1, privacy: .public) clearedPixels=\(clearedPixels, privacy: .public)")
+        }
         let palette = nadirSeg.probabilities.palette
 
         // Fail-closed gate on the nadir argmax, guarding both capture paths —

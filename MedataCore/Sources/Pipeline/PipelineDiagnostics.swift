@@ -240,6 +240,9 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     // frame) the carve used, so a stored transform can be audited against the
     // photos offline. nil on single-view.
     public let twoViewPoses: TwoViewPoses?
+    // two-view-trust Req 4.1/4.2/4.6: what the rectangle detector found and
+    // what was done with it. nil when no rectangle was detected.
+    public let card: CardMeasurements?
 
     public struct TwoViewPoses: Codable, Sendable, Equatable {
         public let nadirSessionGeneration: Int
@@ -255,6 +258,29 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             self.nadirWorldFromCamera = nadirWorldFromCamera
             self.obliqueWorldFromCamera = obliqueWorldFromCamera
             self.transform1To2Mm = transform1To2Mm
+        }
+    }
+
+    public struct CardMeasurements: Codable, Sendable, Equatable {
+        public let pnpResidualPx: Float
+        public let distanceMm: Float
+        public let scaleMmPerPx: Float
+        // Symmetric disagreement against the LiDAR scale; nil without LiDAR.
+        public let lidarDisagreement: Float?
+        // false: the rectangle failed the LiDAR bound and was dropped from
+        // scale and from the exclusion.
+        public let accepted: Bool
+        // Nadir pixels whose label changed to background under the card quad.
+        public let clearedPixels: Int
+
+        public init(pnpResidualPx: Float, distanceMm: Float, scaleMmPerPx: Float,
+                    lidarDisagreement: Float?, accepted: Bool, clearedPixels: Int) {
+            self.pnpResidualPx = pnpResidualPx
+            self.distanceMm = distanceMm
+            self.scaleMmPerPx = scaleMmPerPx
+            self.lidarDisagreement = lidarDisagreement
+            self.accepted = accepted
+            self.clearedPixels = clearedPixels
         }
     }
 
@@ -306,7 +332,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 decomposition: [ClassDecomposition]? = nil,
                 sigma: SigmaTerms? = nil,
                 regionGrowth: RegionGrowthMeasurements? = nil,
-                twoViewPoses: TwoViewPoses? = nil) {
+                twoViewPoses: TwoViewPoses? = nil,
+                card: CardMeasurements? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -335,6 +362,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.sigma = sigma
         self.regionGrowth = regionGrowth
         self.twoViewPoses = twoViewPoses
+        self.card = card
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -359,7 +387,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             volume: volume,
             preShutterSegmentationErrorCount: count,
             decomposition: decomposition, sigma: sigma,
-            regionGrowth: regionGrowth, twoViewPoses: twoViewPoses
+            regionGrowth: regionGrowth, twoViewPoses: twoViewPoses, card: card
         )
     }
 }
@@ -393,6 +421,7 @@ public final class PipelineDiagnostics {
     private var foodRegionCoveragePercent: Float?
     private var regionGrowth: EstimationAttemptRecord.RegionGrowthMeasurements?
     private var twoViewPoses: EstimationAttemptRecord.TwoViewPoses?
+    private var card: EstimationAttemptRecord.CardMeasurements?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -463,6 +492,10 @@ public final class PipelineDiagnostics {
 
     public func recordTwoViewPoses(_ p: EstimationAttemptRecord.TwoViewPoses) {
         twoViewPoses = p
+    }
+
+    public func recordCard(_ c: EstimationAttemptRecord.CardMeasurements) {
+        card = c
     }
 
     public func recordSegmentation(
@@ -542,7 +575,8 @@ public final class PipelineDiagnostics {
             decomposition: decomposition,
             sigma: sigma,
             regionGrowth: regionGrowth,
-            twoViewPoses: twoViewPoses
+            twoViewPoses: twoViewPoses,
+            card: card
         )
     }
 }

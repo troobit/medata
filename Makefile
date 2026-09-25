@@ -317,7 +317,8 @@ build-app:
 # log line on a Debug-only logger reached research and cost a deploy. Run it
 # before committing anything that touches #if DEBUG boundaries.
 build-release-check:
-	$(XCODEBUILD) -configuration Release -derivedDataPath $(DERIVED_RELEASE) \
+	xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
+		-configuration Release -derivedDataPath $(DERIVED_RELEASE) \
 		-destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
 		MEDATA_BUILD_STAMP='$(BUILD_STAMP)' build
 	@echo "release compile OK: $(BUILD_STAMP)"

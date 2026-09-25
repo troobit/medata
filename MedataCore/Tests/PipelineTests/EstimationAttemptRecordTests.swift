@@ -54,7 +54,9 @@ final class EstimationAttemptRecordTests: XCTestCase {
                          sigmaPlane: 0.53, sigmaView: 0.9, sigmaTilt: 0.99),
             regionGrowth: .init(applied: true, capTripped: false,
                                 foodPixelsBefore: 13_824, foodPixelsAfter: 193_536,
-                                refitReference: "foodSupport", refitRefused: false)
+                                refitReference: "foodSupport", refitRefused: false),
+            card: .init(pnpResidualPx: 1.4, distanceMm: 402.5, scaleMmPerPx: 0.21,
+                        lidarDisagreement: 0.05, accepted: true, clearedPixels: 38_210)
         )
     }
 
