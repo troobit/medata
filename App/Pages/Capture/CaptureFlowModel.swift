@@ -350,6 +350,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             return "wait"
         case .ready(let snapshot):
             if !distanceGateOK(snapshot) { return "too far" }
+            // The oblique tilt gate had no entry here, so a shutter disabled
+            // by tilt alone showed no reason at all (2026-09-25).
+            if firstFrame != nil, !obliqueTiltOk(degrees: indicators.liveTiltDegrees) {
+                return "tilt to 25°"
+            }
             if firstFrame == nil, !hasFreshPreShutterMask { return "wait" }
             if firstFrame == nil, preShutterMaskIsEmpty { return "no food in view" }
             if cardGateBlocking { return "card needed" }
@@ -1036,6 +1041,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // distance gate a real non-LiDAR phone does not have: there, ARKit
         // publishes no distance at all and the guard below returns true.
         if DeveloperFlags.forceNonLiDAR { return true }
+        // The oblique-band measurement needs a shot from near table level, and
+        // a camera that low is further from the food than the 25–50 cm window
+        // allows. Unlocking the tilt without this leaves the shutter disabled
+        // and blaming the distance, which is how the first attempt at that
+        // capture failed (2026-09-25).
+        if DeveloperFlags.unlockObliqueTilt, firstFrame != nil { return true }
         #endif
         // No LiDAR ⇒ distance is guidance-only and does not gate (§3.2).
         guard let cm = snapshot.distanceCm else { return true }
