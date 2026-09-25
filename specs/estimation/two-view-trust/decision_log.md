@@ -276,3 +276,58 @@ The interaction is unchanged from the version written before the measurement bec
 `CaptureFlowModel` / `CapturedFramesView` (the per-view tap step and the frozen-frame outline, now on both paths), `FoodRegionGrowth` (seed-set restriction — the load-bearing change), `ObjectReconciler` (connectivity-gate bypass, seeded class order), `SegmentationResult.excluding` (component clearing, reused from the card path), `PipelineBridges` (projecting the nadir seed into the oblique), `PipelineDiagnostics` (the `userRegion` block and the hull-extent audit field), `PbMealFixture` (two seed fields), `FixtureRunner` / `HarnessCLI volumes` (seed replay and command-line seeds), `meal_artefacts` (per-view `user_confirmed` silhouettes). Not in scope and not fixed here: `VoxelGridSizer`'s vertical extent, which owns ~92 % of the two-view over-read.
 
 ---
+
+## Decision 8: A non-LiDAR two-view volume is not defensible until a height bound exists
+
+**Date**: 2026-09-25
+**Status**: proposed
+
+### Context
+
+The two-view shape-from-silhouette carve now runs end to end: the inter-view transform is verified (Decision 4), the reference card is excluded from both views (Decisions 3 and 6), and the two views are reconciled to one object and one class (Decision 6). What it returns is still wrong by a factor of three, and the cause is not any of those things.
+
+Measured 2026-09-25 with a synthetic control — exact silhouettes of a 120 x 70 x 40 mm box, the real camera intrinsics and the real inter-view baseline, carved through the shipping `VoxelGridSizer` and `VoxelCarveEstimator` against a voxelised truth of 337 cm³:
+
+| oblique tilt from vertical | carved | vs truth | with the grid capped at the object's real height |
+|---|---|---|---|
+| 26° | 800.7 cm³ | 2.38x | ~375 cm³ |
+| 22.2° (this capture's inter-view rotation) | 832.8 cm³ | 2.47x | ~372 cm³ |
+| 40° | 712.0 cm³ | 2.11x | ~375 cm³ |
+| 60° | 552.0 cm³ | 1.64x | ~376 cm³ |
+
+Below the object's true height the carve is accurate. Above it, the two silhouette cones never meet: a voxel at height h leaves the oblique silhouette only once h·tan(θ) exceeds the object's extent along the tilt direction, which for this roll is 139 mm / tan(22.2°) ≈ 340 mm — far beyond any plausible grid. The voxel grid's vertical extent is therefore the only thing that stops the carve, and it is what sets the answer: on the real bundle the cumulative volume runs 238 cm³ at a 24 mm cap, 460 at 48 mm, 656 at 72 mm, 810 at 96 mm and 927 at the shipped 120 mm, with the topmost layer still keeping 42 % of the base layer's voxels. Closing the hull on this roll would need about 74° of tilt, and the shutter arms only between 10° and 40° (`CaptureFlowModel.obliqueTiltOk`).
+
+With LiDAR this is solvable and is being solved: the nadir frame already carries the depth the single-view path uses to read the same roll at 267–302 cm³, so the grid can be bounded by a measured food height. Without LiDAR there is no height information in the capture at all, at any tilt the app allows. That is the path every phone without LiDAR must use, and the one the ID-1 card exists for.
+
+### Decision
+
+Until a height bound exists for the non-LiDAR path, a two-view estimate taken without depth MUST NOT be presented as a measurement: it is recorded, flagged degraded on the row and in review, and the carb figure it produces is not offered as a dosing number. The capture-side experiment that decides what to build is a single capture of a known object with the oblique deliberately near side-on, which requires a developer-phase way to arm the shutter outside the present band.
+
+### Rationale
+
+The measurement is unambiguous about where the error lives, and it is not anywhere that more careful segmentation, a better transform or a tighter mask can reach. Shipping a number that is three times the truth, on the path taken by the phones least able to check it, is the dangerous direction for a tool whose output informs an insulin dose. Flagging it costs nothing and is honest about what the geometry can support.
+
+The options for actually fixing it differ by an order of magnitude in cost, and the cheapest one has not been tested. A wider aim band is free if it works: the same carve, the same code, a different instruction to the user. At 60° the synthetic hull does close (both silhouettes reach zero by about 90 mm), so the question is not whether steep tilt bounds height — it does — but whether a near-side-on photograph of a plate keeps the food in frame, keeps the card's PnP pose solvable, and leaves the support plane fittable. One capture answers all three.
+
+### Alternatives Considered
+
+- **Widen the capture band toward side-on**: The hull provably closes by 60° on this geometry and the code needs no change. Not yet chosen because no capture has been taken past 40° — the shutter will not arm — so nothing is known about whether the food stays framed, whether the card remains solvable at that obliquity (Decision 4 already measured Vision over-segmenting the card by 15–27 px at 26°), or whether the plate occludes the food's base. This is the option to test first.
+- **A third photograph from a second azimuth**: Adds silhouettes but not height information — three shallow cones still fail to close the top. Rejected on the same geometry that rejects the current pair.
+- **A height-from-footprint prior per food class**: Deterministic and offline, and it would bound the grid. Rejected as the first move because its error is unbounded in exactly the cases that matter — a roll and a bowl of rice with the same footprint differ several-fold in height — and it would silently substitute a table lookup for a measurement while the row still claimed to be a carve.
+- **Stand the ID-1 card upright beside the food as a vertical ruler**: Gives a true metric height reference in the image. Rejected for now as a first move: it changes the card's role mid-capture, the card must then be detected in a pose the solver treats as too oblique, and it asks the user to balance a card on a table beside their dinner.
+- **Refuse a volume on non-LiDAR and offer a portion picker instead**: Honest and cheap, and it is what the degraded flag approximates. Rejected as the end state because it abandons the capability the non-LiDAR path exists to provide (segmenter-foundation Decision 26 retains that path deliberately), but it is the fallback if the tilt experiment fails.
+- **Shading or focus cues to infer height**: Rejected; not deterministic, not robust to a kitchen table, and far beyond the offline-geometry budget this estimator is built on.
+
+### Consequences
+
+**Positive:**
+- No phone without LiDAR reports a three-times-high carbohydrate figure as though it were measured.
+- The next decision rests on one capture rather than on an architecture argument.
+- The LiDAR path is unaffected and keeps its measured height bound.
+
+**Negative:**
+- The non-LiDAR path has no usable volume until the experiment is run and something is built, which is a real reduction in what the app claims to do on those devices.
+- A developer-phase shutter that arms outside the tilt band exists only to take an experimental capture, and must not leak into a Release build.
+- The degraded flag is a promise to come back; if the tilt experiment fails and no prior is acceptable, the honest outcome is removing the non-LiDAR volume claim rather than leaving a flag on it indefinitely.
+
+---
