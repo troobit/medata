@@ -215,6 +215,7 @@ public enum FixtureRunner {
                 nadirSeg: nadirSeg, obliqueSeg: obliqueSeg,
                 nadirIntrinsics: nadirIntrinsics, obliqueIntrinsics: obliqueIntrinsics,
                 t1to2: t1to2, plane: plane, gravity: gravity,
+                nadirDepth: fixture.hasNadirDepth ? DepthMap(pb: fixture.nadirDepth) : nil,
                 beta: unityBeta, palette: palette,
                 voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID,
                 reconcile: reconciliation
@@ -603,6 +604,7 @@ public enum FixtureRunner {
         t1to2: Mat4,
         plane: SupportPlane,
         gravity: Vec3,
+        nadirDepth: DepthMap?,
         beta: BetaCorrection,
         palette: ClassPalette,
         voxelEdgeMm: Float,
@@ -625,6 +627,14 @@ public enum FixtureRunner {
             palette: palette
         )
         let foodMask = foodRegionMask(argmax: nadirSeg.argmax, palette: palette)
+        // Same measured vertical bound as the device (Pipeline, stage I): with
+        // nadir depth the grid stops at the food's own height, without it the
+        // 120 mm constant stands.
+        let measuredFoodHeightMm = nadirDepth.flatMap {
+            VoxelGridSizer.measuredFoodHeightMm(
+                foodMask: foodMask, depth: $0,
+                intrinsics: nadirIntrinsics, supportPlane: plane)
+        }
         let grid: VoxelGrid
         do {
             grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
@@ -632,7 +642,8 @@ public enum FixtureRunner {
                 nadirIntrinsics: nadirIntrinsics,
                 supportPlane: plane,
                 gravityCamera: gravity,
-                edgeMm: voxelEdgeMm
+                edgeMm: voxelEdgeMm,
+                measuredFoodHeightMm: measuredFoodHeightMm
             ))
         } catch {
             throw Error.volumeEstimationFailed(fixtureID, error)
@@ -640,9 +651,11 @@ public enum FixtureRunner {
         let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
             grid: grid,
             view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
-                                 intrinsics: nadirIntrinsics),
+                                 intrinsics: nadirIntrinsics,
+                                 argmax: nadirSeg.argmax),
             view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
-                                 intrinsics: obliqueIntrinsics),
+                                 intrinsics: obliqueIntrinsics,
+                                 argmax: obliqueSeg.argmax),
             transform1To2: t1to2,
             supportPlane: plane,
             matchedClasses: matching.matchedClasses,

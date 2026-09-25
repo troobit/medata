@@ -12,10 +12,29 @@ import SupportPlane
 public struct VoxelCarveView: Sendable {
     public let probabilities: ProbabilityTensor
     public let intrinsics: CameraIntrinsics
+    /// The REGULARISED label map for this view — what `MaskMatcher`,
+    /// `VoxelGridSizer`, the review outline and persistence all read. When it
+    /// is present a pixel is in the silhouette only if its label is carvable;
+    /// when it is nil the legacy soft test `(1 − q[bg]) ≥ τ_sil` on the raw
+    /// tensor is used instead.
+    ///
+    /// Why the label map wins (two-view-trust, 2026-09-25): the soft test
+    /// admits every pixel with half its probability mass spread across
+    /// non-background channels, and `ObjectReconciler.relabel` then piles all
+    /// carvable channels into one, so a pixel with no winning class passes.
+    /// On bundle `1790318627741` that halo was 138,671 px against 108,531 px
+    /// of label-food in the nadir (+28 %) and 77,932 against 60,949 in the
+    /// oblique — a footprint ~40 % larger than the roll's real ~84 cm²,
+    /// carved before height even enters. Every shipping caller (Pipeline,
+    /// FixtureRunner) supplies the map; the nil case is for synthetic tests
+    /// that build a tensor and no label map.
+    public let argmax: ArgmaxMap?
 
-    public init(probabilities: ProbabilityTensor, intrinsics: CameraIntrinsics) {
+    public init(probabilities: ProbabilityTensor, intrinsics: CameraIntrinsics,
+                argmax: ArgmaxMap? = nil) {
         self.probabilities = probabilities
         self.intrinsics = intrinsics
+        self.argmax = argmax
     }
 }
 
@@ -92,6 +111,18 @@ public enum VoxelCarveEstimator {
                 )
             )
         }
+        for (view, probs) in [(inputs.view1, probs1), (inputs.view2, probs2)] {
+            guard let a = view.argmax else { continue }
+            guard a.width == probs.width, a.height == probs.height else {
+                return VolumeOutcome(
+                    estimate: nil,
+                    stats: VolumeStats(),
+                    refusal: .mismatchedViewDimensions(
+                        "argmax \(a.width)×\(a.height) ≠ probabilities \(probs.width)×\(probs.height)"
+                    )
+                )
+            }
+        }
 
         // Per-class voxel ownership sets are flattened into a count map.
         var counts: [Int: Int] = [:]
@@ -105,6 +136,8 @@ public enum VoxelCarveEstimator {
         // satisfied by §6.10 (dims are multiples of 8); the CPU reference walks the
         // full grid directly.
         let classList = inputs.matchedClasses.sorted()
+        withOptionalLabels(inputs.view1.argmax) { labels1 in
+        withOptionalLabels(inputs.view2.argmax) { labels2 in
         probs1.bytes.withUnsafeBytes { rawP1 in
             let buf1 = rawP1.bindMemory(to: Float16.self).baseAddress!
             probs2.bytes.withUnsafeBytes { rawP2 in
@@ -135,11 +168,16 @@ public enum VoxelCarveEstimator {
                             let off1 = (pix1.y * probs1.width + pix1.x) * probs1.classes
                             let off2 = (pix2.y * probs2.width + pix2.x) * probs2.classes
 
-                            // Silhouette test on (1 − q[bg]) ≥ τ_sil in BOTH views.
-                            let q1Bg = Float(buf1[off1 + bgId])
-                            let q2Bg = Float(buf2[off2 + bgId])
-                            if (1 - q1Bg) < tauSilhouette { continue }
-                            if (1 - q2Bg) < tauSilhouette { continue }
+                            // In-silhouette in BOTH views, against the label
+                            // map when there is one (see `VoxelCarveView`).
+                            if !inSilhouette(labels: labels1, probs: buf1,
+                                             pixelIndex: pix1.y * probs1.width + pix1.x,
+                                             classOffset: off1, backgroundId: bgId,
+                                             palette: palette) { continue }
+                            if !inSilhouette(labels: labels2, probs: buf2,
+                                             pixelIndex: pix2.y * probs2.width + pix2.x,
+                                             classOffset: off2, backgroundId: bgId,
+                                             palette: palette) { continue }
 
                             passedSilhouettePlaneTest += 1
 
@@ -169,6 +207,8 @@ public enum VoxelCarveEstimator {
                     }
                 }
             }
+        }
+        }
         }
 
         // Single-view-only fallback per §6.6: extrude silhouette to π_sup at a 30 mm
@@ -284,6 +324,30 @@ public enum VoxelCarveEstimator {
 
     // MARK: - helpers
 
+    // Silhouette membership for one pixel of one view: the regularised label
+    // map when the view carries one, the raw tensor's (1 − q[bg]) ≥ τ_sil
+    // otherwise.
+    @inline(__always)
+    static func inSilhouette(
+        labels: UnsafePointer<UInt8>?, probs: UnsafePointer<Float16>,
+        pixelIndex: Int, classOffset: Int, backgroundId: Int, palette: ClassPalette
+    ) -> Bool {
+        if let labels {
+            return palette.isCarvableClass(Int(labels[pixelIndex]))
+        }
+        return (1 - Float(probs[classOffset + backgroundId])) >= tauSilhouette
+    }
+
+    @inline(__always)
+    static func withOptionalLabels<R>(
+        _ map: ArgmaxMap?, _ body: (UnsafePointer<UInt8>?) -> R
+    ) -> R {
+        guard let map else { return body(nil) }
+        return map.pixels.withUnsafeBytes { raw in
+            body(raw.bindMemory(to: UInt8.self).baseAddress!)
+        }
+    }
+
     static func pixelInside(u: Float, v: Float, width: Int, height: Int) -> Bool {
         u >= 0 && v >= 0 && u < Float(width) && v < Float(height)
     }
@@ -311,23 +375,31 @@ public enum VoxelCarveEstimator {
         let fMean = (k.fx + k.fy) / 2
         var totalMm3: Double = 0
         var raySkips = 0
+        withOptionalLabels(view.argmax) { labels in
         probs.bytes.withUnsafeBytes { raw in
             let buf = raw.bindMemory(to: Float16.self).baseAddress!
             for y in 0..<probs.height {
                 for x in 0..<probs.width {
                     let off = (y * probs.width + x) * probs.classes
-                    let qBg = Float(buf[off + bgId])
-                    if (1 - qBg) < tauSilhouette { continue }
-                    // argmax over carvable classes only (solid food, unknown).
-                    var bestC = -1
-                    var bestQ: Float = -1
-                    for c in 0..<probs.classes {
-                        if !palette.isCarvableClass(c) { continue }
-                        if c == liquidId { continue }
-                        let q = Float(buf[off + c])
-                        if q > bestQ { bestQ = q; bestC = c }
+                    // The extruded silhouette is the same region as the carve's:
+                    // the label map's pixels of this class when there is a map,
+                    // the tensor's soft test plus a carvable argmax otherwise.
+                    if let labels {
+                        if Int(labels[y * probs.width + x]) != classId { continue }
+                    } else {
+                        let qBg = Float(buf[off + bgId])
+                        if (1 - qBg) < tauSilhouette { continue }
+                        // argmax over carvable classes only (solid food, unknown).
+                        var bestC = -1
+                        var bestQ: Float = -1
+                        for c in 0..<probs.classes {
+                            if !palette.isCarvableClass(c) { continue }
+                            if c == liquidId { continue }
+                            let q = Float(buf[off + c])
+                            if q > bestQ { bestQ = q; bestC = c }
+                        }
+                        if bestC != classId { continue }
                     }
-                    if bestC != classId { continue }
 
                     // Compute pixel area at food-plane depth via ray-plane intersection.
                     let dir = Vec3(
@@ -357,6 +429,7 @@ public enum VoxelCarveEstimator {
                     totalMm3 += Double(aP * singleViewPriorHeightMm)
                 }
             }
+        }
         }
         return (totalMm3, raySkips)
     }

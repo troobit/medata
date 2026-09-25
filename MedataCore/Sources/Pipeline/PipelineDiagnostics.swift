@@ -248,6 +248,12 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     // two-view-trust Req 2.1: the carvable classes each view carried and the
     // one both were relabelled to before the carve; nil on single-view.
     public let twoViewReconciliation: TwoViewReconciliation?
+    // The carve grid's vertical bound and the measurement behind it
+    // (two-view-trust, 2026-09-25); nil on single-view. The carve cannot read
+    // above `verticalExtentMm`, and at the tilts the aim guide allows nothing
+    // else closes the hull from above, so this pair is what a two-view volume
+    // has to be read against.
+    public let voxelGrid: VoxelGridMeasurements?
 
     public struct TwoViewPoses: Codable, Sendable, Equatable {
         public let nadirSessionGeneration: Int
@@ -317,6 +323,26 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         }
     }
 
+    public struct VoxelGridMeasurements: Codable, Sendable, Equatable {
+        /// `VoxelGridSizer.heightPercentile` of the food's per-pixel height
+        /// above the support plane in the nadir view, mm. nil when the nadir
+        /// frame carried no depth or too few usable samples — the grid then
+        /// kept the `verticalExtentMm` constant.
+        public let measuredFoodHeightMm: Float?
+        /// The grid's actual vertical extent, dimsZ whole voxels, mm.
+        public let verticalExtentMm: Float
+        public let dimsZ: Int
+        public let edgeMm: Float
+
+        public init(measuredFoodHeightMm: Float?, verticalExtentMm: Float,
+                    dimsZ: Int, edgeMm: Float) {
+            self.measuredFoodHeightMm = measuredFoodHeightMm
+            self.verticalExtentMm = verticalExtentMm
+            self.dimsZ = dimsZ
+            self.edgeMm = edgeMm
+        }
+    }
+
     public init(v: Int,
                 timestampMs: Int64,
                 outcome: Outcome,
@@ -347,7 +373,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 twoViewPoses: TwoViewPoses? = nil,
                 card: CardMeasurements? = nil,
                 cardCandidateCount: Int? = nil,
-                twoViewReconciliation: TwoViewReconciliation? = nil) {
+                twoViewReconciliation: TwoViewReconciliation? = nil,
+                voxelGrid: VoxelGridMeasurements? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -379,6 +406,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.card = card
         self.cardCandidateCount = cardCandidateCount
         self.twoViewReconciliation = twoViewReconciliation
+        self.voxelGrid = voxelGrid
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -405,7 +433,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             decomposition: decomposition, sigma: sigma,
             regionGrowth: regionGrowth, twoViewPoses: twoViewPoses, card: card,
             cardCandidateCount: cardCandidateCount,
-            twoViewReconciliation: twoViewReconciliation
+            twoViewReconciliation: twoViewReconciliation,
+            voxelGrid: voxelGrid
         )
     }
 }
@@ -442,6 +471,7 @@ public final class PipelineDiagnostics {
     private var card: EstimationAttemptRecord.CardMeasurements?
     private var cardCandidateCount: Int?
     private var twoViewReconciliation: TwoViewReconciliation?
+    private var voxelGrid: EstimationAttemptRecord.VoxelGridMeasurements?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -533,6 +563,10 @@ public final class PipelineDiagnostics {
         twoViewReconciliation = r
     }
 
+    public func recordVoxelGrid(_ g: EstimationAttemptRecord.VoxelGridMeasurements) {
+        voxelGrid = g
+    }
+
     public func recordSegmentation(
         view: SegmentationView,
         measurements: EstimationAttemptRecord.SegmentationMeasurements
@@ -613,7 +647,8 @@ public final class PipelineDiagnostics {
             twoViewPoses: twoViewPoses,
             card: card,
             cardCandidateCount: cardCandidateCount,
-            twoViewReconciliation: twoViewReconciliation
+            twoViewReconciliation: twoViewReconciliation,
+            voxelGrid: voxelGrid
         )
     }
 }
