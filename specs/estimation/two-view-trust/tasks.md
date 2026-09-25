@@ -25,11 +25,11 @@ references:
 
 - [x] 8. The card's projection into the oblique view is cleared once the Req 1.3 transform is verified (Req 4.6, oblique half)
 
-- [ ] 9. Double mode shows the card reminder; without LiDAR the shutter does not arm until a card is detected live (Req 4.3)
+- [x] 9. Double mode shows the card reminder; without LiDAR the shutter does not arm until a card is detected live (Req 4.3)
 
 - [x] 10. Card-only plane fit takes the food's lower silhouette edges or refuses (Req 4.4)
 
-- [ ] 11. Debug switch runs the non-LiDAR path on a LiDAR phone (Req 4.5, device half)
+- [x] 11. Debug switch runs the non-LiDAR path on a LiDAR phone (Req 4.5, device half)
 
 - [x] 12. The review outline shades the accepted card's quadrilateral as the reference, distinct from food (owner note 2026-09-25)
 
@@ -49,6 +49,6 @@ references:
 
 - [ ] 18. A two-view estimate taken without depth is flagged degraded on the row and in review, and its carb figure is not offered for dosing (Decision 8)
 
-- [ ] 19. Developer-phase shutter arms outside the 10–40° tilt band so a near-side-on oblique can be captured (Decision 8 experiment)
+- [x] 19. Developer-phase shutter arms outside the 10–40° tilt band so a near-side-on oblique can be captured (Decision 8 experiment)
 
 - [ ] 20. Device capture of a known object with the oblique near side-on decides whether a wider aim band bounds height (Decision 8)
