@@ -39,7 +39,7 @@ references:
 
 - [x] 14. Cross-view label reconciliation before the carve (Req 2)
 
-- [ ] 15. Two-tap confirmation of the food in both photos (Req 3)
+- [ ] 15. Two-tap confirmation of the food in both photos (Req 3) — REJECTED by its own gate 2026-09-25 (Decision 7): a hand-placed seed changes the leak by under 1 %, because the plate is reached from the food's own component. Req 3 is back for re-decision
 
 ## Carve height
 
