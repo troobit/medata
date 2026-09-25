@@ -245,6 +245,9 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     public let card: CardMeasurements?
     // How many rectangles the detector offered, card or not.
     public let cardCandidateCount: Int?
+    // two-view-trust Req 2.1: the carvable classes each view carried and the
+    // one both were relabelled to before the carve; nil on single-view.
+    public let twoViewReconciliation: TwoViewReconciliation?
 
     public struct TwoViewPoses: Codable, Sendable, Equatable {
         public let nadirSessionGeneration: Int
@@ -334,7 +337,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 regionGrowth: RegionGrowthMeasurements? = nil,
                 twoViewPoses: TwoViewPoses? = nil,
                 card: CardMeasurements? = nil,
-                cardCandidateCount: Int? = nil) {
+                cardCandidateCount: Int? = nil,
+                twoViewReconciliation: TwoViewReconciliation? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -365,6 +369,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.twoViewPoses = twoViewPoses
         self.card = card
         self.cardCandidateCount = cardCandidateCount
+        self.twoViewReconciliation = twoViewReconciliation
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -390,7 +395,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             preShutterSegmentationErrorCount: count,
             decomposition: decomposition, sigma: sigma,
             regionGrowth: regionGrowth, twoViewPoses: twoViewPoses, card: card,
-            cardCandidateCount: cardCandidateCount
+            cardCandidateCount: cardCandidateCount,
+            twoViewReconciliation: twoViewReconciliation
         )
     }
 }
@@ -426,6 +432,7 @@ public final class PipelineDiagnostics {
     private var twoViewPoses: EstimationAttemptRecord.TwoViewPoses?
     private var card: EstimationAttemptRecord.CardMeasurements?
     private var cardCandidateCount: Int?
+    private var twoViewReconciliation: TwoViewReconciliation?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -504,6 +511,10 @@ public final class PipelineDiagnostics {
 
     public func recordCardCandidates(_ count: Int) {
         cardCandidateCount = count
+    }
+
+    public func recordTwoViewReconciliation(_ r: TwoViewReconciliation) {
+        twoViewReconciliation = r
     }
 
     public func recordSegmentation(
@@ -585,7 +596,8 @@ public final class PipelineDiagnostics {
             regionGrowth: regionGrowth,
             twoViewPoses: twoViewPoses,
             card: card,
-            cardCandidateCount: cardCandidateCount
+            cardCandidateCount: cardCandidateCount,
+            twoViewReconciliation: twoViewReconciliation
         )
     }
 }

@@ -160,3 +160,28 @@ Vision returns on the device path to the pixel. What it measured on the two
 - Non-LiDAR volume replay (depth cleared, card branch) does not exist:
   `FixtureRunner` requires depth. Card *detection* replays (above); the
   card-only plane fit and the carve it would feed do not.
+
+## 5. Cross-view reconciliation (2026-09-25, two-view-trust Decision 5)
+
+`TwoViewReconciler.reconcile` (Volume) runs in `Pipeline` and in
+`FixtureRunner.runVoxelCarve` right before `MaskMatcher`: when each view
+carries at most one named carvable class, every carvable pixel in both views
+is relabelled to one class (user's > named over `unknown_food` > nadir over
+oblique), in the argmax and in the probability tensor (the other carvable
+channels' mass is added to the chosen channel and zeroed). The row records
+`twoViewReconciliation {nadirClasses, obliqueClasses, chosenClass, applied}`
+and the Shutter log prints `event=two_view.reconcile`. The bundle keeps the
+raw segmenter outputs. `FixtureRunner.run(twoViewReconciliation: false)`
+replays the raw labels for comparison.
+
+First carved numbers on real bundles (replay, β = 1): `1790313381100` went
+from unknown_food 1043 + bread_wholemeal 290 (two extrusions) to
+bread_wholemeal 1055 cm³ (one carved row); `1790310086654` from bread_white
+315 + bread_wholemeal 402 + unknown_food 81 to bread_wholemeal 935 cm³. The
+roll is ~12 × 7 × 4 cm (≈ 300 cm³ on the single-view path). The hull is
+large because the nadir silhouette is the plate-sized region the segmenter
+labelled (348 cm² and 161 cm² footprints) and an oblique ~26° from vertical
+bounds height only near its far edge; the grid's 120 mm vertical extent
+(`VoxelGridSizer.verticalExtentMm`) is the other cap. Tighter silhouettes
+(Req 3, the user's tap) and a wider baseline are the levers, not the
+reconciler.
