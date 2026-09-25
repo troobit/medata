@@ -287,8 +287,10 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         public let capTripped: Bool
         public let foodPixelsBefore: Int
         public let foodPixelsAfter: Int
-        // Reference of the refit plane when the refit succeeded; nil when it
-        // refused (the first plane was kept) or growth added nothing.
+        // Reference of the plane the refit returned; nil when the fitter
+        // refused or growth added nothing. Only a `foodSupport` refit is
+        // adopted for volume (depth-grown-food-region Decision 3); an
+        // `edgeBand` value here means the first plane was kept.
         public let refitReference: String?
         public let refitRefused: Bool
 

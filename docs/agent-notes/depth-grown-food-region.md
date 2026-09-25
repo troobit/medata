@@ -52,7 +52,7 @@ nothing, and the estimate is today's.
 
 ## Constants (Decision 1 table, 2026-09-24)
 
-`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 3 mm, cap 0.35.
+`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35 (floor was 3 mm until 2026-09-25, Decision 3). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
 Floor 2 mm let plate noise in (median added area on well-segmented plates
 +40 %, one plate 2.5×); floor 3 mm reads +9 %; floor 5 mm dropped the roll's
 refit back to `edgeBand`. Cliff made no difference to the median; 3 was

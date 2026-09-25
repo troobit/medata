@@ -66,7 +66,11 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// area on well-segmented plates under the 20 % bar (+9 %; floor 2 mm reads
     /// +40 %), and cliff 3 mm is the tightest cliff at which the roll capture
     /// still grows to its full slab (7.1 % of the frame).
-    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 3, frameFractionCap: 0.35)
+    /// Floor raised 3 → 5 mm on 2026-09-25 (Decision 3): with the first
+    /// plane fitted from the pre-shutter mask, as the device does, a plate
+    /// that sits 3–5 mm above the fitted plane (dish, tilt) leaked a blob
+    /// out to the rim on both roll captures at 3 mm and not at 5 mm.
+    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 5, frameFractionCap: 0.35)
     public static let disabled = FoodRegionGrowthConfig(cliffMm: 0, floorMm: 0, frameFractionCap: 0)
 
     public var isDisabled: Bool { frameFractionCap <= 0 }

@@ -93,9 +93,13 @@ public enum FixtureRunner {
             // branch — the estimator_path stamp no longer selects a fitter here. The
             // flood fill survives for the mixture path, which has no segmentation
             // output to derive a mask from (Decision 17).
+            // The device fits the first plane from the pre-shutter mask it captured
+            // (`captureResult.preShutterFoodMask`); a bundle that carries it replays
+            // from the same mask. Fixtures without one keep the argmax-derived mask.
             var fit = try fitSupportPlane(
                 depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
-                foodMask: foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
+                foodMask: preShutterMask(fixture, width: W, height: H)
+                    ?? foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
                 fixtureID: fixture.fixtureID)
             // Depth-grown food region, exactly as Pipeline.estimate runs it
             // (depth-grown-food-region Req 7): grow from the regularised map,
@@ -109,11 +113,14 @@ public enum FixtureRunner {
             var refitRefused = false
             var measuredSeg = nadirSeg
             if candidate.applied {
-                let refit = try? fitSupportPlane(
+                let refitted = try? fitSupportPlane(
                     depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
                     foodMask: foodRegionMask(argmax: candidate.argmax, palette: palette),
                     fixtureID: fixture.fixtureID)
-                refitRefused = refit == nil
+                refitRefused = refitted == nil
+                refitReference = refitted?.reference
+                // Only a foodSupport refit is usable (Decision 3), as in Pipeline.
+                let refit = refitted.flatMap { $0.reference == .foodSupport ? $0 : nil }
                 let pruneFit = refit ?? fit
                 grown = FoodRegionGrowth.prune(
                     candidate, depth: depth, intrinsics: nadirIntrinsics,
@@ -123,10 +130,7 @@ public enum FixtureRunner {
                     measuredSeg = SegmentationResult(
                         probabilities: nadirSeg.probabilities, argmax: grown.argmax,
                         perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
-                    if let refit {
-                        fit = refit
-                        refitReference = refit.reference
-                    }
+                    if let refit { fit = refit }
                 }
             }
             regionGrowth = .init(
@@ -279,6 +283,17 @@ public enum FixtureRunner {
             width: argmax.width,
             height: argmax.height
         )
+    }
+
+    // The device's pre-shutter food mask as the bundle recorded it
+    // (`CaptureBundleRecorder`: raw `BinaryMask.pixels`, 1 = food, on the colour
+    // grid). nil when the fixture has none or its size is not the nadir's.
+    static func preShutterMask(_ fixture: PbMealFixture, width: Int, height: Int) -> BinaryMask? {
+        guard Int(fixture.preShutterMaskWidth) == width,
+              Int(fixture.preShutterMaskHeight) == height,
+              fixture.preShutterMask.count == width * height
+        else { return nil }
+        return BinaryMask(pixels: [UInt8](fixture.preShutterMask), width: width, height: height)
     }
 
     // MARK: - Plate-region support plane (mixture calibration only, Decision 17)
