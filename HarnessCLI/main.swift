@@ -75,6 +75,13 @@ struct Args {
     var growthFloorMm: Float?
     var growthCap: Float?
     var growthBandMm: Float?
+    // two-view-trust Req 3.14 / Decision 7: a hand-placed growth seed for
+    // `volumes`, in NADIR COLOUR-GRID pixels (top-left origin, the 1920 x 1440
+    // buffer the intrinsics declare — not view coordinates). Only the
+    // 4-connected food-like component containing this point seeds the fill;
+    // every other food-like component is cleared. Both must be given.
+    var seedX: Int?
+    var seedY: Int?
 }
 
 // The growth the harness applies on the single-view replay: `.standard` (what
@@ -139,6 +146,10 @@ func parseArgs() -> Args? {
             if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
         case "--oblique":
             result.oblique = true
+        case "--seed-x":
+            if let s = it.next(), let v = Int(s) { result.seedX = v }
+        case "--seed-y":
+            if let s = it.next(), let v = Int(s) { result.seedY = v }
         default:
             if !flag.hasPrefix("--") { result.fixturePaths.append(flag) }
         }
@@ -503,6 +514,12 @@ func runVolumes(args: Args) throws {
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let regularisation = regularisationConfig(args: args)
     let growth = growthConfig(args: args)
+    var nadirSeed: SIMD2<Int>?
+    if let x = args.seedX, let y = args.seedY {
+        nadirSeed = SIMD2(x, y)
+    } else if args.seedX != nil || args.seedY != nil {
+        fputs("volumes: --seed-x and --seed-y must be given together\n", stderr); exit(1)
+    }
     struct Row: Encodable {
         let fixtureID: String
         let capturePath: String
@@ -514,6 +531,7 @@ func runVolumes(args: Args) throws {
         let foodPixelsBefore: Int?
         let foodPixelsAfter: Int?
         let refitReference: String?
+        let nadirSeed: [Int]?
         let skipped: String?
     }
     var rows: [Row] = []
@@ -521,7 +539,8 @@ func runVolumes(args: Args) throws {
         do {
             let m = try FixtureRunner.run(
                 fixture: fx, palette: paletteForFixture(fx), database: db,
-                voxelEdgeMm: args.voxelEdgeMm, regularisation: regularisation, growth: growth)
+                voxelEdgeMm: args.voxelEdgeMm, regularisation: regularisation, growth: growth,
+                nadirSeed: nadirSeed)
             rows.append(Row(
                 fixtureID: m.fixtureID, capturePath: m.capturePath.rawValue,
                 perClassVolumesCm3: m.perClassVolumesCm3,
@@ -532,6 +551,7 @@ func runVolumes(args: Args) throws {
                 foodPixelsBefore: m.regionGrowth?.foodPixelsBefore,
                 foodPixelsAfter: m.regionGrowth?.foodPixelsAfter,
                 refitReference: m.regionGrowth?.refitReference?.rawValue,
+                nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: nil))
         } catch {
             rows.append(Row(
@@ -539,6 +559,7 @@ func runVolumes(args: Args) throws {
                 perClassVolumesCm3: [:], predictedCarbsPerClass: [:],
                 planeReference: nil, planeResidualMm: nil, growthApplied: nil,
                 foodPixelsBefore: nil, foodPixelsAfter: nil, refitReference: nil,
+                nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: "\(error)"))
         }
     }

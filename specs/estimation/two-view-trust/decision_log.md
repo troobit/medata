@@ -216,64 +216,76 @@ Class counts cannot distinguish "one roll with three labels" from "three foods",
 
 ---
 
-## Decision 7: One tap per view anchors the growth seed; the silhouette it tightens is not where the two-view over-read lives
+## Decision 7: One tap per view does not cut the single-view growth leak; the gate fails and Req 3 is re-decided
 
 **Date**: 2026-09-25
-**Status**: accepted
+**Status**: rejected
 
 ### Context
 
-The product owner's original proposal for this spec was that the user identifies the food in both photos, and Req 3 was a stub. The prompt for filling it in was the two-view over-read: with the transform verified (Decision 4), the card cleared from both views (Decision 3) and the views reconciled to one class (Decision 6), the same sesame roll carved at 851, 920, 926.9 and 930 cm³ against 266.9–272.0 cm³ from the single-view LiDAR path minutes apart. Three terms were suspected — an over-wide nadir mask, an oblique only 26° from vertical bounding height near its far edge alone, and the grid's 120 mm `verticalExtentMm`.
+This decision previously proposed one tap per view on the frozen frame, doing two things: clearing every carvable component the tap does not name from that view's silhouette, and restricting the region growth's seed set to the component that survives. Its claimed benefit was the **second** mechanism only — the silhouette term was already measured at ~7 % of the two-view over-read and disclaimed as a reason to build anything. The claim was that the seed set today is every pixel the segmenter called food-like, that on the leaking captures it includes speckles out on the plate, and that one point certainly on the food removes those speckles and so removes the leak.
 
-The measurement has since landed and settles it. A synthetic control on `1790318627741` (exact silhouettes, real intrinsics, real baseline, voxelised truth 337 cm³ for a 120 × 70 × 40 mm box) returns 800.7 cm³ at 26° tilt, 832.8 at the real 22.2° inter-view rotation, 712.0 at 40° and 552.0 at 60°. Below the object's true height the carve is accurate — capping the grid at 40 mm gives ~375 cm³ against 337 — and everything above is un-carved hull, because two cones close only once h·tan(θ) exceeds the object's extent along the tilt direction: 139 mm / tan 22.2° ≈ 340 mm, far beyond the grid. On the real bundle the cumulative volume by cap is 40 mm → 379, 62 → 587, 86 → 756, 120 → 927 cm³, and the top layer at 118.5 mm still keeps 42 % of the base layer. Attribution: **grid vertical cap ~92 %, over-wide nadir mask ~7 % (92.6 cm² measured against ~84 cm² real), oblique mask 0–10 cm³.** The shutter's aim band is 25° ± 15° (`CaptureFlowModel.obliqueTiltOk`), so no tilt a user is allowed to take closes the hull.
+Req 3.15 made that claim a hard gate before any capture-surface code: replay the two documented single-view leak bundles from a hand-placed seed and compare against the 267–302 cm³ the same roll reads elsewhere. The gate has now been run. `FoodRegionGrowth.grow` takes a `seedPoints:` restriction (4-connected volumetric components containing a point survive; the rest become background, in the map the fill seeds from, in the map `prune`'s seed band is measured on, and in the map the integrator reads), `FixtureRunner.run` takes `nadirSeed:`, and `HarnessCLI volumes` takes `--seed-x/--seed-y` in nadir colour-grid pixels. Default behaviour with no point is byte-identical.
 
-Separately, the single-view path leaks in a way geometry does not fix: `1790315900185` grew 89 k → 242 k px and `1790315865030` 122 k → 236 k px, with the owner's note "the highlighted regions show the plate as food items".
+Seeds were placed at the centre of the roll as a person sees it in the nadir frame and confirmed by eye on the rendered frame before any number was read. Shipped config (floor 5 mm, band 10 mm):
+
+| bundle | food px before → after, unseeded | volume | food px before → after, seeded | volume |
+|---|---|---|---|---|
+| `1790315900185` (leak) | 88,513 → 141,758 | 298.9 cm³ | 84,293 → 137,072 | 291.6 cm³ |
+| `1790315865030` (leak) | 121,881 → 137,871 | 309.5 cm³ | 121,479 → 138,831 | 315.9 cm³ |
+| `1790310107431` (clean) | 112,439 → 155,916 | 219.4 cm³ | 112,439 → 155,916 | 219.4 cm³ |
+| `1790232681422` (clean) | 146,278 → 152,460 | 283.5 cm³ | 146,278 → 152,460 | 283.5 cm³ |
+
+With the seed band disabled (`--growth-band-mm 0`), the configuration in which the leak is actually visible, the seed changes nothing at all:
+
+| bundle | unseeded | seeded |
+|---|---|---|
+| `1790315900185` | 241,743 px, 410.2 cm³ | 241,779 px, 410.3 cm³ |
+| `1790315865030` | 236,464 px, 428.8 cm³ | 236,572 px, 438.0 cm³ |
+
+Sensitivity, seed moved 20, 40 and 80 px in four directions from the chosen point: on both leak bundles every result is identical to the centred one to the last digit, with one exception — 80 px left of centre on `1790315900185` the point lands on a pixel the segmenter labelled background, the restriction is inert by design, and the run returns the unseeded number.
 
 ### Decision
 
-The identification is **one tap per view on the frozen frame**, in both modes — single-view after the shutter, Double between the shots for the nadir and after the oblique shutter for the oblique — and nothing else: no drag, box, pinch, lasso, brush or boundary handle. The tap is a point in sensor-buffer coordinates, and it does two things: every carvable connected component that does not contain it is cleared from that view's silhouette, and the region growth's seed set is restricted to the component that survives.
+**The gate fails.** One hand-placed seed does not materially cut the grown region on either leak bundle, does not move either volume into a place the 267–302 cm³ reference distinguishes from where it already was, and moves `1790315865030` the wrong way (+6.4 cm³, further from the reference). Decision 7's claimed mechanism is false and this decision is rejected. Req 3 MUST be re-decided before any capture-surface code is written; the tap is not carried forward on the strength of the growth seed.
 
-Its claimed benefit is the **second** mechanism only. The tap is a growth seed anchor, and the single-view leak is what it is built to cut; the silhouette it tightens is worth ~7 % of the two-view over-read and is not a reason to build anything. The two-view over-read is a height problem and is bounded by capping the grid at the height the nadir LiDAR already measures — a separate change this decision does not claim. The oblique seed is still projected from the nadir seed through the verified transform so the common case costs one tap, a seeded view still bypasses Decision 6's connectivity gate, skipping still never refuses the estimate, and disagreeing seeds still refuse the carve rather than carve a mismatch. Both seeds, their sources and the resulting pixel counts go on the outcome row and into the fixture, so the harness replays a tap from the record and can be given one on the command line.
+The seed-restriction code and the `--seed-x/--seed-y` replay stay in the tree as the measurement instrument that produced this result, unused by the shipping path.
 
 ### Rationale
 
-The growth leak has a single root cause: the seed set is every pixel the segmenter called food-like, which on these captures includes speckles out on the plate, so the fill starts on the plate and the seed-height band is anchored to plate height. One user point replaces that seed set with a point certainly on the food, which makes the already-shipped floor and band rules (depth-grown-food-region Decisions 3–4) bite for the first time. That is a benefit measurable offline, on two bundles that already exist, with no UI and no device sitting — which is why Req 3.15's gate is now those two single-view bundles and not the two-view volumes.
+The premise was wrong about where the leaking seeds are. Restricting the seed set to the tapped component removes 4,220 of 88,513 seed pixels on `1790315900185` (4.8 %) and 402 of 121,881 on `1790315865030` (0.3 %), and removes nothing on the two clean bundles. Those stray speckles are not what the fill runs on. The plate region is reached from the **roll's own component**, across the gentle food-to-plate depth slope that depth-grown-food-region Decision 1 already measured and named — the fill leaves the roll and walks down onto the plate because no cliff stops it. A seed rule cannot cut a leak whose seed is the food itself, and the band-off table is the direct proof: 241,743 px unseeded against 241,779 px seeded on the same bundle, the seeded run marginally **larger**.
 
-A point is also the only input that survives replay cleanly. Storing a mask would freeze a silhouette against a growth rule that is still moving; storing two integers lets any future build re-derive the region from the same user intent.
+The two clean bundles confirm the other half: the seed does not hurt them, because on a well-segmented plate there is only one component and the restriction is a no-op. That is a null result on both sides, not a trade.
 
-The interaction is unchanged from the version written before the measurement because the measurement falsified the claim, not the gesture: a tap is still the cheapest way to say "the food is here", it is still the only lever a phone without LiDAR has, and the component rule still removes a card or a neighbouring item for free. What changed is the honesty of what it is sold as. Making it optional keeps Decision 6's rejection of "ask the user before reconciling" intact.
+The sensitivity result is the same finding seen from the user's end. The volume is perfectly flat to ±80 px of thumb wobble not because the seed is robust but because it is inert: nothing downstream depends on which of the food's pixels was named. The one non-flat cell is a failure mode rather than a gradient — a tap 80 px from centre, visibly still on the roll, landed on a pixel the segmenter had labelled background (the labelled mask is 88.5 k px on a roll whose true footprint is larger and patchily labelled), so the seed did nothing at all. An interaction whose only observable behaviour is "no effect, or silently no effect" cannot be sold to a user.
+
+What remains true from the previous version is what it had already conceded: the silhouette-clearing half is worth ~7 % of the two-view over-read and was explicitly not a reason to build anything, and the grid vertical cap still owns ~92 % of it (Decision 8). With the growth-seed half now measured at zero, nothing load-bearing is left.
 
 ### Alternatives Considered
 
-- **Tap to select one connected component, with no re-seeding**: The smallest possible change, and enough to drop the card or a second food - Rejected as sufficient: the measurement puts the whole silhouette term at ~7 % of the two-view excess, and on the single-view leak the plate blob is often contiguous with the roll, so selection alone changes neither number. It is kept as half of the chosen interaction.
-- **Drag a box round the food**: Bounds extent directly, including a contiguous excess - Rejected: it imposes a rectangle on a 12 × 7 × 4 cm roll, asks the user to guess a boundary at arm's length instead of pointing at a thing they can see, and buys a term now measured at ~7 %.
-- **Pinch to size a circular region**: One gesture, gives a radius - Rejected: a two-finger gesture on a phone held over a plate, a disc prior on an oblong food, and the same boundary-guessing for the same small term.
-- **Freehand paint or lasso**: The most expressive silhouette a user can give - Rejected on measurement twice over: meal-review Decision 4 recorded ~79 s per hand-painted mask and ~4 mm touch error, and a perfect silhouette is now known to leave 800.7 cm³ of the 927 standing.
-- **Confirm or retake, with no region input at all**: Zero new surface, honest about what a user can judge - Rejected: a confirmation with no lever cannot change a number, and it would leave the single-view growth leak with no lever either.
-- **Ask the user to indicate the food's height, or to tilt further**: The term that actually dominates - Rejected: 60° still returns 552 cm³ against 337, the shutter's aim band tops out at 40°, and a height typed by a user is a guess where the nadir LiDAR already holds a measurement. The grid bound belongs in geometry, not in the interaction.
-- **Ask only on the view where the masks disagree**: Targets the prompt at an observed failure - Rejected as the trigger: label disagreement is what Decision 6 already absorbs, and the growth leak appears on captures where nothing disagrees.
-- **Require the tap before any estimate**: Guarantees a good seed every time - Rejected: it contradicts Decision 6, which reconciles a single roll with no input, and taxes the common case to fix the uncommon one.
+- **Keep the tap and re-argue it on the silhouette term**: The component-clearing half still removes a card or a second food for free - Rejected: this decision already measured that term at ~7 % of the two-view excess and declined to build for it, and the two clean bundles show it is a no-op on a single-food plate. Re-adopting it now would be choosing the interaction first and the justification second.
+- **Move the seed rule earlier, to the plane fit**: Anchoring the first support-plane fit to the tapped component would change the plate-versus-food height reference, which is the term the leak actually turns on - Not rejected, not tested: it is a different mechanism from the one Decision 7 claimed and belongs in a decision of its own under depth-grown-food-region, measured the same way. It is the most promising direction this gate turned up.
+- **Tune the seed rule until the numbers improve** (8-connectivity, a seed disc, a seed-anchored band floor): Rejected on principle; the gate exists to test a stated mechanism, and the band-off table shows the mechanism is absent, not weak. Tuning until it looks positive is the failure mode Req 3.15 was written to prevent.
+- **Declare the gate passed because both leak bundles already read 291–316 cm³**: Rejected as dishonest. They read 298.9 and 309.5 cm³ **unseeded**, on the shipped floor-5/band-10 config — Decisions 3 and 4 of depth-grown-food-region had already cut the leak that the 410 cm³ and 428.8 cm³ figures describe. The seed is not what put them there.
+- **Run the gate on the four two-view bundles instead**: Rejected by Req 3.15 itself, which forbids using them as the criterion; Decision 8 shows the grid height cap owns those numbers.
 
 ### Consequences
 
 **Positive:**
-- The single-view growth leak gets a lever that no geometry change has given it: a seed certainly on the food, anchoring the height band to food height rather than plate height.
-- The benefit is testable with no UI at all — two existing fixtures, a hand-placed seed, a pixel count — so the premise is falsifiable before a line of capture code is written (Req 3.15).
-- The same gesture still clears a card or a neighbouring blob from either view, and still supplies the class when the segmenter scatters labels.
-- The estimate never depends on the user, so Decision 6's unaided path stands.
-- The two-view over-read now has a named owner (the grid height bound) rather than being absorbed into a UI change that would not have fixed it.
+- Req 3 is falsified before a line of capture UI was written, which is exactly what Req 3.15 was for. The cost was one afternoon of replay, not a device sitting and two tagged UI attempts.
+- The leak now has a correctly identified cause: the fill crosses the food-to-plate slope from the food's own component, so any fix must act on the growth's stopping rule or on the plane the heights are measured against, not on which pixels seed it.
+- `grow(seedPoints:)`, `FixtureRunner.run(nadirSeed:)` and `volumes --seed-x/--seed-y` exist and are tested, so the next "the user can point at it" proposal can be measured the same way in minutes.
+- The two clean bundles are byte-identical seeded and unseeded, so nothing shipped regressed.
 
 **Negative:**
-- This decision's original claim — that a tighter silhouette would halve the two-view over-read — was wrong by roughly an order of magnitude, and the interaction survives only because its second mechanism does different work. Any future "the user can fix this by pointing at it" argument should be measured against a synthetic control first.
-- **On a phone without LiDAR the tap rescues nothing.** With no depth there is no height bound at any tilt the shutter allows, so the hull stays open above the food, and the tap moves only the ~7 % the silhouette owns. The retained non-LiDAR path needs a card-plane or two-view-derived height bound of its own before it can be called trustworthy (Req 3.19).
-- The preview outline is grown at preview resolution while the estimate re-grows at full resolution, so a user can accept an outline slightly different from the one integrated.
-- One seed per view cannot describe two foods; a multi-food plate still waits on instance matching (Req 2.3).
-- A seed on a highlight, a shadow or a sesame seed can under-grow where there is no depth to stop the fill; the only remedy offered is another tap.
-- A wrong tap is a silent input to the geometry — nothing on screen says the number moved because of where the finger landed, and only the outcome row records it.
+- The single-view growth leak has no lever at all now; the 5 mm floor and the 10 mm seed-relative band remain the only things holding it, and on `1790315865030` the shipped number (309.5 cm³) still sits above the 267–302 cm³ reference.
+- The non-LiDAR path loses the one mitigation this decision offered it (Req 3.19), leaving Decision 8's degraded flag as the whole story there.
+- Dead-but-kept code: the seed restriction is in `Volume` with no caller on the shipping path. It is small and tested, but it is a measurement instrument in a production module and should be removed if nothing claims it.
+- Requirement 3 and its tasks are now stale in a spec that has shipped work either side of them; the re-decision has to say what, if anything, replaces "the user identifies the food".
 
 ### Impact
 
-`CaptureFlowModel` / `CapturedFramesView` (the per-view tap step and the frozen-frame outline, now on both paths), `FoodRegionGrowth` (seed-set restriction — the load-bearing change), `ObjectReconciler` (connectivity-gate bypass, seeded class order), `SegmentationResult.excluding` (component clearing, reused from the card path), `PipelineBridges` (projecting the nadir seed into the oblique), `PipelineDiagnostics` (the `userRegion` block and the hull-extent audit field), `PbMealFixture` (two seed fields), `FixtureRunner` / `HarnessCLI volumes` (seed replay and command-line seeds), `meal_artefacts` (per-view `user_confirmed` silhouettes). Not in scope and not fixed here: `VoxelGridSizer`'s vertical extent, which owns ~92 % of the two-view over-read.
+`MedataCore/Sources/Volume/FoodRegionGrowth.swift` (`restrictToSeededComponents`, `grow(seedPoints:)`), `HarnessCore/FixtureRunner.swift` (`run(nadirSeed:)`), `HarnessCLI` (`volumes --seed-x/--seed-y`), `MedataCore/Tests/VolumeTests/FoodRegionGrowthTests.swift`. Nothing in `App/`, `Pipeline/` or `SupportPlane/` changed, and no capture-surface work starts from this decision. Req 3.1–3.19 are held pending the re-decision; Req 3.15 is discharged.
 
 ---
 

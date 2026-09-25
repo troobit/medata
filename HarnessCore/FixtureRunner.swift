@@ -54,7 +54,8 @@ public enum FixtureRunner {
         regularisation: MaskRegularisationConfig = .standard,
         growth: FoodRegionGrowthConfig = .standard,
         reconciliation: Bool = true,
-        cardExclusion: Bool = true
+        cardExclusion: Bool = true,
+        nadirSeed: SIMD2<Int>? = nil
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -121,10 +122,13 @@ public enum FixtureRunner {
             // Depth-grown food region, exactly as Pipeline.estimate runs it
             // (depth-grown-food-region Req 7): grow from the regularised map,
             // refit from the grown mask, keep the first plane on a refusal.
+            // two-view-trust Req 3.14: the replay applies the identical seed
+            // rule the device will; `nadirSeed: nil` replays without it.
             let candidate = FoodRegionGrowth.grow(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
                 supportPlane: fit.plane, supportOffsetMm: fit.supportOffsetMm,
-                palette: palette, config: growth)
+                palette: palette, config: growth,
+                seedPoints: nadirSeed.map { [$0] } ?? [])
             var grown = candidate
             var refitReference: SupportPlaneReference?
             var refitRefused = false
@@ -149,6 +153,14 @@ public enum FixtureRunner {
                         perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
                     if let refit { fit = refit }
                 }
+            }
+            // A seed clears the components it did not name whether or not the
+            // fill added anything, so the silhouette that is integrated is the
+            // restricted one in every branch.
+            if nadirSeed != nil, !grown.applied {
+                measuredSeg = SegmentationResult(
+                    probabilities: nadirSeg.probabilities, argmax: grown.argmax,
+                    perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
             }
             regionGrowth = .init(
                 applied: grown.applied, capTripped: grown.capTripped,

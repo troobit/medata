@@ -106,6 +106,57 @@ public struct FoodRegionGrowthResult: Sendable {
 public enum FoodRegionGrowth {
     static let unlabelled: UInt8 = 255
 
+    /// Seed restriction (two-view-trust Decision 7, Req 3.15). Keeps only the
+    /// 4-connected components of volumetric-class pixels that contain at least
+    /// one of `points` (colour-grid pixels, top-left origin); every other
+    /// volumetric pixel becomes background. Returns nil when no point lands on
+    /// a volumetric pixel, so a tap that misses the food leaves the map alone
+    /// rather than erasing every seed. 4-connectivity matches the fill's own
+    /// neighbourhood and is deliberately the strict choice: a diagonal speckle
+    /// chain must not re-attach the plate to the food.
+    static func restrictToSeededComponents(
+        labels: [UInt8], width w: Int, height h: Int,
+        palette: ClassPalette, points: [SIMD2<Int>]
+    ) -> [UInt8]? {
+        guard w > 0, h > 0, labels.count == w * h else { return nil }
+        var isFood = [Bool](repeating: false, count: labels.count)
+        for i in 0..<labels.count where palette.isVolumetricClass(Int(labels[i])) { isFood[i] = true }
+
+        var keep = [Bool](repeating: false, count: labels.count)
+        var seeded = false
+        for p in points {
+            let x = p.x, y = p.y
+            guard x >= 0, x < w, y >= 0, y < h else { continue }
+            let start = y * w + x
+            guard isFood[start], !keep[start] else { continue }
+            seeded = true
+            var queue = [start]
+            keep[start] = true
+            var head = 0
+            while head < queue.count {
+                let c = queue[head]
+                head += 1
+                let cx = c % w
+                let cy = c / w
+                let neighbours = [
+                    cx > 0 ? c - 1 : -1,
+                    cx < w - 1 ? c + 1 : -1,
+                    cy > 0 ? c - w : -1,
+                    cy < h - 1 ? c + w : -1,
+                ]
+                for n in neighbours where n >= 0 && isFood[n] && !keep[n] {
+                    keep[n] = true
+                    queue.append(n)
+                }
+            }
+        }
+        guard seeded else { return nil }
+        let background = UInt8(palette.background)
+        var out = labels
+        for i in 0..<out.count where isFood[i] && !keep[i] { out[i] = background }
+        return out
+    }
+
     /// Step 1. `supportOffsetMm` is the support surface's height above
     /// `supportPlane` (the ring median on an `edgeBand` fit, 0 otherwise).
     public static func grow(
@@ -115,20 +166,31 @@ public enum FoodRegionGrowth {
         supportPlane plane: SupportPlane,
         supportOffsetMm: Float = 0,
         palette: ClassPalette,
-        config: FoodRegionGrowthConfig = .standard
+        config: FoodRegionGrowthConfig = .standard,
+        seedPoints: [SIMD2<Int>] = []
     ) -> FoodRegionGrowthResult {
         let w = argmax.width
         let h = argmax.height
         let dw = depth.width
         let dh = depth.height
         let cellCount = dw * dh
-        let labels = [UInt8](argmax.pixels)
+        // Seed restriction (two-view-trust Decision 7): with a user point, the
+        // only food-like pixels that may seed the fill — and the only ones that
+        // reach the output map and `prune`'s seed band — are those in a
+        // 4-connected volumetric component containing one of the points.
+        let restricted = seedPoints.isEmpty
+            ? nil
+            : restrictToSeededComponents(
+                labels: [UInt8](argmax.pixels), width: w, height: h,
+                palette: palette, points: seedPoints)
+        let labels = restricted ?? [UInt8](argmax.pixels)
+        let inputArgmax = restricted.map { ArgmaxMap(pixels: Data($0), height: h, width: w) } ?? argmax
 
         var before = 0
         for l in labels where palette.isVolumetricClass(Int(l)) { before += 1 }
 
         func unchanged(capTripped: Bool) -> FoodRegionGrowthResult {
-            FoodRegionGrowthResult(argmax: argmax, grownRegion: nil,
+            FoodRegionGrowthResult(argmax: inputArgmax, grownRegion: nil,
                                    foodPixelsBefore: before, foodPixelsAfter: before,
                                    capTripped: capTripped, addedCells: [], cellLabel: [],
                                    inputLabels: labels)

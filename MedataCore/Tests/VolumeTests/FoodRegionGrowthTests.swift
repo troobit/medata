@@ -280,4 +280,53 @@ struct FoodRegionGrowthTests {
         let withoutVol = try #require(without.perClassVolumesCm3["food_0"])
         #expect(withVol > withoutVol * 40)
     }
+    // two-view-trust Decision 7 / Req 3.14: an explicit seed point keeps only
+    // the 4-connected food-like component containing it.
+    @Test("a seed point drops every food-like component that does not contain it")
+    func seedPointRestrictsTheSeedSet() throws {
+        // The slab speck plus a stray speck out on the plate, two components.
+        let a = seedArgmax(cells: [(5, 4, 0), (1, 1, 0)])
+        let onSlab = SIMD2(21, 17)   // inside the colour block of cell (5, 4)
+        let unseeded = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                             supportPlane: plane, palette: palette)
+        let seeded = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                           supportPlane: plane, palette: palette,
+                                           seedPoints: [onSlab])
+        #expect(unseeded.foodPixelsBefore == 32)
+        #expect(seeded.foodPixelsBefore == 16)
+        // The plate speck is background in the seeded output and food in the other.
+        let seededLabels = [UInt8](seeded.argmax.pixels)
+        let unseededLabels = [UInt8](unseeded.argmax.pixels)
+        #expect(seededLabels[5 * w + 5] == UInt8(palette.background))
+        #expect(unseededLabels[5 * w + 5] == 0)
+        // The slab still grows from the surviving component.
+        #expect(seeded.applied)
+        #expect(seeded.foodPixelsAfter > 700)
+    }
+
+    @Test("a seed that misses the food leaves the seed set alone")
+    func seedOffFoodIsInert() throws {
+        let a = seedArgmax(cells: [(5, 4, 0)])
+        let plain = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                          supportPlane: plane, palette: palette)
+        let missed = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                           supportPlane: plane, palette: palette,
+                                           seedPoints: [SIMD2(1, 1)])
+        #expect([UInt8](missed.argmax.pixels) == [UInt8](plain.argmax.pixels))
+        #expect(missed.foodPixelsBefore == plain.foodPixelsBefore)
+        #expect(missed.foodPixelsAfter == plain.foodPixelsAfter)
+    }
+
+    @Test("no seed point is byte-identical to the unseeded default")
+    func emptySeedListIsTheDefault() throws {
+        let a = seedArgmax(cells: [(5, 4, 0), (1, 1, 0)])
+        let base = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                         supportPlane: plane, palette: palette)
+        let empty = FoodRegionGrowth.grow(argmax: a, depth: slabDepth, intrinsics: k,
+                                          supportPlane: plane, palette: palette,
+                                          seedPoints: [])
+        #expect([UInt8](empty.argmax.pixels) == [UInt8](base.argmax.pixels))
+        #expect(empty.foodPixelsAfter == base.foodPixelsAfter)
+    }
+
 }
