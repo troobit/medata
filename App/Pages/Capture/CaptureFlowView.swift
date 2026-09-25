@@ -169,8 +169,22 @@ struct CaptureFlowView: View {
             // stream (ARKitCaptureEngine.swift:111), so the pre-shutter
             // producer's subscription is disjoint from the live observer's.
             preShutterSegmenter?.resume(frames: engine.frames)
+            preShutterSegmenter?.setCardDetectionEnabled(model.needsLiveCardDetection)
         }
-        .onDisappear { observer?.stop() }
+        .onDisappear {
+            observer?.stop()
+            preShutterSegmenter?.setCardDetectionEnabled(false)
+        }
+        // The card check rides the pre-shutter producer's existing per-frame
+        // cycle (Req 4.3), so all that is wired here is whether it runs at all:
+        // Double mode without depth, or Double mode with the card toggle on.
+        // `needsLiveCardDetection` reads UserDefaults rather than observable
+        // state, but every input to it also changes something this body reads
+        // (`captureModeRaw`, `model.includeCardThisCapture`), so `onChange`
+        // re-evaluates it whenever it can have moved.
+        .onChange(of: model.needsLiveCardDetection) { _, needed in
+            preShutterSegmenter?.setCardDetectionEnabled(needed)
+        }
         .onChange(of: shouldProducePreShutter) { _, newValue in
             // Req 1.4 / Decision 5: producer halts in capturing / estimating /
             // result / refused, resumes on return to a producing state. Each
@@ -307,6 +321,12 @@ struct CaptureFlowView: View {
         }
         if let chip = blockedChip {
             return (chip, "hint.blocked", "exclamationmark.circle")
+        }
+        // Card line (two-view-trust Req 4.3 / iphone-experience Req 6.1). Above
+        // the oblique guidance because it is nadir-stage only, so the two can
+        // never both be non-nil.
+        if let card = model.cardReminder {
+            return (card, "hint.card", "creditcard")
         }
         if let message = model.obliqueTiltMessage {
             return (message, "hint.obliqueTilt", "rotate.3d")

@@ -128,7 +128,11 @@ struct MedataApp: App {
             // (bugfix app-palette-drift-after-v2-promotion).
             palette: .standard,
             source: Pipeline.preShutterSourceTag == "pre_shutter_stub"
-                ? .preShutterStub : .preShutterCoreML
+                ? .preShutterStub : .preShutterCoreML,
+            // Same detector instance the Pipeline gets, so the live shutter
+            // gate (two-view-trust Req 4.3) and the shutter-time solve run the
+            // same Vision request on the same warmup.
+            cardDetector: cardDetector
         )
         _preShutterSegmenter = State(initialValue: preShutter)
 
