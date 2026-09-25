@@ -728,6 +728,15 @@ struct MealReviewView: View {
                 shortLabel: "Drink over-estimate", copy: ResultFormat.liquidOverEstimateFlagCopy
             ))
         }
+        // two-view-trust Decision 8: a two-view carve with no depth had nothing
+        // bounding the food's height, so the figure above is not a measurement.
+        if ResultFormat.showsUnboundedCarveHeightFlag(record) {
+            out.append(AccessorySignal(
+                id: "unboundedHeight", symbol: "arrow.up.and.down.circle.fill",
+                shortLabel: "Height not measured",
+                copy: ResultFormat.unboundedCarveHeightFlagCopy
+            ))
+        }
         let present = contours?.presentClassIds ?? []
         if present.contains(palette.unknownFood) {
             out.append(AccessorySignal(

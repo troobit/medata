@@ -62,6 +62,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             case .lidarFitResidualTooHigh: caseName = "lidarFitResidualTooHigh"
             case .iterationDiverged: caseName = "iterationDiverged"
             case .noScaleAvailable: caseName = "noScaleAvailable"
+            case .noSupportPlaneWithoutDepth: caseName = "noSupportPlaneWithoutDepth"
             case .noFoodPixels: caseName = "noFoodPixels"
             case .unrecognisedFood: caseName = "unrecognisedFood"
             case .noFoodVolumeRecovered: caseName = "noFoodVolumeRecovered"
@@ -254,6 +255,23 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     // else closes the hull from above, so this pair is what a two-view volume
     // has to be read against.
     public let voxelGrid: VoxelGridMeasurements?
+    // Why this attempt's number must not be read as a measurement, as a
+    // `DegradedReason` raw value; nil when nothing degraded it. Stored as a
+    // string for the same reason `planeReference` is: a row written by a later
+    // build must still decode here (two-view-trust Decision 8).
+    public let degradedReason: String?
+
+    // Reasons an attempt is recorded but its number is not a measurement
+    // (two-view-trust Decision 8). One reason today; it is an enum so a second
+    // one cannot be spelled two ways.
+    public enum DegradedReason: String, Sendable {
+        // Two-view carve with no depth in the nadir frame. Nothing bounds the
+        // voxel grid's height: two silhouette cones close only above roughly
+        // 74 degrees of tilt and the shutter arms between 10 and 40, so the
+        // grid's constant extent sets the answer rather than the food does.
+        // Measured 2026-09-25 against a synthetic control: 1.6x to 2.5x truth.
+        case unboundedCarveHeight = "unbounded_carve_height"
+    }
 
     public struct TwoViewPoses: Codable, Sendable, Equatable {
         public let nadirSessionGeneration: Int
@@ -374,7 +392,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 card: CardMeasurements? = nil,
                 cardCandidateCount: Int? = nil,
                 twoViewReconciliation: TwoViewReconciliation? = nil,
-                voxelGrid: VoxelGridMeasurements? = nil) {
+                voxelGrid: VoxelGridMeasurements? = nil,
+                degradedReason: String? = nil) {
         self.v = v
         self.timestampMs = timestampMs
         self.outcome = outcome
@@ -407,6 +426,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.cardCandidateCount = cardCandidateCount
         self.twoViewReconciliation = twoViewReconciliation
         self.voxelGrid = voxelGrid
+        self.degradedReason = degradedReason
     }
 
     // The pre-shutter error counter lives in the App layer (PreShutterSegmenter)
@@ -434,7 +454,8 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             regionGrowth: regionGrowth, twoViewPoses: twoViewPoses, card: card,
             cardCandidateCount: cardCandidateCount,
             twoViewReconciliation: twoViewReconciliation,
-            voxelGrid: voxelGrid
+            voxelGrid: voxelGrid,
+            degradedReason: degradedReason
         )
     }
 }
@@ -472,6 +493,7 @@ public final class PipelineDiagnostics {
     private var cardCandidateCount: Int?
     private var twoViewReconciliation: TwoViewReconciliation?
     private var voxelGrid: EstimationAttemptRecord.VoxelGridMeasurements?
+    private var degradedReason: String?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
     private var volume: EstimationAttemptRecord.VolumeMeasurements?
@@ -567,6 +589,13 @@ public final class PipelineDiagnostics {
         voxelGrid = g
     }
 
+    // Marks this attempt's number as something other than a measurement
+    // (two-view-trust Decision 8). Recorded on refusals too: the reason is a
+    // property of the capture, not of the outcome.
+    public func recordDegraded(_ reason: EstimationAttemptRecord.DegradedReason) {
+        degradedReason = reason.rawValue
+    }
+
     public func recordSegmentation(
         view: SegmentationView,
         measurements: EstimationAttemptRecord.SegmentationMeasurements
@@ -648,7 +677,8 @@ public final class PipelineDiagnostics {
             card: card,
             cardCandidateCount: cardCandidateCount,
             twoViewReconciliation: twoViewReconciliation,
-            voxelGrid: voxelGrid
+            voxelGrid: voxelGrid,
+            degradedReason: degradedReason
         )
     }
 }

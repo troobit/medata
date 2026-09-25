@@ -112,6 +112,7 @@ extension EstimationFailure {
         case .noLidarDevice: return "no LiDAR"
         case .noScaleAvailable, .degenerateCardPose, .cardTooOblique, .iterationDiverged:
             return "card needed"
+        case .noSupportPlaneWithoutDepth: return "no plane"
         case .lidarCoverageTooLow: return "low depth"
         case .lidarFitDegenerate: return "no surface"
         case .lidarFitResidualTooHigh: return "uneven surface"
@@ -130,6 +131,7 @@ extension EstimationFailure {
         case .noLidarDevice: return "2-view still works"
         case .noScaleAvailable, .degenerateCardPose, .cardTooOblique, .iterationDiverged:
             return "Any bank card sets scale"
+        case .noSupportPlaneWithoutDepth: return "No depth to fit the table surface"
         case .lidarCoverageTooLow: return "Use two-view mode"
         case .lidarFitDegenerate, .lidarFitResidualTooHigh: return "Use a flat surface"
         case .noFoodPixels: return "Show the meal clearly"

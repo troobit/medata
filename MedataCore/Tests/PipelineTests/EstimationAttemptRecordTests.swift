@@ -149,6 +149,38 @@ final class EstimationAttemptRecordTests: XCTestCase {
         XCTAssertEqual(decoded.voxelGrid?.verticalExtentMm, 120)
     }
 
+    // two-view-trust Decision 8: the degraded marker survives the JSON round
+    // trip and encodes as its stable snake-case token, which is what a stored
+    // row and the benchmark filters read.
+    func testDegradedReasonRoundTripsAsItsRawValue() throws {
+        let diagnostics = PipelineDiagnostics(
+            capturePath: "two_view_sfs", modelVersion: "m", timestampMs: 1)
+        diagnostics.recordDegraded(.unboundedCarveHeight)
+        let data = try JSONEncoder().encode(diagnostics.snapshot())
+        let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
+        XCTAssertEqual(decoded.degradedReason, "unbounded_carve_height")
+
+        let object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        XCTAssertEqual(object["degradedReason"] as? String, "unbounded_carve_height")
+    }
+
+    // An undegraded row omits the key entirely, so "not degraded" and "written
+    // before the field existed" stay the same absent value rather than becoming
+    // a defaulted string nobody can tell apart.
+    func testUndegradedRowOmitsTheReason() throws {
+        let diagnostics = PipelineDiagnostics(
+            capturePath: "single_view_lidar", modelVersion: "m", timestampMs: 1)
+        let data = try JSONEncoder().encode(diagnostics.snapshot())
+        let object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        XCTAssertNil(object["degradedReason"])
+        let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
+        XCTAssertNil(decoded.degradedReason)
+    }
+
     // MARK: - schema version field
 
     func testSchemaVersionFieldIsEncodedAsV() throws {
