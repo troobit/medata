@@ -352,7 +352,8 @@ public struct Pipeline: Sendable {
             diagnostics.recordCard(.init(
                 pnpResidualPx: cardPose.pnpResidualPx, distanceMm: cardPose.translationMm.z.magnitude,
                 scaleMmPerPx: cardPose.scaleAtCardPlaneMmPerPx, lidarDisagreement: disagreement,
-                clearedPixels: clearedPixels))
+                clearedPixels: clearedPixels,
+                cornersImagePx: corners.flatMap { [$0.u, $0.v] }))
         }
         supportPlaneLog.info("event=card candidates=\(candidates.count, privacy: .public) picked=\(cardPose != nil, privacy: .public) clearedPixels=\(clearedPixels, privacy: .public)")
         let palette = nadirSeg.probabilities.palette

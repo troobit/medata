@@ -276,15 +276,21 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         public let clearedPixels: Int
         // Oblique pixels cleared under the card's projected quad; nil on single-view.
         public let obliqueClearedPixels: Int?
+        // The card's nadir quad as eight image-pixel values, TL TR BR BL, so the
+        // review can shade the reference rather than leave a hole in the outline
+        // (two-view-trust Req 4.2).
+        public let cornersImagePx: [Float]?
 
         public init(pnpResidualPx: Float, distanceMm: Float, scaleMmPerPx: Float,
-                    lidarDisagreement: Float?, clearedPixels: Int, obliqueClearedPixels: Int? = nil) {
+                    lidarDisagreement: Float?, clearedPixels: Int, obliqueClearedPixels: Int? = nil,
+                    cornersImagePx: [Float]? = nil) {
             self.pnpResidualPx = pnpResidualPx
             self.distanceMm = distanceMm
             self.scaleMmPerPx = scaleMmPerPx
             self.lidarDisagreement = lidarDisagreement
             self.clearedPixels = clearedPixels
             self.obliqueClearedPixels = obliqueClearedPixels
+            self.cornersImagePx = cornersImagePx
         }
     }
 
