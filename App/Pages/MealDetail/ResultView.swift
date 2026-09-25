@@ -802,12 +802,20 @@ struct ResultView: View {
     // The mask overlay (absorbed from MealOverviewView, Decision 16) renders
     // nothing when the mask artefact is missing, so the photo/fallback shows
     // through unmodified.
+    // Photo and mask are both the landscape capture buffer, so both take the
+    // one `ReviewPhotoOrientation.displayRotation` turn — separately, but about
+    // the same square centre, which keeps the tint over the food it came from.
+    // The square is an aspect-fill crop either way: cropping the landscape
+    // buffer left and right is the same pixels as cropping the upright photo
+    // top and bottom. The placeholder symbol is not a capture and does not turn.
     private var thumbnail: some View {
         ZStack {
             if let photo {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .rotationEffect(ReviewPhotoOrientation.displayRotation)
             } else {
                 ZStack {
                     Color.captureChromeBG
@@ -819,6 +827,8 @@ struct ResultView: View {
             }
             MaskOverlayLoader(store: store, mealId: record.id,
                               paletteVersion: record.paletteVersion)
+                .frame(width: 64, height: 64)
+                .rotationEffect(ReviewPhotoOrientation.displayRotation)
         }
         .frame(width: 64, height: 64)
         .clipShape(RoundedRectangle(cornerRadius: 12))
