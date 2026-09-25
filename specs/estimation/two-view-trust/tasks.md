@@ -27,14 +27,28 @@ references:
 
 - [ ] 9. Double mode shows the card reminder; without LiDAR the shutter does not arm until a card is detected live (Req 4.3)
 
-- [ ] 10. Card-only plane fit takes the food's lower silhouette edges or refuses (Req 4.4)
+- [x] 10. Card-only plane fit takes the food's lower silhouette edges or refuses (Req 4.4)
 
 - [ ] 11. Debug switch runs the non-LiDAR path on a LiDAR phone (Req 4.5, device half)
 
-- [ ] 12. The review outline shades the accepted card's quadrilateral as the reference, distinct from food (owner note 2026-09-25)
+- [x] 12. The review outline shades the accepted card's quadrilateral as the reference, distinct from food (owner note 2026-09-25)
+
+- [ ] 13. A card-only capture that refuses for want of a support plane says so, not noScaleAvailable (Pipeline.swift:880)
 
 ## User-identified regions
 
-- [x] 13. Cross-view label reconciliation before the carve (Req 2)
+- [x] 14. Cross-view label reconciliation before the carve (Req 2)
 
-- [ ] 14. Two-tap confirmation of the food in both photos (Req 3)
+- [ ] 15. Two-tap confirmation of the food in both photos (Req 3)
+
+## Carve height
+
+- [ ] 16. The voxel grid's vertical extent is bounded by the LiDAR-measured food height, not a constant (backlog 29)
+
+- [ ] 17. The carve's silhouette test agrees with the regularised argmax the rest of the pipeline uses (28 % halo, −217 cm³)
+
+- [ ] 18. A two-view estimate taken without depth is flagged degraded on the row and in review, and its carb figure is not offered for dosing (Decision 8)
+
+- [ ] 19. Developer-phase shutter arms outside the 10–40° tilt band so a near-side-on oblique can be captured (Decision 8 experiment)
+
+- [ ] 20. Device capture of a known object with the oblique near side-on decides whether a wider aim band bounds height (Decision 8)
