@@ -216,9 +216,13 @@ flowchart LR
     compare -->|yes| stop([stop — log the bar hit])
 ```
 
-- **The target is an artifact, not a memory.** For UI it is `design-system/MASTER.md` and
-  the per-page docs in `design-system/pages/`; for tuning it is the accuracy target and the
-  test set. Iterating against a *written* target is what keeps "taste" reviewable.
+- **The target is an artifact, not a memory.** For UI it is `design-system/surfaces.md`
+  — the surface × state catalogue of what the app actually renders — together with
+  `design-system/archive/`, the write-once record of how a generation looked, and
+  `design-system/MASTER.md` for the visual rules. (The per-page docs in
+  `design-system/pages/` are being retired in favour of the catalogue; see
+  `specs/ui/wireframe-library/`.) For tuning it is the accuracy target and the test set.
+  Iterating against a *written* target is what keeps "taste" reviewable.
 - **Observe with real output** — screenshots / on-device runs (the `verify` and `run`
   skills, the loop in `docs/agent-notes/device-build-and-test.md`), never assumptions.
 - **Get an independent read** — the `ui-ux-reviewer` skill, or a second-opinion critique
@@ -306,6 +310,54 @@ at meaning. A change is done only when:
 > value relative to that friction. We deliberately enforce alignment at the review gate
 > instead. If lightweight structural linting is ever wanted, run it in CI as a non-blocking
 > check — not as a commit-blocking hook.
+
+### The surface-delta table (every UI-touching spec)
+
+A spec that touches the interface carries a **surface-delta table** in its `requirements.md`.
+It lives there rather than in `design.md` or `tasks.md` because it states what must be true of
+the finished work, not how the work is built.
+
+| column | what it holds |
+| --- | --- |
+| surface | the surface's name as `design-system/surfaces.md` gives it |
+| change | one of `add`, `modify`, `delete`, `consolidate`, or `—` |
+| catalogue id | the `<surface>/<state>` id from the catalogue, with the state quoted |
+| note | one line — what changes about it, or why it is named out of scope |
+
+- **`—` is a real row, not an omission.** It marks a surface deliberately named as out of
+  scope: the row that says *this must survive unchanged*. A UI change that quietly removes a
+  component is the failure this exists to catch, and the only way to catch it is to have
+  written down beforehand which surfaces were not supposed to move.
+- **Written before implementation**, at the gate §4 already describes — "Do not start design
+  before requirements are agreed, or code before its plan exists".
+- **Where a spec changes no surface, the table says so explicitly.** One row, or one sentence
+  in its place. An absent table is therefore always a defect and never a claim.
+- **Rows cite catalogue ids and quote the state.** Never a row number, a table position or a
+  screen title: an id survives edits to the catalogue and the other three do not. A spec that
+  adds a surface states the id it will take.
+
+### Checking an attempt branch against the table
+
+**The job is composition, not policing.** The reason to compare an attempt's actual surface set
+against its table is that doing so lets two options be combined *at the level of the surface
+set* — "attempt 3's consolidation with attempt 2's readout" is a proposition two tables can
+express together and prose cannot.
+
+At the review gate, for each attempt, record two things:
+
+- every surface the attempt **adds, deletes or consolidates** that the table does not carry;
+- every surface the table carries that the attempt **omits**.
+
+Both are findings; neither is automatically a fault. One attempt building no activity surfaces
+where its siblings built several is a real difference between the options and belongs in the
+comparison, not in a defect list. Several options for one surface is the expected shape of UI
+work here and is never a defect. What the record actually catches is the difference *nobody
+intended* — the private layout type an attempt deleted on its way past — and that falls out of
+having written the proposition down rather than being the reason to write it.
+
+**This is a human step at the review gate.** No hook and no CI rule, for the reason the
+blockquote above gives. `make surfaces` checks that the catalogue still matches the code; it
+does not judge, and will not judge, whether an attempt matched its table.
 
 ## 9. Scaling the process for the roadmap
 
@@ -397,6 +449,9 @@ Before opening a change for review:
 - [ ] `requirements.md` in EARS, criteria anchored; no implementation leaked in — or, in
   iterative mode, the target and acceptance band are stated and measurable where possible.
 - [ ] `design.md` cites sources / records maths where relevant; no requirements restated.
+- [ ] If the change touches the interface: `requirements.md` carries a surface-delta table
+  (§8), and each attempt has been read against it — including the surfaces it moved that
+  the table does not name.
 - [ ] `tasks.md` exists in `rune`, tasks map to requirements, state is current — *unless*
   iterative mode, where the converge-on-target loop and decision log carry the state.
 - [ ] Code matches requirements + design; refusal/units/safety paths honoured.

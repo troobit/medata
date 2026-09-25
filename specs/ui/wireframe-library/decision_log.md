@@ -3,7 +3,8 @@
 Why each load-bearing choice was made. `requirements.md` holds the WHAT, `design.md` the HOW,
 `prerequisites.md` the preconditions; this file holds only the reasoning, and does not restate them.
 
-Every measurement quoted below was taken on this worktree at `591a6be`.
+Every measurement quoted below was taken on this worktree at `591a6be`, except in the entries and the
+errata block dated 2026-09-25, which were measured at `90cfa24`.
 
 ---
 
@@ -197,6 +198,51 @@ in the tree, which is also what the repo already does everywhere else.
 Sets the shape of every other decision here. `design-system/`, `tools/design_tokens/` and
 `tools/check_surfaces.sh` all follow from "plain files in this repository".
 
+### Errata — 2026-09-25
+
+A re-check of the survey above against primary sources found seven wrong or missing facts. **None of them
+changes a rejection.** Every candidate still fails on the argument in the Rationale — the source of truth
+leaves git, or a GUI step enters an agent-authored workflow — and the corrections below make several
+rejections rest on that argument alone rather than on a price.
+
+This is an errata block and not a supersede. `.agentic.json` declares no `decision_mode`, so supersede is
+the default, and it is used in this log for Decisions 4 and 5, where what was decided changes. A correction
+to a decision's *evidence* is not a revision of the decision: six superseding entries to fix a rate limit,
+two prices, three archival dates and one mis-filed package would roughly double this file and leave every
+decision exactly where it was. The entry's Status is unchanged and its text above is left as written, so
+what was believed on 2026-08-17 stays readable beside what is true now.
+
+- **Figma's MCP call allowance.** The entry says Starter seats get "up to 20 MCP tool calls per *month* and
+  Professional View/Collab seats 6". Figma's current documentation gives **6 a month to Starter, View and
+  Collab seats alike**. The spec was generous to Figma and still wrong; the limit is worse than described.
+- **Tokens Studio pricing.** The "€169/month" figure could not be confirmed from the vendor, and
+  third-party listings show around €39. The number is withdrawn rather than corrected. The rejection never
+  needed it and rests on the hosted source of truth and the human GUI step.
+- **Supernova.** Supernova now has a free tier — 5 seats, one design system — so the "No SaaS seat"
+  consequence is factually weaker for it than the entry implies. Same correction as above: the rejection
+  stands on structure, not on price.
+- **Three candidates are dead, and the survey lists them as live.** Theo was archived **2025-06-09**;
+  Specify sunset **November 2024**; ShowcaseKit was archived **2025-04-30** and is UIKit, not SwiftUI. Read
+  all three as history.
+- **"Ships no SwiftUI `Color` format."** True of Style Dictionary, but it reads as though no tool does one.
+  Design Token Kit emits SwiftUI — `static let` declarations in nested enums. What survives, and is the
+  decisive fact the entry states only in passing, is that no token format in the field can express
+  `Color(uiColor: .systemGroupedBackground)`: the DTCG draft has no platform semantic colours, no
+  light/dark variants and no modes, and Apple's own `.colorset` stores literal components per appearance.
+  Twelve of the 22 tokens in `App/Colors.swift` are OS-resolved, so every standard pipeline flattens more
+  than half the palette **inside the app**. That is a functional regression, not a formatting preference.
+- **getsentry/SnapshotPreviews is mis-filed.** It sits under "Golden screenshot corpus / snapshot testing"
+  and inherits that entry's test-target rejection, which does not reach it: `PreviewGallery` links into the
+  *app* target and needs no test target at all, because it discovers previews from `__swift5_proto` runtime
+  metadata. The honest rejection is the bill and the chicken-and-egg — browsing this catalogue would need
+  roughly 418 `#Preview` declarations plus mock stores, against the one `#Preview` in the tree today
+  (`App/MedataLoadingSymbol.swift:171`).
+- **draw.io with the Puzzle wireframe-kit was omitted entirely**, and it is the omission a reader notices:
+  the one free, offline, plain-XML, seat-free canvas tool, with iOS shape libraries already drawn. It is
+  rejected for a reason none of the hosted tools need. `mxGeometry` stores absolute coordinates, so an
+  agent authoring an option computes every x and y itself, and a diff between two options is coordinate
+  soup. HTML gives flow layout to the author and plain text to git, and no canvas format gives both.
+
 ---
 
 ## Decision 3: Wireframes are static HTML at true device metrics, not SwiftUI
@@ -274,7 +320,7 @@ same options that cost three branches cost 364 lines here, and they can then be 
 ## Decision 4: Options are composed from named zones, declared once per surface
 
 **Date**: 2026-08-17
-**Status**: accepted
+**Status**: superseded by Decision 17
 
 ### Context
 
@@ -368,7 +414,7 @@ imports anything because of one, and `tools/check_surfaces.sh` does not read the
 ## Decision 5: Every surface under design gets one side-by-side compare page
 
 **Date**: 2026-08-17
-**Status**: accepted
+**Status**: superseded by Decision 18
 
 ### Context
 
@@ -1243,5 +1289,437 @@ the report automatically and the check cannot rot on that axis.
 
 `tools/check_surfaces.sh` check 4, and the `view-model` / `data` columns of `design-system/surfaces.md`
 that give it something to be about.
+
+---
+
+## Decision 17: A cited zone must resolve, and a zone name says the role
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Decision 4 is right about the mechanism and wrong about two things inside it, and both are substance
+rather than evidence. Zones stay: 23 surfaces declare them across 19 distinct lists, the three
+insulin-dose attempts each mark six, and the one composition table in the tree
+(`design-system/wireframes/insulin-dose/composition.md`, 89 lines) is the worked example of the sentence
+that could not previously be written down.
+
+**Unverifiability is listed as a virtue.** Decision 4's Rationale closes with "Zones cost nothing to
+have … and `tools/check_surfaces.sh` does not read them", and its Consequences list "Renaming a zone
+silently breaks every composition table citing it, and nothing checks for the dangling reference" as a
+negative. Those are one fact carrying two signs on the same page.
+
+**Seven names encode present geometry.** Decision 4 states that a zone "never says how that region is
+factored in Swift" three paragraphs after taking every name member-for-member from a SwiftUI `body`:
+`total-row`, `accessory-line`, `bottom-row`, `food-rows`, `value-line`, `time-line` and `row-list` each
+assert an arrangement. `total-row` is the claim that the total is a row, which is exactly the claim the
+first option proposing a total that is *not* a row has to break.
+
+### Decision
+
+Decision 4 stands except in two respects.
+
+1. **A cited zone must resolve.** A zone name used in a wireframe (`data-zone="…"`) or in a composition
+   table MUST match a name declared for that surface in `design-system/surfaces.md`.
+   `tools/check_surfaces.sh` collects the cited names and the declared names and fails on a citation that
+   resolves to nothing, so `make surfaces` covers it.
+2. **Names say the role, not the geometry.** Seven zones are renamed: `total-row` → `total`,
+   `accessory-line` → `accessory`, `bottom-row` → `bottom`, `food-rows` → `foods`, `value-line` →
+   `value`, `time-line` → `time`, `row-list` → `rows`.
+
+The new check is a spell-check on references and nothing more. Nothing about what a zone *means* is
+checkable — no Swift type exists for a zone, nothing imports one, and no script can say that a `VStack`
+respected the boundary its wireframe drew. Decision 4's negative on that point stays true and stays a
+negative.
+
+### Rationale
+
+A pointer is the one thing in a prose artifact that a machine can check, and the check is about fifteen
+lines in a script that already runs under `make surfaces`. Keeping "nothing reads them" as a virtue while
+listing the dangling reference as a cost made the vocabulary unfalsifiable: a composition table citing
+`total-rows` reads exactly like one citing `total-row`, and the first reader to notice is the person
+building from it.
+
+Role naming is what lets the vocabulary survive the option it exists for. A zone name is a handle two
+people use to mean the same region; if the handle asserts the arrangement, then an option that changes
+the arrangement either renames the zone — breaking every table citing it — or keeps a name that
+contradicts the thing it names. `foods` is true of a list, a grid and a single summarised line;
+`food-rows` is true of one of them.
+
+The shape is not a local invention. ARIA landmark regions and Drupal theme regions are two decades-old
+precedents for named screen regions that generate nothing: both name by role, both require the regions to
+partition the surface exhaustively, and both pair a machine name with a human label. Nathan Curtis's
+component-anatomy work names parts the same way — `root`, `content`, `label`, `leadingVisual` — never by
+where a part currently sits. The exhaustive-partition rule is adopted as guidance for the Zones preamble,
+not as a check; nothing verifies that a zone list covers the whole screen.
+
+Doing the rename now is what keeps it cheap. One composition table exists, three attempt files carry six
+marks each, and `design-system/surfaces.md` holds the declarations. Every table written from here on adds
+to the cost of doing it later.
+
+### Alternatives Considered
+
+- **Leave Decision 4 as written**: No edit, no rename, no check - Rejected: the contradiction is on one
+  page and the rename cost only grows. The dangling reference is not hypothetical — it is the failure mode
+  the entry itself predicts.
+- **Check that the implementation respects its zone boundaries**: The check a reader assumes is meant -
+  Rejected: nothing links a `data-zone` attribute to a SwiftUI view. It needs the swift-syntax parser
+  Decision 15 priced at 12.5s cold build and 380MB of products against the script's 1.3s and zero, and it
+  would still be guessing which `VStack` is the zone. The resolvable half is checkable today; the rest is
+  not checkable at all.
+- **Keep the geometry names and add an alias table**: No breaking rename - Rejected: two names per region,
+  and the alias table is a second hand-maintained copy — the drift class Decision 12 exists to close.
+- **Rename later, once the vocabulary has settled**: Defer the churn - Rejected: the vocabulary settles by
+  being used, and every use is another citation to rewrite. Today there is one table.
+- **A separate `make zones` target rather than folding the check into `make surfaces`**: Keeps the
+  330-line script from growing - Rejected: this repo has its own precedent for rules whose scripts nobody
+  runs (Decision 15's third negative). A check nobody types is not a check.
+
+### Consequences
+
+**Positive:**
+- A mistyped or renamed zone fails `make surfaces` instead of sitting in a table pointing at nothing.
+- Role names survive the option that changes the arrangement, which is the option the vocabulary exists
+  to describe.
+- The check costs about fifteen lines in a script that already runs, and adds no dependency.
+
+**Negative:**
+- The check reads `design-system/wireframes/**/*.html` and the composition tables. A zone cited in a
+  spec's `decision_log.md`, a rune task or an agent prompt is still unchecked, so the dangling-reference
+  class is narrowed rather than closed.
+- It is a spell-check. A wireframe can mark `data-zone="total"` around the wrong markup and pass.
+- Role names are shorter and more abstract. `total` and `value` need the surface's context to be
+  unambiguous in a way `total-row` did not, and the preamble has to carry that context.
+- The rename is a breaking edit to every file citing the old names, landed in one commit; git is the only
+  record that `total-row` and `total` are the same region.
+- Exhaustive partition is taken from the precedents as guidance and not enforced, so a zone list can still
+  leave part of a screen unnamed and nothing will say so.
+
+---
+
+## Decision 18: The compare page composes the real option files in iframes
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Decision 5 is right about simultaneity and wrong about the mechanism it chose to get it. Its Rationale
+says the page carries its own copy of each option's markup "deliberately: a `file://` page cannot read its
+siblings, and the alternative is a server or a build step in a repo that has neither".
+
+That conflates reading with displaying. A `file://` parent **does** render a sibling `file://` page inside
+an `<iframe>`; what throws is `contentDocument` — reading the child's DOM. The research pass verified the
+distinction by experiment rather than by reasoning about it. The cost of the mistake is in the tree:
+`design-system/wireframes/insulin-dose/compare.html` is 538 lines holding a third copy of each of the
+three attempts, and each copy can diverge silently from the file it copies.
+
+### Decision
+
+`compare.html` points `<iframe src="attempt-N.html">` at the real option files, one frame per option at
+402x874. The per-zone view is driven through a **URL fragment**: the parent sets each frame's fragment,
+and each attempt reads `location.hash` in about ten lines of **inline classic script** and shows only the
+named zone. No option markup is duplicated.
+
+The one real `file://` constraint is recorded here so it is not rediscovered: **ES module scripts do not
+load from `file://`** — the opaque origin fails the module fetch — so any script in a wireframe or a
+compare page is a classic inline `<script>`, never `type="module"`.
+
+### Rationale
+
+The duplication was accepted as the price of a constraint that does not exist. Removing it retires both of
+Decision 5's stated negatives — markup existing twice, and the page growing by hand as options are added —
+for the cost of an `<iframe>` tag per option.
+
+The fragment is the channel that survives the constraint that *is* real. The parent cannot script into the
+child across `file://` origins, but it can set the child's URL, and a child can always read its own. That
+is why the per-zone view is driven from the address and not from the parent's JavaScript.
+
+This knocks on to Decision 6, which leans partly on the duplication being time-bounded: "the options and
+the compare page are deleted together, so it lives for days". There is no duplication to bound now.
+Decision 6 stands unchanged on its own measurement — the 7:1 update cadence and the `MANIFEST.md` row that
+went stale six days after it was written — and stops needing the duplication argument at all.
+
+### Alternatives Considered
+
+- **Keep the duplicated markup**: No change, and the page already works - Rejected: the premise was false,
+  and the negative is real. 538 lines carrying three copies that nothing checks for agreement is the exact
+  drift class this spec was written around.
+- **A generator or a dev server that composes the page**: Removes the duplication too - Rejected,
+  unchanged from Decision 5: Decision 2 keeps Node out of this repo, and a build step for a page that
+  lives a fortnight is more machinery than the duplication it removes. Iframes need neither.
+- **Script the child's DOM from the parent to drive the per-zone view**: The obvious way to do it -
+  Rejected: this is the part that genuinely does not work. `contentDocument` on a `file://` child throws,
+  which is the true half of the sentence Decision 5 generalised from.
+- **`postMessage` between the parent and the frames**: A real cross-document channel - Rejected: a
+  `file://` document's origin is opaque, so the sender's `targetOrigin` can only be `"*"` and the receiver
+  cannot check who sent it — and it buys nothing a fragment does not already give, at the cost of a
+  handshake on both sides.
+- **`<object>` or `<embed>` instead of `<iframe>`**: Same effect, different tag - Rejected: identical
+  origin rules, no advantage, and `<iframe>` is the well-trodden path whose sizing behaves predictably.
+
+### Consequences
+
+**Positive:**
+- Each option exists once. Editing `attempt-2.html` changes what the compare page shows, with nothing to
+  keep in step and nothing to check.
+- Adding an option to the page is one line, so the page stops growing by hand-copied screens.
+- No new dependency: a browser opening a local file, as before — no server, no build, no framework.
+
+**Negative:**
+- Each attempt now carries about ten lines of script that exist only to serve the compare page, so an
+  attempt file is no longer pure markup, and an attempt written without the snippet ignores the per-zone
+  view silently rather than visibly.
+- The frames are live pages, so the compare page inherits each option's own page chrome. An attempt that
+  wraps its 402x874 `.device` differently makes the frames disagree in height.
+- Safari's `file://` policy is stricter than Chrome's and the iframe behaviour was verified in one engine
+  only. If Safari blocks it, the page works in the wrong browser; this needs one check before it is
+  relied on.
+- The page still only chooses between options. Dynamic Type, safe areas and `ViewThatFits` remain
+  approximations (limit L4), and whether a whole flow hangs together is still the phone's question.
+
+---
+
+## Decision 19: An option's author can render it — `make wireshot`
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Decision 1 names three costs: options were costly to produce, costly to compare, and impossible to reuse.
+Decisions 3 and 4 address production and reuse. Decision 5 addresses comparison **for the person
+choosing**. Nobody addressed the **author**: an agent writes roughly a hundred lines of HTML and has no
+way to see what it wrote. Before this entry, a grep for `headless`, `screenshot` or "render the option"
+over the whole spec folder returned nothing.
+
+Moving option-making from Swift to HTML made an option about four times cheaper to write — 104, 100 and
+160 lines against 542, 1,565 and 1,015 — and did nothing at all about looking at one.
+
+### Decision
+
+`make wireshot SURFACE=<surface> [ATTEMPT=<n>]` renders each
+`design-system/wireframes/<surface>/attempt-*.html` to a PNG under `tmp/wireshot/`, using headless Google
+Chrome. `tools/wireshot.sh` is 104 lines of bash 3.2: no Node, no npm, no lockfile.
+
+The window is sized to the page (1220x1500 by default) while the `.device` inside it stays at 402x874 CSS
+px, which at `--force-device-scale-factor=3` is 1206x2622 device pixels — the frame an iPhone 16 Pro
+screenshot produces. A distance measured on that frame and divided by three is the number to write in
+Swift.
+
+It does not move the gate. `CLAUDE.md`'s gate is a person looking at the screen of an iPhone 16 Pro, and
+nothing here touches it.
+
+### Rationale
+
+Every source the research pass surveyed describes the same loop — generate, render, look, adjust — and
+this spec had optimised only the generate end. A render step closes the author's half of it: the agent
+that wrote the option sees it before a person spends attention on it, and structural mistakes (a shed that
+does not shed, a row that wraps, a control pushed below the fold) are caught by the thing that made them.
+
+What it is not is evidence. A PNG from headless Chrome says nothing about Dynamic Type, safe-area insets
+or `ViewThatFits` (limit L4). It says the layout and the hierarchy are what the author meant, which is the
+question at the point an option is being written, and not the question the phone answers later.
+
+### Alternatives Considered
+
+- **A local HTTP server plus a browser**: The conventional preview loop - Rejected: a step to remember, a
+  port to collide with and a process to kill, for pages that already render from `file://` — which is the
+  property Decision 3 chose them for in the first place.
+- **Screenshot by hand from a browser window**: No tooling at all - Rejected: a browser window is whatever
+  size it happens to be, so the shot is not at true device metrics (requirement 4.2), and two shots of the
+  same file differ by the window. It also costs a person's attention on every iteration, which is the cost
+  being removed.
+- **Do nothing; the developer opens the file**: The status quo - Rejected: it is one of the spec's own
+  three stated costs, and it means the author of an option cannot iterate on it at all without a second
+  person in the loop.
+- **Playwright or Puppeteer**: Better control, scriptable, and what the `web-v0` capture used - Rejected:
+  Node, a lockfile and `node_modules` in a repo with none (Decision 2). Chrome's own headless screenshot
+  flag needs none of it, and this job needs nothing Playwright adds.
+- **Xcode 27's `RenderPreview`**: Renders the real type system, including the adaptive behaviour HTML
+  cannot - Rejected *for this job*: it presupposes the SwiftUI exists, which is the chicken-and-egg
+  Decision 2 rejected `#Preview`-as-library over. It is a candidate verification mirror, not the author's
+  render step, and it is left open as such.
+
+### Consequences
+
+**Positive:**
+- The author of an option can see it, which is the half of the loop the spec had no mechanism for.
+- Five lines of Makefile and 104 of bash, depending on nothing a developer on this machine did not
+  already have.
+- The PNG is at the device's own pixel count, so a measurement taken from it is a measurement rather than
+  an impression.
+
+**Negative:**
+- It depends on Google Chrome being installed, at `/Applications/Google Chrome.app/…` unless `CHROME=` is
+  passed. On a machine without it the target exits 127 and the loop is back to a person with a browser.
+- It renders what the CSS says, so it inherits every lie the wireframe tells. A PNG that looks right is
+  not evidence that the SwiftUI will (limit L4).
+- The capture is the window viewport, so an attempt taller than `SHOT_H` is cropped with no warning, and
+  an attempt rendering two frames side by side needs `SHOT_W` raised by hand.
+- `tmp/wireshot/` is another output directory nothing cleans, holding PNGs that go stale the moment the
+  HTML is edited.
+- An agent looking at its own render catches structural mistakes and misses four points of padding. The
+  render step shortens the loop; it does not remove the person from it.
+
+---
+
+## Decision 20: The `web-v0` archive keeps static HTML beside every PNG
+
+**Date**: 2026-09-25
+**Status**: accepted
+
+### Context
+
+Requirement 3.1 asks for "a rendered screenshot". Decision 11 committed to capturing the SvelteKit screens
+before `main` stops being able to build them, and that capture has now run: **97 of the 101 `web-v0`
+rows**, from `origin/main` at `adc3b56`, on 2026-09-25, at 402x874 CSS px and `deviceScaleFactor: 3`.
+
+Running it forced the question of what a captured frame is. A PNG is what a person flips through, and it
+is also the one artifact from which a hex value, a line height or a 44 pt tap target cannot be recovered —
+while requirement 4.2 is about exactly those measurements. The window does not reopen: once `research`
+merges to `main`, the toolchain that renders these screens is no longer what `main` builds, and re-running
+the capture is not possible.
+
+### Decision
+
+Every captured `web-v0` frame is stored twice — `<surface>/<state>.png` and `<surface>/<state>.html` —
+beside an `_assets/` directory holding the files no screenshot can recover. The HTML is self-contained:
+scripts stripped, same-origin images inlined as data URIs, so it opens by double-clicking with no server
+and no requests.
+
+Measured on the tree: 97 PNG (7.0 MB) and 97 HTML (4.0 MB, mean 42 KB), 11 MB for the generation.
+
+### Rationale
+
+A screenshot records what the screen looked like; the snapshot keeps the numbers. Those are different
+questions and only one of them survives in a PNG. `_assets/app.css` is the clearest case —
+`--color-brand-accent: #63ff00`, `--color-brand-background: #064e3b` and
+`--color-primary-background: #0a0a0a`, where `#064e3b` exists nowhere else in the repository. No amount of
+looking at a picture recovers those three strings.
+
+Two facts made the capture cheaper than Decision 11 assumed, and both belong in the record. **No Azure
+credentials were needed**: every `+page.svelte` on `main` loads its data client-side in an `$effect` via
+`fetch('/api/…')`, and there is no `+page.server.ts` or `hooks.server.ts` anywhere, so the interception
+happens in the browser before a request leaves it. And the **Node toolchain reached no branch** — it lived
+in a `git archive` extract of `main` under `/tmp` and went with it, leaving no `node_modules`, no lockfile
+and no build step on `research`.
+
+The argument against is real and is the reason this is a decision rather than a detail: HTML in the
+archive blurs the line with the disposable wireframes it could feed. A frozen frame is markup, and markup
+can be copied into `design-system/wireframes/` and designed from, which would make a dead app's
+implementation the starting point for a live option. The mitigation is the archive's own first rule —
+`archive/` is write-once, so a snapshot cannot be edited into an option in place, and copying one out is a
+visible act in a diff. That is a mitigation, not a prevention.
+
+### Alternatives Considered
+
+- **PNG only, as requirement 3.1 reads**: Simplest, half the files, no blurred line - Rejected: the
+  numbers are the part that cannot be re-derived, and the capture does not run twice. It optimises tidiness
+  against the one irreversible loss the generation exists to prevent.
+- **HTML only**: Measurable, and a third of the bytes - Rejected: an HTML snapshot renders in whatever
+  engine opens it, which makes it a re-rendering rather than a record of a moment. The PNG is the artifact
+  that cannot change.
+- **Capture the PNGs now and rebuild `main` later if measurements are wanted**: Defers the decision -
+  Rejected: it is not possible after the merge, and it is barely possible now — the March 2026 lockfile
+  resolves on node 26.10.0 and pnpm 12.6.0 today, and nothing guarantees that next year.
+- **A computed-style or DOM JSON dump beside each PNG**: Machine-readable measurements - Rejected: nobody
+  opens it without writing a tool first, and it is a larger invention than a file the browser already
+  knows how to write.
+
+### Consequences
+
+**Positive:**
+- Hex values, spacing and type sizes stay recoverable from an app nothing can build any more.
+- One session answers both the "what did it look like" and the "what were the numbers" questions, and the
+  session cannot be repeated.
+- Coverage is stated rather than implied: the four rows that cannot render on `main` are recorded as
+  `unrenderable`, not left `pending` for somebody who owes nothing.
+
+**Negative:**
+- HTML in the archive blurs the line with the wireframes it could feed. Write-once mitigates it; nothing
+  prevents a copy.
+- 11 MB of binary and near-binary in the repository, permanently, for an app that will never ship.
+- The frames are Chromium's rendering under headless, not Safari's on an iPhone, which is where this app
+  actually ran.
+- Two files per row to keep together, and nothing checks that a row has both or that the pair came from
+  the same run.
+- Navigation `href`s inside the snapshots are dead by design. A reader who clicks one gets nothing, and
+  only `design-system/archive/README.md` says why.
+
+---
+
+## Decision 21: Scope the `ios-v0` backfill to the zone-declaring surfaces first
+
+**Date**: 2026-09-25
+**Status**: proposed
+
+### Context
+
+378 of the 418 iOS catalogue rows carry `archive: pending`; the other 40 are `n/a`. Nothing has been
+captured. Decision 7 makes screenshots half of how existing layouts are preserved, and limit L6 already
+concedes what the backfill is not for — it serves the baseline, and it does not help generate options,
+because `App/*.swift` is already the canonical answer for a surface that ships.
+
+Every frame needs the physical iPhone 16 Pro and two build modes: `make deploy-device` for non-capture UI
+and `make deploy-release-stub` for the capture flow. This is the largest item in the spec, and the choice
+is the developer's, so this entry is `proposed` and records the options with their measured sizes instead
+of picking one.
+
+### Decision
+
+**Proposed:** capture the 23 zone-declaring surfaces first and leave the remaining rows `pending`. While
+the backfill is partial, `ios-v0` does not claim to be a complete baseline, and
+`design-system/archive/README.md` says which generation is partial and why.
+
+### Rationale
+
+The zone-declaring surfaces are, by construction, the ones already judged a plausible subject of design
+options — that is the rule the catalogue uses for declaring a zone list at all. They are the surfaces
+about to be redesigned, and a baseline is worth most where a change is coming.
+
+**The saving is smaller than the delivery plan assumed, and the measurement should be read before this is
+accepted.** Those 23 surfaces carry **228 of the 378 pending frames** — three-fifths of the work, not the
+tenth the plan estimated. The estimate counted surfaces; the cost is frames. What does cost about a tenth
+is one frame per zone-declaring surface — 23 frames, 6% of the backlog — and it may be the scope that
+actually serves the purpose, because a zone list is a claim about an arrangement while most of a surface's
+states vary the content inside the zones rather than the zones themselves. That is a third option, and it
+is the one the measurement points at.
+
+### Alternatives Considered
+
+- **Capture all 378 pending frames**: The full backfill Decision 7 describes - Not chosen here because it
+  is a full day on the device across two build modes, for frames limit L6 already says generate no
+  options. It is the only option under which the archive's completeness claim is true, and accepting it is
+  an edit to this entry's Status rather than a new decision.
+- **Capture one frame per zone-declaring surface (23 frames, 6%)**: The scope that matches the "tenth of
+  the cost" estimate - Rejected as the proposal only because it has not been tested against a real
+  redesign: a surface whose states differ in *layout* — `meal-review/very-low` drops a region rather than
+  restyling it — would be photographed in its ordinary state and not in the one worth arguing about. It is
+  the cheapest option and the most likely to need a second session.
+- **Capture nothing and drop the `archive` column**: Removes the largest item entirely - Rejected: it
+  discards the developer's stated requirement that every current UI layout be preserved, and Decision 7's
+  baseline goal with it.
+- **Prioritise by change rate — the surfaces `App/` commits touch most**: Mechanical, no judgment needed -
+  Rejected: it is a proxy for "about to be redesigned", and the zone list answers that question directly
+  and by hand.
+
+### Consequences
+
+**Positive:**
+- The frames most likely to be argued from arrive first, at a measured 228 of 378 rather than all of them.
+- The archive's coverage becomes a stated number instead of an implied promise.
+- Rows nobody has captured stay `pending`, which is the honest status for a frame somebody still owes.
+
+**Negative:**
+- The claim that `ios-v0` is a complete baseline is abandoned for as long as the backfill is partial, and
+  a partial archive is one that has to be explained to every reader.
+- Three-fifths is not a saving on the order the plan implied. The scoping defers a day's work by part of a
+  day, and a second device session is still owed.
+- `pending` rows that stay pending are exactly what Decision 11's third negative warns about on the web
+  side: a status that never resolves is indistinguishable from an abandoned one.
+- A `proposed` entry that is neither accepted nor rejected is its own kind of stale, and nothing in this
+  spec sets a date for resolving it.
 
 ---

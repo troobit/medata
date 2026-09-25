@@ -33,13 +33,13 @@ ratcheted.
 ## Zones
 
 A **zone** is a named region of a surface — the part a person points at when comparing two versions of the
-same screen: `total-row`, `scale-control`, `food-rows`. Zone names are declared **once per surface, here**,
+same screen: `total`, `scale-control`, `foods`. Zone names are declared **once per surface, here**,
 and every option for that surface reuses them, so the vocabulary is shared rather than reinvented per
-wireframe. In a wireframe the zone is marked in the markup — `<section data-zone="total-row">` — and the
+wireframe. In a wireframe the zone is marked in the markup — `<section data-zone="total">` — and the
 catalogue only declares which names exist.
 
-**What they are for.** An option becomes expressible as **a set of zone choices**: `total-row` from
-attempt 2, `scale-control` from attempt 1, `food-rows` from attempt 3. That short table is the description of
+**What they are for.** An option becomes expressible as **a set of zone choices**: `total` from
+attempt 2, `scale-control` from attempt 1, `foods` from attempt 3. That short table is the description of
 what you want to see next — unambiguous, writable in a minute, and directly usable as the brief for the next
 wireframe or for the SwiftUI implementation. It is also what makes parts of one option recombinable with
 parts of another, which prose cannot express and a rendered screen cannot be pointed at to supply.
@@ -47,7 +47,38 @@ parts of another, which prose cannot express and a rendered screen cannot be poi
 **What they are not.** Zones generate no code. No Swift type has to exist for a zone, nothing imports
 anything because of one, and nothing checks that an implementation respects the boundaries its wireframe
 declared. They are a naming convention, and their whole value is that two people mean the same region by the
-same word. A zone says what a region looks like; it never says how that region is factored in Swift.
+same word. A zone names a region by its **role**; it never says how that region is factored in Swift.
+
+**What a zone name must not encode: its present geometry.** A zone outlives the arrangement it was named
+under — that is the whole reason for having one — so a name that describes today's shape stops being true
+the moment an option changes the shape, and the vocabulary breaks exactly when it is needed. Seven names
+here used to do this and were renamed on 2026-09-25: `total-row` → `total`, `accessory-line` → `accessory`,
+`bottom-row` → `bottom`, `food-rows` → `foods`, `value-line` → `value`, `time-line` → `time`,
+`row-list` → `rows`. The concrete case: all three options under `design-system/wireframes/insulin-dose/`
+render that region as a two-line block — a figure row over a middle-dot line — so "total-row" misdescribed
+every option that exists, and "the total-row is not a row" was a sentence the vocabulary forced on anyone
+comparing them. Named-region schemes that have lasted decades name by role for this reason: ARIA's landmark
+regions (`banner`, `main`, `complementary`), Drupal's theme regions, and Nathan Curtis's component anatomy
+(`root` / `content` / `label` / `leadingVisual`) all say what a part is for, never where it sits.
+
+**Three rules the lists are held to.** They are rules for the next list as much as an audit of the ones
+below; where an existing list does not meet one, that is said here rather than left to be discovered.
+
+1. **Exhaustive, not favourites.** A declared list partitions its surface — every region of the surface
+   falls in exactly one zone. Naming only the interesting parts leaves an option with nowhere to put a
+   change, and makes "unchanged" unsayable about everything nobody named. This is the rule ARIA landmarks
+   and Drupal regions both impose, and the one this catalogue least satisfies today: the three
+   `insulin-dose` attempts mark six regions each and leave their spacers and frame chrome unzoned, so a
+   change to the spacing between `total` and `primary-action` is currently a change to no zone.
+2. **Zones may nest, written `parent/child`.** A region inside another region is a zone in its own right
+   when an option can change it alone; its name carries its parent. `relabel`'s `filter-field` is the live
+   case — it sits inside `all-foods`, and under this rule reads `all-foods/filter-field`. It is not renamed
+   here, because renaming a zone is a breaking change to every wireframe and composition table that cites
+   it, and this pass renames only the seven geometry-encoding names.
+3. **Past about seven names, the surface wants splitting.** A list that long is usually two surfaces sharing
+   one screen, and a zone choice drawn from it is no longer a small thing to point at. `settings` has nine
+   (`account` … `debug`) and is the only list over the cap: its sections are independent enough that an
+   option for one says nothing about the others, which is the symptom the rule names.
 
 **Where they are declared.** Zones are declared **where they earn their keep** — on surfaces that are a
 plausible subject of design options. Most rows have none, and that is correct: a 76 pt shutter button, a
@@ -71,7 +102,12 @@ divider / scrolling rows". Nothing here is invented.
 - **surface** — the Swift type that renders it, or the construction site where no type exists.
 - **file** — repository-relative path.
 - **kind** — `screen` | `cover` | `sheet` | `overlay` | `component` | `control` | `row` | `shape` |
-  `layout` | `representable` | `widget` | `bundle` | `notification`.
+  `layout` | `representable` | `widget` | `bundle` | `notification` | `model` | `asset`. `screen` means a
+  thing a route or a navigation destination puts on the display by itself; a file that only ever renders
+  because some other surface mounts it is a `component`, however much of the display it fills. `model` and
+  `asset` occur only in the web-v0 half: `model` is the document template, which has no surface of its own,
+  and `asset` is a file that contributes to every screen without being one (a stylesheet, an icon, a
+  manifest).
 - **state** — the distinguishable visual state, phrased as what you would see on the phone.
 - **state source** — the thing in code that produces it: an enum case, a predicate, a stored flag. This is
   what makes a row checkable against a closed enum.
@@ -83,12 +119,16 @@ divider / scrolling rows". Nothing here is invented.
   tracks these; the catalogue only has to stop pretending they are bound.
 - **data** — MedataCore product and type, names only. Never a code dependency.
 - **direction** — `read` | `write` | `read-write` | `none`.
-- **archive** — where the rendered screenshot will land, under `design-system/archive/ios-v0/`. The path is
-  `<id>.png` with the id's slash flattened to a hyphen — `capture/tracking-lost` becomes
-  `capture-tracking-lost.png` — so the cell carries only `pending` (screenshot owed) or `n/a` (nothing
-  photographable in isolation, or retired). No PNG exists yet — this generation has not been captured. The
-  web-v0 rows spell their path out in full (`archive/web-v0/<id>.png · pending`) because they land in a
-  different generation directory and their ids already carry the `web/` prefix.
+- **archive** — where the rendered screenshot lives, or would. On the **iOS** half the path is `<id>.png`
+  under `design-system/archive/ios-v0/` with the id's slash flattened to a hyphen —
+  `capture/tracking-lost` becomes `capture-tracking-lost.png` — so the cell carries only `pending`
+  (screenshot owed) or `n/a` (nothing photographable in isolation, or retired). No iOS PNG exists yet; that
+  generation has not been captured. The **web-v0** rows spell their path out in full because they land in a
+  different generation directory and their ids already carry the `web/` prefix, and their cells carry one of
+  four values: `captured` (the file is there — `archive/web-v0/<id>.png` plus a `.html` snapshot beside it),
+  `archived` (a non-pixel artefact copied verbatim into `archive/web-v0/_assets/`), `unrenderable` (the
+  state cannot be produced on `main` at all, so no path is given and no frame is owed) and `n/a`. A cell
+  never reads `pending` on the web-v0 half: that capture is finished and cannot be re-run.
 - **status** — `shipped` | `planned` | `retired` | `web-v0`. `web-v0` means frozen: not shipped, not planned,
   and not a thing to build from without a decision that says so. Every row in the SvelteKit section carries
   it, and no iOS row does.
@@ -173,11 +213,11 @@ what vary, not its regions.
 
 **Zones:**
 
-- **`capture`** — `top-bar` · `preview` · `transient-status` · `telemetry` · `bottom-row`.
+- **`capture`** — `top-bar` · `preview` · `transient-status` · `telemetry` · `bottom`.
   Both `App/CaptureFlowView.swift` (`backgroundLayer`, `topBar`, `transientStatus`, `bottomArea` /
   `bottomRow`) and the "Layout zones" block in `design-system/pages/capture.md` already use these divisions:
   top bar carries close, mode capsule and bubble level; `preview` is the full-bleed AR layer; the hint and
-  the blocked chip share `transient-status`; `telemetry` is the always-visible capsule; `bottom-row` is the
+  the blocked chip share `transient-status`; `telemetry` is the always-visible capsule; `bottom` is the
   mode button and the shutter.
 - **`capture-error`** — `ghost-frame` · `chip` · `hint` · `actions`. `App/CaptureErrorOverlay.swift`: the
   dashed amber `RoundedRectangle`, the `chip`, the one-clause `errorHint`, and the Retry / 2-view / Cancel
@@ -208,6 +248,8 @@ has no interior to point at, and the two retired state-only rows have no surface
 | capture/blocked-chip | CaptureFlowView | App/CaptureFlowView.swift | screen | Transient 1.5 s chip: "too far" / "wait" / "hold steady" | `CaptureFlowModel.failingShutterGate` written into `blockedChip` on a blocked tap | CaptureFlowModel | — | none | pending | shipped |
 | capture/fork-sheet-open | CaptureFlowView | App/CaptureFlowView.swift | screen | `LidarForkSheetView` presented from a long press on the mode button | long-press gesture on the mode control | CaptureFlowModel | — | none | pending | shipped |
 | capture/back-gesture-resync | CaptureFlowView | App/CaptureFlowView.swift | screen | Stack path emptied while `.showingResult` → soft-lock resync | `path.isEmpty` while `CaptureState.showingResult` | CaptureFlowModel | Persistence · MealRecord | none | n/a | shipped |
+| capture/photo-permission-prompt | (no struct — the system add-only prompt raised by `PhotoKitSaver`) | App/PhotoLibrarySaver.swift | overlay | System "would like to add to your Photos" alert, once, on the first successful capture; refusing returns an empty identifier and the meal is saved without one | `PHPhotoLibrary.requestAuthorization(for: .addOnly)` (`App/PhotoLibrarySaver.swift:48-53`), reached from `saveNadirPhoto` (`App/CaptureFlowModel.swift:865`) on every successful estimate | CaptureFlowModel | Persistence · MealRecord | write | pending | shipped |
+| capture/photo-save-silent-failure | (no struct — the `saveNadirPhoto` catch) | App/CaptureFlowModel.swift | screen | Nothing appears: an encoding or `performChanges` failure is swallowed, the asset id degrades to empty, and the meal persists without one. The only visible trace is the fork.knife placeholder at `result/thumbnail-fallback` | `catch { assetID = "" }` (`App/CaptureFlowModel.swift:866-869`) over `PhotoLibrarySaveError` | CaptureFlowModel | Persistence · MealRecord | write | n/a | shipped |
 | captured-frames/single-view | CapturedFramesView | App/CaptureFlowView.swift | component | Nadir frame fills the safe area | one frame in `CaptureResult` | CaptureFlowModel | CaptureKit · RawFrame | read | pending | shipped |
 | captured-frames/two-view | CapturedFramesView | App/CaptureFlowView.swift | component | Nadir top half, oblique bottom half | two frames in `CaptureResult` | CaptureFlowModel | CaptureKit · RawFrame | read | pending | shipped |
 | captured-frames/decode-failure | CapturedFramesView | App/CaptureFlowView.swift | component | Flat `captureBackground` fill | image decode returns nil | CaptureFlowModel | CaptureKit · PixelBufferAdapter | read | n/a | shipped |
@@ -254,8 +296,8 @@ has no interior to point at, and the two retired state-only rows have no surface
 
 **Zones:**
 
-- **`meal-review`** — `photo` · `total-row` · `primary-action` · `scale-control` · `accessory-line` ·
-  `food-rows`. The canonical list. It is the layout order `specs/data/insulin-dosing/design-direction.md` §2
+- **`meal-review`** — `photo` · `total` · `primary-action` · `scale-control` · `accessory` ·
+  `foods`. The canonical list. It is the layout order `specs/data/insulin-dosing/design-direction.md` §2
   declares fixed — "photo (40%) / totalRow / primaryAction / scale control / 1px divider / scrolling rows" —
   and it matches `App/MealReviewView.swift` member for member (`photoSection`, `totalRow`, `primaryAction`,
   `scaleControl`, `accessoryLine`, `foodRow`) and the "Layout zones" block in
@@ -268,7 +310,7 @@ has no interior to point at, and the two retired state-only rows have no surface
   placeholder chip, calibration banner and liquid flag, which all compete for the same slot and are therefore
   one zone; then `plateCard` (which contains `fractionControl`, the food rows and `logPill`), `summaryCard`,
   `macroPlaceholders`, and the bottom-pinned `actionRow`.
-- **`meal-overview`** — `photo-card` · `total-row` · `metadata-line` · `food-rows` · `action-row`.
+- **`meal-overview`** — `photo-card` · `total` · `metadata-line` · `foods` · `action-row`.
   `App/MealOverviewView.swift`'s `body`: `photoCard`, `totalRow`, the `metadataLine` footnote, `foods`,
   `actionRow`.
 - **`relabel`** — `absent-action` · `shortlist` · `filter-field` · `all-foods`. The three `Section`s of
@@ -370,13 +412,13 @@ their own right.
 
 **Zones:**
 
-- **`records`** — `toolbar` · `row-list` · `edit-bottom-bar`. `App/RecordsView.swift` is a `List` with a
+- **`records`** — `toolbar` · `rows` · `edit-bottom-bar`. `App/RecordsView.swift` is a `List` with a
   `toolbarContent` that has three placements: leading close, trailing Select / ⋯, and a `.bottomBar` group
   that exists only in edit mode. The screen is deliberately untitled, so there is no title zone.
 - **`row-meal`, `row-insulin`, `row-glucose`, `row-intake`, `row-activity`** — one shared list:
-  `kind-glyph` · `value-line` · `time-line`. All five render the same three-part shape in
+  `kind-glyph` · `value` · `time`. All five render the same three-part shape in
   `App/RecordsView.swift`, so they share a vocabulary rather than each inventing one; the trailing
-  "corrected" capsule of `row-meal/corrected` sits in `value-line`.
+  "corrected" capsule of `row-meal/corrected` sits in `value`.
   Worth declaring because the shape of a history row is a live question: the web app grouped rows under
   Today / Yesterday headers and expanded them in place, and both were dropped (see **Successor mapping**).
 
@@ -592,6 +634,7 @@ declaring zones nobody will use is how a convention becomes noise.
 | benchmark/report-invalid | BenchmarkView | App/BenchmarkView.swift | screen | Warning naming N-below-floor and/or missing staples | headline invalid (`BenchmarkStaples`) | BenchmarkModel (in App/BenchmarkView.swift) | Benchmark · BenchmarkStaples | read | pending | shipped |
 | benchmark/metrics-unavailable | BenchmarkView | App/BenchmarkView.swift | screen | "—" for MAE / MAPE / within ±10 g | metrics nil on `Report` | BenchmarkModel (in App/BenchmarkView.swift) | Benchmark · Report.MealRow | read | pending | shipped |
 | benchmark/verdict | BenchmarkView | App/BenchmarkView.swift | screen | Verdict: better than / within noise of / worse than the SNAQ anchor / insufficient data | `Report.AnchorVerdict` via `verdictText(_:)` | BenchmarkModel (in App/BenchmarkView.swift) | Benchmark · Report.AnchorVerdict, BenchmarkAnchors | read | pending | shipped |
+| benchmark/anchor-citations | BenchmarkView | App/BenchmarkView.swift | screen | Two footnote lines under the verdict: the SNAQ MAE / MAPE anchor, and within ±10 g for GoCARB and for dietitians, each carrying its published citation | `anchorBlock` over `BenchmarkAnchors` (`App/BenchmarkView.swift:79-96`) | BenchmarkModel (in App/BenchmarkView.swift) | Benchmark · BenchmarkAnchors | read | pending | shipped |
 | benchmark/attempts-line | BenchmarkView | App/BenchmarkView.swift | screen | Attempts line, with and without an undecodable count | undecodable attempt count > 0 | BenchmarkModel (in App/BenchmarkView.swift) | Persistence · EstimationOutcome | read | pending | shipped |
 | benchmark/meals-empty | BenchmarkView | App/BenchmarkView.swift | screen | "No benchmark meals" | `BenchmarkMeal` set empty | BenchmarkModel (in App/BenchmarkView.swift) | Persistence · BenchmarkMeal | read | pending | shipped |
 | benchmark/meals-populated | BenchmarkView | App/BenchmarkView.swift | screen | One row per meal, with truth / items / fidelity / attempts | `BenchmarkMeal` set non-empty | BenchmarkModel (in App/BenchmarkView.swift) | Persistence · BenchmarkMeal | read | pending | shipped |
@@ -747,7 +790,7 @@ is not a surface.
 | exempt: `MealReviewView.AccessorySignal` | App/MealReviewView.swift | Signal datum; its states are `meal-review/signal-*`. |
 | exempt: `FoodCandidate`, `CorrectionFlags`, `ReviewFood` | App/MealReviewModel.swift | View-model data behind the review rows. |
 | exempt: `GatingSnapshot` | App/GatingSnapshot.swift | The value carried by `CaptureState.ready` / `.capturing`; not renderable. |
-| exempt: `PhotoKitSaver` | App/PhotoLibrarySaver.swift | Photo-library service; no UI. |
+| exempt: `PhotoKitSaver` | App/PhotoLibrarySaver.swift | Photo-library service with no UI of its own. The one thing a person sees because of it — the system add-only prompt — is `capture/photo-permission-prompt`, and the failure it swallows is `capture/photo-save-silent-failure`. |
 | exempt: `IntakeRecord`, `GlucoseRow` | App/MealRouting.swift | Row data behind `row-intake/*` and `row-glucose/*`. |
 | exempt: `LocalReminderRequest` | App/LocalReminderScheduler.swift | Notification request value; the notification itself is `dose-notification/*`. |
 | exempt: `RefusingPipeline`, `StallingPipeline` | App/App.swift | Harness pipeline stubs; their visible effect is `app-shell/refusing-pipeline` and `app-shell/stalling-pipeline`. |
@@ -771,14 +814,57 @@ These rows describe the SvelteKit web app that preceded the SwiftUI rewrite. It 
 not planned, and not a thing to build from without a decision that says so. They earn their place here for
 two reasons: they are the second half of the "define the app as-is" baseline, and they are the only place the
 capabilities the rewrite dropped are still written down. `archive` paths follow `archive/web-v0/<id>.png`
-with the leading `web/` of the id elided, because the `web-v0/` directory already carries it; every one is
-`pending` until the screens are captured. That capture is an expiring option: the SvelteKit toolchain on
-`main` rots, and once it will not build these screens cannot be photographed at all.
+with the leading `web/` of the id elided, because the `web-v0/` directory already carries it.
+
+**The capture has been taken, and cannot be taken again.** On 2026-09-25 the app was built from
+`origin/main` (`adc3b56`) and photographed at 402x874 CSS px, `deviceScaleFactor: 3` — the iPhone 16 Pro
+frame — with a `.html` snapshot beside each PNG so the numbers survive as well as the picture.
+`design-system/archive/README.md` records the toolchain and the method. Of the 109 rows below, 102 describe
+a state of a screen or component: 97 of those carry a frame, four read `unrenderable` and one reads `n/a`.
+None reads `pending`, because the SvelteKit toolchain on `main` will not survive `research` merging and
+nobody can be owed a frame that can never be taken. The remaining seven rows read `archived`: the build
+inputs a screenshot cannot recover — the `@theme` palette, the icon, the manifest and the four favicon
+files — copied verbatim into `archive/web-v0/_assets/`. Everything below was re-checked against `main`
+during that capture, and where a row turned out to claim more than the code does, the row says so now.
+
+**Four states cannot be produced on `main` at all**, and are marked `unrenderable` rather than left owed. In
+each case a flag exists in the script block and never reaches the template, or a binding can never be
+established: `web/capture/saving` (`isSaving` a re-entrancy guard, capture/+page.svelte:52, set :227, unread
+at :303-380), `web/manual-entry/saving` (`saving` declared manual/+page.svelte:22, toggled :52/:61, never
+passed on), and `web/camera-capture/food-camera-active` + `/label-camera-active` (`isCameraActive` is set at
+CameraCapture.svelte:88 only inside `if (videoRef)` at :85, and `videoRef` is bound only by `<video>`
+elements at :359 and :385 that live inside branches already requiring `isCameraActive` — a deadlock, not a
+missing camera). Each row carries its own reason.
+
+**Six pairs of frames are byte-identical, and four of them are findings about the code** rather than
+capture faults: `edit-meal-modal/image-and-confidence` = `/image-only` and `/confidence-only` = `/plain`,
+because `MealEditor` never draws `overallConfidence` (its only use is the save payload,
+MealEditor.svelte:144);
+`meal-editor/without-image` = `/has-items`, whose predicates are independent but which nothing distinguishes
+on screen; and `toast/info` = `/persistent`, because a toast's duration is not a visual property. The rows
+are kept apart because they are four distinct branches of the code, and merged rows would lose that; each
+one names its twin. The other two pairs — `logbook-list/row-collapsed` = `/source-ai-image` and
+`logbook-list/group-yesterday` = `/source-preset` — are fixture coincidences: the one meal chosen to show a
+collapsed row happened to carry the `ai_image` glyph, and the one chosen for the Yesterday header happened
+to carry `preset`. Those rows do describe different things; the frames just cannot show it.
+
+**Where a state is a state of the component rather than of the app**, the row says which.
+`meal-editor/save-error`, `image-preview/processing`, `meal-editor/preset-capable`, `toast/info` and
+`toast/persistent` are all reachable through a component's typed props and unreachable through any route on
+`main` — the catalogue is a catalogue of components as well as screens, so they keep their rows, but a
+reader taking the web app as a design input should know that nobody using it could see them.
+
+**A frozen layout defect the rows now record.** `Toast`'s root is `fixed bottom-20 left-1/2
+-translate-x-1/2` with no width and no right offset (Toast.svelte:50), so at 402 px its containing block is
+201 px — half the viewport. "Delete failed" wraps onto two lines. `ToastContainer` then renders each toast
+with no positional offset (ToastContainer.svelte:10-17), so several pile on one coordinate instead of
+stacking; and on `/`, `/manual` and `/presets` the container itself is mounted twice, so every toast there
+renders doubled. Three faults across two components and three route files, all preserved.
 
 **Zones:** none declared. Zones exist so that options for a surface can be pointed at and recombined, and no
 options are being generated for a frozen app. Where a web surface is wanted as a design input, the zone list
 belongs to the iOS surface that would carry it — take `logbook-list`'s date-group headers and expand-in-place
-rows as a choice about `row-list` on `records`, not as a zone vocabulary for a Svelte component nobody will
+rows as a choice about `rows` on `records`, not as a zone vocabulary for a Svelte component nobody will
 build again.
 
 Two structural facts about this app are worth carrying forward rather than losing. First, the UI↔data seam
@@ -794,113 +880,122 @@ destructures it, so the label is discarded; and `CameraCapture.svelte` imports `
 
 The capabilities with **no successor at all** in the current iOS app — spelt out row by row in the successor
 mapping below — are: editing a meal after it is saved; gallery/file import in the meal path; several named
-food items with individually typed carbs/protein/fat inside one meal; saving a captured meal as a preset;
+food items with individually typed carbs/protein/fat inside one meal; naming and keeping a meal you have
+just typed up (the capture flow never offered this — see **Save as Preset** below);
 Meals/Snacks categories on presets; a modify-before-saving step when applying a preset; transient
 confirmation (toasts); and an on-screen marker that the app is running against a stubbed backend.
 
 | id | surface | file | kind | state | state source | view-model | data | direction | archive | status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| web/document-shell/default | Document shell | main:src/app.html | model | default | static template | — | — | none | archive/web-v0/document-shell/default.png · pending | web-v0 |
-| web/root-layout/default | Root layout | main:src/routes/+layout.svelte | screen | default | no branches | — | — | none | archive/web-v0/root-layout/default.png · pending | web-v0 |
-| web/app-shell/default | AppShell | main:src/lib/components/AppShell.svelte | component | default | no branches | — | — | none | archive/web-v0/app-shell/default.png · pending | web-v0 |
-| web/home/loading | Home | main:src/routes/+page.svelte | screen | loading | `loading === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/loading.png · pending | web-v0 |
-| web/home/error | Home | main:src/routes/+page.svelte | screen | error | `error !== null` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/error.png · pending | web-v0 |
-| web/home/loaded | Home | main:src/routes/+page.svelte | screen | loaded | `!loading && !error && meals.length > 0` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/loaded.png · pending | web-v0 |
-| web/home/empty | Home | main:src/routes/+page.svelte | screen | empty | `meals.length === 0` (delegated to LogbookList) | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/empty.png · pending | web-v0 |
-| web/edit-meal-modal/image-and-confidence | Edit Meal modal | main:src/routes/+page.svelte | sheet | image + confidence | `editingMeal.imageUrl !== undefined && editingMeal.confidence !== undefined` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/image-and-confidence.png · pending | web-v0 |
-| web/edit-meal-modal/image-only | Edit Meal modal | main:src/routes/+page.svelte | sheet | image only | `imageUrl !== undefined` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/image-only.png · pending | web-v0 |
-| web/edit-meal-modal/confidence-only | Edit Meal modal | main:src/routes/+page.svelte | sheet | confidence only | `confidence !== undefined` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/confidence-only.png · pending | web-v0 |
-| web/edit-meal-modal/plain | Edit Meal modal | main:src/routes/+page.svelte | sheet | neither | `else` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/plain.png · pending | web-v0 |
-| web/delete-meal-confirm/singular | Delete Meal? | main:src/routes/+page.svelte | overlay | one item | `deleteConfirmMeal.items.length === 1` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | write | archive/web-v0/delete-meal-confirm/singular.png · pending | web-v0 |
-| web/delete-meal-confirm/plural | Delete Meal? | main:src/routes/+page.svelte | overlay | many items | `deleteConfirmMeal.items.length !== 1` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | write | archive/web-v0/delete-meal-confirm/plural.png · pending | web-v0 |
-| web/capture/status-loading | Capture flow | main:src/routes/capture/+page.svelte | screen | status skeleton | `statusLoading === true` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/status-loading.png · pending | web-v0 |
-| web/capture/not-configured | Capture flow | main:src/routes/capture/+page.svelte | screen | recognition unconfigured | `!recognitionConfigured && !mockMode` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/not-configured.png · pending | web-v0 |
-| web/capture/mock-mode | Capture flow | main:src/routes/capture/+page.svelte | screen | mock banner pinned | `mockMode === true` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/mock-mode.png · pending | web-v0 |
-| web/capture/capture | Capture flow | main:src/routes/capture/+page.svelte | screen | capture | `flowState === 'capture'` | meal-api · toast.svelte.ts | — | none | archive/web-v0/capture/capture.png · pending | web-v0 |
-| web/capture/preview | Capture flow | main:src/routes/capture/+page.svelte | screen | preview | `flowState === 'preview' && capturedImage` | meal-api · toast.svelte.ts | — | none | archive/web-v0/capture/preview.png · pending | web-v0 |
-| web/capture/recognising | Capture flow | main:src/routes/capture/+page.svelte | screen | recognising | `flowState === 'recognising'` | meal-api · toast.svelte.ts | recognition · FoodAnalysisResult | read | archive/web-v0/capture/recognising.png · pending | web-v0 |
-| web/capture/results | Capture flow | main:src/routes/capture/+page.svelte | screen | results | `flowState === 'results'` | meal-api · toast.svelte.ts | recognition · AnalysedFoodItem | read | archive/web-v0/capture/results.png · pending | web-v0 |
-| web/capture/error | Capture flow | main:src/routes/capture/+page.svelte | screen | error | `flowState === 'error'` | meal-api · toast.svelte.ts | recognition · RecognitionErrorCode | none | archive/web-v0/capture/error.png · pending | web-v0 |
-| web/capture/editing | Capture flow | main:src/routes/capture/+page.svelte | screen | editing | `flowState === 'editing'` | meal-api · toast.svelte.ts | meal · FoodItem | none | archive/web-v0/capture/editing.png · pending | web-v0 |
-| web/capture/saving | Capture flow | main:src/routes/capture/+page.svelte | screen | saving | `isSaving === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput · blob-image-repository | write | archive/web-v0/capture/saving.png · pending | web-v0 |
-| web/camera-capture/detecting | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | detecting camera | `!detectionComplete` | — | — | none | archive/web-v0/camera-capture/detecting.png · pending | web-v0 |
-| web/camera-capture/camera-available | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | camera + gallery choice | `detectionComplete && hasCamera` | — | — | none | archive/web-v0/camera-capture/camera-available.png · pending | web-v0 |
-| web/camera-capture/no-camera | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | gallery only | `detectionComplete && !hasCamera` | — | — | none | archive/web-v0/camera-capture/no-camera.png · pending | web-v0 |
-| web/camera-capture/food-camera-active | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | food viewfinder | `isCameraActive && !showLabelOption` | — | — | none | archive/web-v0/camera-capture/food-camera-active.png · pending | web-v0 |
-| web/camera-capture/label-prompt | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | label interstitial | `showLabelOption && !isCameraActive` | — | — | none | archive/web-v0/camera-capture/label-prompt.png · pending | web-v0 |
-| web/camera-capture/label-camera-active | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | label viewfinder | `isCameraActive && showLabelOption` | — | — | none | archive/web-v0/camera-capture/label-camera-active.png · pending | web-v0 |
-| web/camera-capture/error | CameraCapture | main:src/lib/components/CameraCapture.svelte | screen | error banner | `error !== null` (getUserMedia refusal or non-JPEG/PNG) | — | — | none | archive/web-v0/camera-capture/error.png · pending | web-v0 |
-| web/image-preview/idle | ImagePreview | main:src/lib/components/ImagePreview.svelte | component | idle | `isProcessing === false` | — | — | none | archive/web-v0/image-preview/idle.png · pending | web-v0 |
-| web/image-preview/processing | ImagePreview | main:src/lib/components/ImagePreview.svelte | component | processing | `isProcessing === true` | — | — | none | archive/web-v0/image-preview/processing.png · pending | web-v0 |
-| web/recognition-result/high-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | screen | high | `confidence >= 0.8` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/high-confidence.png · pending | web-v0 |
-| web/recognition-result/moderate-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | screen | moderate | `confidence >= 0.6 && < 0.8` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/moderate-confidence.png · pending | web-v0 |
-| web/recognition-result/low-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | screen | low | `confidence < 0.6` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/low-confidence.png · pending | web-v0 |
-| web/recognition-result/zero-items | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | screen | no items | `items.length === 0` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/zero-items.png · pending | web-v0 |
-| web/recognition-error/timeout | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | screen | timeout | `errorType === 'timeout'` (HTTP 504) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/timeout.png · pending | web-v0 |
-| web/recognition-error/no-items | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | screen | no items | `errorType === 'no_items'` (HTTP 422) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/no-items.png · pending | web-v0 |
-| web/recognition-error/ai-failure | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | screen | backend failure | `errorType === 'ai_failure'` (HTTP 502/503) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/ai-failure.png · pending | web-v0 |
-| web/recognition-error/generic | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | screen | generic | `errorType === 'generic'` | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/generic.png · pending | web-v0 |
-| web/recognition-error/retrying | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | screen | retrying | `isRetrying === true` | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/retrying.png · pending | web-v0 |
-| web/food-item-card/with-confidence | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | with confidence chip | `confidence !== undefined` | — | meal · FoodItem | none | archive/web-v0/food-item-card/with-confidence.png · pending | web-v0 |
-| web/food-item-card/without-confidence | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | no chip | `confidence === undefined` | — | meal · FoodItem | none | archive/web-v0/food-item-card/without-confidence.png · pending | web-v0 |
-| web/food-item-card/empty-name | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | empty name | `item.name === ''` (placeholder "Food name") | — | meal · FoodItem | none | archive/web-v0/food-item-card/empty-name.png · pending | web-v0 |
-| web/meal-editor/with-image | MealEditor | main:src/lib/components/MealEditor.svelte | screen | with image | `imageUrl !== undefined` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/with-image.png · pending | web-v0 |
-| web/meal-editor/without-image | MealEditor | main:src/lib/components/MealEditor.svelte | screen | no image | `imageUrl === undefined` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/without-image.png · pending | web-v0 |
-| web/meal-editor/mock-mode | MealEditor | main:src/lib/components/MealEditor.svelte | screen | mock banner | `mockMode === true` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/mock-mode.png · pending | web-v0 |
-| web/meal-editor/save-error | MealEditor | main:src/lib/components/MealEditor.svelte | screen | save error | `saveError !== null` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/save-error.png · pending | web-v0 |
-| web/meal-editor/no-items | MealEditor | main:src/lib/components/MealEditor.svelte | screen | no items | `items.length === 0` (totals hidden, Save disabled) | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/no-items.png · pending | web-v0 |
-| web/meal-editor/all-names-blank | MealEditor | main:src/lib/components/MealEditor.svelte | screen | all names blank | `items.every(i => i.name.trim() === '')` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/all-names-blank.png · pending | web-v0 |
-| web/meal-editor/has-items | MealEditor | main:src/lib/components/MealEditor.svelte | screen | has items | `hasItems === true` (totals panel shown) | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/has-items.png · pending | web-v0 |
-| web/meal-editor/preset-capable | MealEditor | main:src/lib/components/MealEditor.svelte | screen | preset button shown | `onSaveAsPreset !== undefined` | — | meal · CreatePresetInput | none | archive/web-v0/meal-editor/preset-capable.png · pending | web-v0 |
-| web/save-as-preset-modal/category-meal | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | category meal | `presetCategory === 'meal'` | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/category-meal.png · pending | web-v0 |
-| web/save-as-preset-modal/category-snack | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | category snack | `presetCategory === 'snack'` | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/category-snack.png · pending | web-v0 |
-| web/save-as-preset-modal/name-empty | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | name empty | `!presetName.trim()` (Save disabled) | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/name-empty.png · pending | web-v0 |
-| web/logbook-list/empty | LogbookList | main:src/lib/components/LogbookList.svelte | component | empty | `meals.length === 0` | — | meal · Meal | none | archive/web-v0/logbook-list/empty.png · pending | web-v0 |
-| web/logbook-list/row-collapsed | LogbookList | main:src/lib/components/LogbookList.svelte | component | row collapsed | `!expandedMeals.has(meal.id)` | — | meal · Meal | none | archive/web-v0/logbook-list/row-collapsed.png · pending | web-v0 |
-| web/logbook-list/row-expanded | LogbookList | main:src/lib/components/LogbookList.svelte | component | row expanded | `expandedMeals.has(meal.id)` (chevron rotated) | — | meal · Meal · FoodItem | none | archive/web-v0/logbook-list/row-expanded.png · pending | web-v0 |
-| web/logbook-list/group-today | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Today" | `date.toDateString() === today.toDateString()` | — | meal · Meal | none | archive/web-v0/logbook-list/group-today.png · pending | web-v0 |
-| web/logbook-list/group-yesterday | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Yesterday" | `date.toDateString() === yesterday.toDateString()` | — | meal · Meal | none | archive/web-v0/logbook-list/group-yesterday.png · pending | web-v0 |
-| web/logbook-list/group-dated | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Mon 4 Aug" | `toLocaleDateString('en-IE', …)` fallback | — | meal · Meal | none | archive/web-v0/logbook-list/group-dated.png · pending | web-v0 |
-| web/logbook-list/source-ai-image | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph 📷 | `source === 'ai_image'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-ai-image.png · pending | web-v0 |
-| web/logbook-list/source-manual | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph ✏️ | `source === 'manual'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-manual.png · pending | web-v0 |
-| web/logbook-list/source-preset | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph 📋 | `source === 'preset'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-preset.png · pending | web-v0 |
-| web/meal-detail/with-image | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | with image | `meal.imageUrl && !imageError` | — | meal · Meal · blob-image-repository | none | archive/web-v0/meal-detail/with-image.png · pending | web-v0 |
-| web/meal-detail/image-unavailable | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | image 404 | `meal.imageUrl && imageError` | — | meal · Meal · blob-image-repository | none | archive/web-v0/meal-detail/image-unavailable.png · pending | web-v0 |
-| web/meal-detail/no-image | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | no image | `meal.imageUrl === undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/no-image.png · pending | web-v0 |
-| web/meal-detail/with-confidence | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | confidence line | `meal.confidence !== undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/with-confidence.png · pending | web-v0 |
-| web/meal-detail/without-confidence | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | no confidence line | `meal.confidence === undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/without-confidence.png · pending | web-v0 |
-| web/manual-entry/entry | Manual entry | main:src/routes/manual/+page.svelte | screen | entry | `flowState === 'entry'` | meal-api · toast.svelte.ts | meal · FoodItem | none | archive/web-v0/manual-entry/entry.png · pending | web-v0 |
-| web/manual-entry/review | Manual entry | main:src/routes/manual/+page.svelte | screen | review | `flowState === 'review'` | meal-api · toast.svelte.ts | meal · CreateMealInput | none | archive/web-v0/manual-entry/review.png · pending | web-v0 |
-| web/manual-entry/saving | Manual entry | main:src/routes/manual/+page.svelte | screen | saving | `saving === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput | write | archive/web-v0/manual-entry/saving.png · pending | web-v0 |
-| web/manual-entry-form/single-item | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | screen | one item | `items.length === 1` (remove button hidden) | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/single-item.png · pending | web-v0 |
-| web/manual-entry-form/multiple-items | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | screen | many items | `items.length > 1` | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/multiple-items.png · pending | web-v0 |
-| web/manual-entry-form/no-valid-names | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | screen | no valid names | `!hasValidItems` (totals hidden, Review disabled) | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/no-valid-names.png · pending | web-v0 |
-| web/manual-entry-form/has-valid-names | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | screen | has valid names | `hasValidItems === true` | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/has-valid-names.png · pending | web-v0 |
-| web/presets/loading | Presets | main:src/routes/presets/+page.svelte | screen | loading | `loading === true` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/loading.png · pending | web-v0 |
-| web/presets/error | Presets | main:src/routes/presets/+page.svelte | screen | error | `error !== null` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/error.png · pending | web-v0 |
-| web/presets/loaded | Presets | main:src/routes/presets/+page.svelte | screen | loaded | `!loading && !error && presets.length > 0` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/loaded.png · pending | web-v0 |
-| web/presets/empty | Presets | main:src/routes/presets/+page.svelte | screen | empty | `presets.length === 0` (delegated to PresetList) | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/empty.png · pending | web-v0 |
-| web/preset-list/empty | PresetList | main:src/lib/components/PresetList.svelte | component | empty | `presets.length === 0` | — | meal · Preset | none | archive/web-v0/preset-list/empty.png · pending | web-v0 |
-| web/preset-list/meals-only | PresetList | main:src/lib/components/PresetList.svelte | component | meals only | `groupedPresets.get('snack').length === 0` | — | meal · PresetCategory | none | archive/web-v0/preset-list/meals-only.png · pending | web-v0 |
-| web/preset-list/snacks-only | PresetList | main:src/lib/components/PresetList.svelte | component | snacks only | `groupedPresets.get('meal').length === 0` | — | meal · PresetCategory | none | archive/web-v0/preset-list/snacks-only.png · pending | web-v0 |
-| web/preset-list/both-groups | PresetList | main:src/lib/components/PresetList.svelte | component | both groups | both group arrays non-empty | — | meal · PresetCategory | none | archive/web-v0/preset-list/both-groups.png · pending | web-v0 |
-| web/preset-card/meal | PresetCard | main:src/lib/components/PresetCard.svelte | row | category meal | `preset.category === 'meal'` | — | meal · Preset | none | archive/web-v0/preset-card/meal.png · pending | web-v0 |
-| web/preset-card/snack | PresetCard | main:src/lib/components/PresetCard.svelte | row | category snack | `preset.category === 'snack'` | — | meal · Preset | none | archive/web-v0/preset-card/snack.png · pending | web-v0 |
-| web/preset-card/long-name | PresetCard | main:src/lib/components/PresetCard.svelte | row | truncated name | name overflows (`truncate`) | — | meal · Preset | none | archive/web-v0/preset-card/long-name.png · pending | web-v0 |
-| web/preset-card/focused | PresetCard | main:src/lib/components/PresetCard.svelte | row | keyboard focus | `focus:ring-2 ring-brand-accent` on `role="button"` | — | meal · Preset | none | archive/web-v0/preset-card/focused.png · pending | web-v0 |
-| web/apply-preset-sheet/open | Apply Preset | main:src/routes/presets/+page.svelte | sheet | open | `applyingPreset !== null` | meal-api · preset-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput | write | archive/web-v0/apply-preset-sheet/open.png · pending | web-v0 |
-| web/edit-preset-modal/category-meal | Edit Preset | main:src/routes/presets/+page.svelte | overlay | category meal | `editCategory === 'meal'` | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/category-meal.png · pending | web-v0 |
-| web/edit-preset-modal/category-snack | Edit Preset | main:src/routes/presets/+page.svelte | overlay | category snack | `editCategory === 'snack'` | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/category-snack.png · pending | web-v0 |
-| web/edit-preset-modal/name-blank | Edit Preset | main:src/routes/presets/+page.svelte | overlay | name blank | `!editName.trim()` (Save disabled) | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/name-blank.png · pending | web-v0 |
-| web/delete-preset-confirm/open | Delete Preset? | main:src/routes/presets/+page.svelte | overlay | open | `deleteConfirmPreset !== null` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | write | archive/web-v0/delete-preset-confirm/open.png · pending | web-v0 |
-| web/toast/success | Toast | main:src/lib/components/Toast.svelte | overlay | success | `type === 'success'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/success.png · pending | web-v0 |
-| web/toast/error | Toast | main:src/lib/components/Toast.svelte | overlay | error | `type === 'error'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/error.png · pending | web-v0 |
-| web/toast/info | Toast | main:src/lib/components/Toast.svelte | overlay | info | `type === 'info'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/info.png · pending | web-v0 |
-| web/toast/persistent | Toast | main:src/lib/components/Toast.svelte | overlay | no auto-dismiss | `duration === 0` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/persistent.png · pending | web-v0 |
-| web/toast-container/none | ToastContainer | main:src/lib/components/ToastContainer.svelte | component | no toasts | `toastStore.toasts.length === 0` | toast.svelte.ts | toast · ToastMessage | read | archive/web-v0/toast-container/none.png · pending | web-v0 |
-| web/toast-container/stacked | ToastContainer | main:src/lib/components/ToastContainer.svelte | component | stacked toasts | `toastStore.toasts.length > 1` (same fixed coordinates) | toast.svelte.ts | toast · ToastMessage | read | archive/web-v0/toast-container/stacked.png · pending | web-v0 |
-| web/mock-mode-banner/shown | MockModeBanner | main:src/lib/components/MockModeBanner.svelte | control | shown | rendered by parent; copy is fixed | — | — | none | archive/web-v0/mock-mode-banner/shown.png · pending | web-v0 |
-| web/manual-entry-cta/shown | ManualEntryCTA | main:src/lib/components/ManualEntryCTA.svelte | component | shown | rendered when recognition unconfigured; copy is fixed | — | — | none | archive/web-v0/manual-entry-cta/shown.png · pending | web-v0 |
+| web/document-shell/default | Document shell | main:src/app.html | model | default — the template has no surface of its own; the archived frame is a read-out of the head metadata it contributes (`<html lang>`, charset, viewport, icon/manifest links, `theme-color #63ff00`, `apple-mobile-web-app-capable`) plus the `display: contents` body wrapper | static template | — | — | none | archive/web-v0/document-shell/default.png · captured | web-v0 |
+| web/root-layout/default | Root layout | main:src/routes/+layout.svelte | screen | default | no branches | — | — | none | archive/web-v0/root-layout/default.png · captured | web-v0 |
+| web/app-shell/default | AppShell | main:src/lib/components/AppShell.svelte | component | default | no branches | — | — | none | archive/web-v0/app-shell/default.png · captured | web-v0 |
+| web/home/loading | Home | main:src/routes/+page.svelte | screen | loading | `loading === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/loading.png · captured | web-v0 |
+| web/home/error | Home | main:src/routes/+page.svelte | screen | error | `error !== null` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/error.png · captured | web-v0 |
+| web/home/loaded | Home | main:src/routes/+page.svelte | screen | loaded | `!loading && !error && meals.length > 0` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/loaded.png · captured | web-v0 |
+| web/home/empty | Home | main:src/routes/+page.svelte | screen | empty | `meals.length === 0` (delegated to LogbookList) | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | read | archive/web-v0/home/empty.png · captured | web-v0 |
+| web/edit-meal-modal/image-and-confidence | Edit Meal modal | main:src/routes/+page.svelte | sheet | image + confidence — renders identically to `image-only`: `MealEditor` never draws `overallConfidence`, whose only use is the save payload (MealEditor.svelte:144). Byte-identical PNG | `editingMeal.imageUrl !== undefined && editingMeal.confidence !== undefined` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/image-and-confidence.png · captured | web-v0 |
+| web/edit-meal-modal/image-only | Edit Meal modal | main:src/routes/+page.svelte | sheet | image only — the same picture as `image-and-confidence`, by the same fact | `imageUrl !== undefined` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/image-only.png · captured | web-v0 |
+| web/edit-meal-modal/confidence-only | Edit Meal modal | main:src/routes/+page.svelte | sheet | confidence only — renders identically to `plain`, for the same reason: `overallConfidence` reaches the payload, never the template. Byte-identical PNG | `confidence !== undefined` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/confidence-only.png · captured | web-v0 |
+| web/edit-meal-modal/plain | Edit Meal modal | main:src/routes/+page.svelte | sheet | neither — the same picture as `confidence-only` | `else` branch | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal · UpdateMealInput | read-write | archive/web-v0/edit-meal-modal/plain.png · captured | web-v0 |
+| web/delete-meal-confirm/singular | Delete Meal? | main:src/routes/+page.svelte | overlay | one item | `deleteConfirmMeal.items.length === 1` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | write | archive/web-v0/delete-meal-confirm/singular.png · captured | web-v0 |
+| web/delete-meal-confirm/plural | Delete Meal? | main:src/routes/+page.svelte | overlay | many items | `deleteConfirmMeal.items.length !== 1` | meal-api · toast.svelte.ts | cosmos-meal-repository · Meal | write | archive/web-v0/delete-meal-confirm/plural.png · captured | web-v0 |
+| web/capture/status-loading | Capture flow | main:src/routes/capture/+page.svelte | screen | status skeleton | `statusLoading === true` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/status-loading.png · captured | web-v0 |
+| web/capture/not-configured | Capture flow | main:src/routes/capture/+page.svelte | screen | recognition unconfigured | `!recognitionConfigured && !mockMode` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/not-configured.png · captured | web-v0 |
+| web/capture/mock-mode | Capture flow | main:src/routes/capture/+page.svelte | screen | mock banner pinned | `mockMode === true` | meal-api · toast.svelte.ts | /api/recognition/status | read | archive/web-v0/capture/mock-mode.png · captured | web-v0 |
+| web/capture/capture | Capture flow | main:src/routes/capture/+page.svelte | screen | capture | `flowState === 'capture'`, which mounts `CameraCapture`; which of that component's own branches you then see is decided by `enumerateDevices()`, not by `flowState` — see the `web/camera-capture/*` rows | meal-api · toast.svelte.ts | — | none | archive/web-v0/capture/capture.png · captured | web-v0 |
+| web/capture/preview | Capture flow | main:src/routes/capture/+page.svelte | screen | preview | `flowState === 'preview' && capturedImage` | meal-api · toast.svelte.ts | — | none | archive/web-v0/capture/preview.png · captured | web-v0 |
+| web/capture/recognising | Capture flow | main:src/routes/capture/+page.svelte | screen | recognising | `flowState === 'recognising'` | meal-api · toast.svelte.ts | recognition · FoodAnalysisResult | read | archive/web-v0/capture/recognising.png · captured | web-v0 |
+| web/capture/results | Capture flow | main:src/routes/capture/+page.svelte | screen | results | `flowState === 'results'` | meal-api · toast.svelte.ts | recognition · AnalysedFoodItem | read | archive/web-v0/capture/results.png · captured | web-v0 |
+| web/capture/error | Capture flow | main:src/routes/capture/+page.svelte | screen | error | `flowState === 'error'` | meal-api · toast.svelte.ts | recognition · RecognitionErrorCode | none | archive/web-v0/capture/error.png · captured | web-v0 |
+| web/capture/editing | Capture flow | main:src/routes/capture/+page.svelte | screen | editing | `flowState === 'editing'` | meal-api · toast.svelte.ts | meal · FoodItem | none | archive/web-v0/capture/editing.png · captured | web-v0 |
+| web/capture/saving | Capture flow | main:src/routes/capture/+page.svelte | screen | saving — cannot render on `main`: `isSaving` is a re-entrancy guard only (declared capture/+page.svelte:52, set :227), never read by the template at :303-380, and `MealEditor`’s props carry no such field | `isSaving === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput · blob-image-repository | write | unrenderable | web-v0 |
+| web/camera-capture/detecting | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | detecting camera | `!detectionComplete` | — | — | none | archive/web-v0/camera-capture/detecting.png · captured | web-v0 |
+| web/camera-capture/camera-available | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | camera + gallery choice | `detectionComplete && hasCamera` | — | — | none | archive/web-v0/camera-capture/camera-available.png · captured | web-v0 |
+| web/camera-capture/no-camera | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | gallery only | `detectionComplete && !hasCamera` | — | — | none | archive/web-v0/camera-capture/no-camera.png · captured | web-v0 |
+| web/camera-capture/food-camera-active | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | food viewfinder — cannot render on `main`: `isCameraActive = true` (CameraCapture.svelte:88) is guarded by `if (videoRef)` (:85), and `videoRef` is bound only by the `<video>` elements at :359 and :385, both inside branches that already require `isCameraActive`. The flag can never be set, camera or no camera | `isCameraActive && !showLabelOption` | — | — | none | unrenderable | web-v0 |
+| web/camera-capture/label-prompt | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | label interstitial — reachable only by the gallery path (`handleFileSelect`, CameraCapture.svelte:158); the camera route to it, `capturePhoto` (:105), returns immediately unless both `videoRef` and `canvasRef` are bound (:105), and neither ever is | `showLabelOption && !isCameraActive` | — | — | none | archive/web-v0/camera-capture/label-prompt.png · captured | web-v0 |
+| web/camera-capture/label-camera-active | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | label viewfinder — cannot render on `main`, by the same `videoRef` / `isCameraActive` deadlock | `isCameraActive && showLabelOption` | — | — | none | unrenderable | web-v0 |
+| web/camera-capture/error | CameraCapture | main:src/lib/components/CameraCapture.svelte | component | error banner | `error !== null` (getUserMedia refusal or non-JPEG/PNG) | — | — | none | archive/web-v0/camera-capture/error.png · captured | web-v0 |
+| web/image-preview/idle | ImagePreview | main:src/lib/components/ImagePreview.svelte | component | idle | `isProcessing === false` | — | — | none | archive/web-v0/image-preview/idle.png · captured | web-v0 |
+| web/image-preview/processing | ImagePreview | main:src/lib/components/ImagePreview.svelte | component | processing — a state of the component, not of the app: `isProcessing` does reach the template (`Analysing…` at ImagePreview.svelte:40, two `disabled=` bindings at :37 and :48), but the sole caller renders `<ImagePreview image onConfirm onRetake />` (capture/+page.svelte:326-330) and never passes it | `isProcessing === true` | — | — | none | archive/web-v0/image-preview/processing.png · captured | web-v0 |
+| web/recognition-result/high-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | component | high | `confidence >= 0.8` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/high-confidence.png · captured | web-v0 |
+| web/recognition-result/moderate-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | component | moderate | `confidence >= 0.6 && < 0.8` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/moderate-confidence.png · captured | web-v0 |
+| web/recognition-result/low-confidence | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | component | low | `confidence < 0.6` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/low-confidence.png · captured | web-v0 |
+| web/recognition-result/zero-items | FoodRecognitionResult | main:src/lib/components/FoodRecognitionResult.svelte | component | no items — there is no empty-state branch (FoodRecognitionResult.svelte:62-96): the confidence badge renders, the item list is an empty gap, Total Macros reads 0g / 0g / 0g, and "Use These Results" stays live and confirms an empty meal | `items.length === 0` | — | recognition · AnalysedFoodItem | none | archive/web-v0/recognition-result/zero-items.png · captured | web-v0 |
+| web/recognition-error/timeout | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | component | timeout | `errorType === 'timeout'` (HTTP 504) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/timeout.png · captured | web-v0 |
+| web/recognition-error/no-items | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | component | no items | `errorType === 'no_items'` (HTTP 422) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/no-items.png · captured | web-v0 |
+| web/recognition-error/ai-failure | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | component | backend failure | `errorType === 'ai_failure'` (HTTP 502/503) | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/ai-failure.png · captured | web-v0 |
+| web/recognition-error/generic | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | component | generic | `errorType === 'generic'` | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/generic.png · captured | web-v0 |
+| web/recognition-error/retrying | AIErrorFallback | main:src/lib/components/AIErrorFallback.svelte | component | retrying — not a fifth error type: `isRetrying` composes with all four `errorType` values, so this is one of the four screens above with its buttons disabled. The captured frame uses `timeout` | `isRetrying === true` (AIErrorFallback.svelte:19), orthogonal to `errorType` | — | recognition · RecognitionErrorCode | none | archive/web-v0/recognition-error/retrying.png · captured | web-v0 |
+| web/food-item-card/with-confidence | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | with confidence chip | `confidence !== undefined` | — | meal · FoodItem | none | archive/web-v0/food-item-card/with-confidence.png · captured | web-v0 |
+| web/food-item-card/without-confidence | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | no chip | `confidence === undefined` | — | meal · FoodItem | none | archive/web-v0/food-item-card/without-confidence.png · captured | web-v0 |
+| web/food-item-card/empty-name | FoodItemCard | main:src/lib/components/FoodItemCard.svelte | row | empty name | `item.name === ''` (placeholder "Food name") | — | meal · FoodItem | none | archive/web-v0/food-item-card/empty-name.png · captured | web-v0 |
+| web/meal-editor/with-image | MealEditor | main:src/lib/components/MealEditor.svelte | component | with image | `imageUrl !== undefined` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/with-image.png · captured | web-v0 |
+| web/meal-editor/without-image | MealEditor | main:src/lib/components/MealEditor.svelte | component | no image — with any items-present fixture this is the same picture as `has-items`; the two PNGs are byte-identical | `imageUrl === undefined` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/without-image.png · captured | web-v0 |
+| web/meal-editor/mock-mode | MealEditor | main:src/lib/components/MealEditor.svelte | component | mock banner | `mockMode === true` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/mock-mode.png · captured | web-v0 |
+| web/meal-editor/save-error | MealEditor | main:src/lib/components/MealEditor.svelte | component | save error — a component-level state no route can reach: the `catch` at MealEditor.svelte:150 sees only a synchronous throw, and every caller passes an async handler whose rejected promise it cannot see (manual/+page.svelte:51, capture/+page.svelte:225, +page.svelte:101, presets/+page.svelte:131). Reachable through the typed `onSave` prop, which is what the captured frame uses | `saveError !== null` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/save-error.png · captured | web-v0 |
+| web/meal-editor/no-items | MealEditor | main:src/lib/components/MealEditor.svelte | component | no items | `items.length === 0` (totals hidden, Save disabled) | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/no-items.png · captured | web-v0 |
+| web/meal-editor/all-names-blank | MealEditor | main:src/lib/components/MealEditor.svelte | component | all names blank — distinct from `no-items`: the totals panel *is* shown (`hasItems` true, MealEditor.svelte:290) reading 0g / 0g / 0g, while Save is disabled | `items.every(i => i.name.trim() === '')` | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/all-names-blank.png · captured | web-v0 |
+| web/meal-editor/has-items | MealEditor | main:src/lib/components/MealEditor.svelte | component | has items (totals panel shown) — the same picture as `without-image` under the archive fixture; the predicates are independent but nothing distinguishes the renders | `hasItems === true` (totals panel shown) | — | meal · CreateMealInput | none | archive/web-v0/meal-editor/has-items.png · captured | web-v0 |
+| web/meal-editor/preset-capable | MealEditor | main:src/lib/components/MealEditor.svelte | component | preset button shown — a prop-level state: on `main` exactly one caller passes `onSaveAsPreset`, presets/+page.svelte:225, inside the Apply Preset sheet. The capture and manual flows never did | `onSaveAsPreset !== undefined` | — | meal · CreatePresetInput | none | archive/web-v0/meal-editor/preset-capable.png · captured | web-v0 |
+| web/save-as-preset-modal/category-meal | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | category meal | `presetCategory === 'meal'` | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/category-meal.png · captured | web-v0 |
+| web/save-as-preset-modal/category-snack | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | category snack | `presetCategory === 'snack'` | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/category-snack.png · captured | web-v0 |
+| web/save-as-preset-modal/name-empty | Save as Preset | main:src/lib/components/MealEditor.svelte | overlay | name empty | `!presetName.trim()` (Save disabled) | — | meal · CreatePresetInput | none | archive/web-v0/save-as-preset-modal/name-empty.png · captured | web-v0 |
+| web/logbook-list/empty | LogbookList | main:src/lib/components/LogbookList.svelte | component | empty | `meals.length === 0` | — | meal · Meal | none | archive/web-v0/logbook-list/empty.png · captured | web-v0 |
+| web/logbook-list/row-collapsed | LogbookList | main:src/lib/components/LogbookList.svelte | component | row collapsed | `!expandedMeals.has(meal.id)` | — | meal · Meal | none | archive/web-v0/logbook-list/row-collapsed.png · captured | web-v0 |
+| web/logbook-list/row-expanded | LogbookList | main:src/lib/components/LogbookList.svelte | component | row expanded | `expandedMeals.has(meal.id)` (chevron rotated) | — | meal · Meal · FoodItem | none | archive/web-v0/logbook-list/row-expanded.png · captured | web-v0 |
+| web/logbook-list/group-today | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Today" | `date.toDateString() === today.toDateString()` | — | meal · Meal | none | archive/web-v0/logbook-list/group-today.png · captured | web-v0 |
+| web/logbook-list/group-yesterday | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Yesterday" | `date.toDateString() === yesterday.toDateString()` | — | meal · Meal | none | archive/web-v0/logbook-list/group-yesterday.png · captured | web-v0 |
+| web/logbook-list/group-dated | LogbookList | main:src/lib/components/LogbookList.svelte | component | header "Mon, 4 Aug" — with the comma `en-IE` short-weekday formatting produces (LogbookList.svelte:63-67), not "Mon 4 Aug" | `toLocaleDateString('en-IE', …)` fallback | — | meal · Meal | none | archive/web-v0/logbook-list/group-dated.png · captured | web-v0 |
+| web/logbook-list/source-ai-image | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph 📷 | `source === 'ai_image'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-ai-image.png · captured | web-v0 |
+| web/logbook-list/source-manual | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph ✏️ | `source === 'manual'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-manual.png · captured | web-v0 |
+| web/logbook-list/source-preset | LogbookList | main:src/lib/components/LogbookList.svelte | component | glyph 📋 | `source === 'preset'` | — | meal · MealDataSource | none | archive/web-v0/logbook-list/source-preset.png · captured | web-v0 |
+| web/meal-detail/with-image | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | with image | `meal.imageUrl && !imageError` | — | meal · Meal · blob-image-repository | none | archive/web-v0/meal-detail/with-image.png · captured | web-v0 |
+| web/meal-detail/image-unavailable | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | image 404 | `meal.imageUrl && imageError` | — | meal · Meal · blob-image-repository | none | archive/web-v0/meal-detail/image-unavailable.png · captured | web-v0 |
+| web/meal-detail/no-image | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | no image | `meal.imageUrl === undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/no-image.png · captured | web-v0 |
+| web/meal-detail/with-confidence | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | confidence line | `meal.confidence !== undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/with-confidence.png · captured | web-v0 |
+| web/meal-detail/without-confidence | MealDetail | main:src/lib/components/MealDetail.svelte | sheet | no confidence line | `meal.confidence === undefined` | — | meal · Meal | none | archive/web-v0/meal-detail/without-confidence.png · captured | web-v0 |
+| web/manual-entry/entry | Manual entry | main:src/routes/manual/+page.svelte | screen | entry | `flowState === 'entry'` | meal-api · toast.svelte.ts | meal · FoodItem | none | archive/web-v0/manual-entry/entry.png · captured | web-v0 |
+| web/manual-entry/review | Manual entry | main:src/routes/manual/+page.svelte | screen | review | `flowState === 'review'` | meal-api · toast.svelte.ts | meal · CreateMealInput | none | archive/web-v0/manual-entry/review.png · captured | web-v0 |
+| web/manual-entry/saving | Manual entry | main:src/routes/manual/+page.svelte | screen | saving — cannot render on `main`: `saving` is declared manual/+page.svelte:22 and toggled at :52 / :61, but never reaches the template or `MealEditor`, so the screen is pixel-identical to `review` throughout the save | `saving === true` | meal-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput | write | unrenderable | web-v0 |
+| web/manual-entry-form/single-item | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | component | one item, remove button hidden — the contrast this row records is against `multiple-items`, not against `has-valid-names`: one named item satisfies both predicates and renders one DOM | `items.length === 1` (remove button hidden) | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/single-item.png · captured | web-v0 |
+| web/manual-entry-form/multiple-items | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | component | many items | `items.length > 1` | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/multiple-items.png · captured | web-v0 |
+| web/manual-entry-form/no-valid-names | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | component | no valid names | `!hasValidItems` (totals hidden, Review disabled) | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/no-valid-names.png · captured | web-v0 |
+| web/manual-entry-form/has-valid-names | ManualEntryForm | main:src/lib/components/ManualEntryForm.svelte | component | has valid names — the contrast is against `no-valid-names`; the same DOM also satisfies `single-item` | `hasValidItems === true` | — | meal · FoodItem | none | archive/web-v0/manual-entry-form/has-valid-names.png · captured | web-v0 |
+| web/presets/loading | Presets | main:src/routes/presets/+page.svelte | screen | loading | `loading === true` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/loading.png · captured | web-v0 |
+| web/presets/error | Presets | main:src/routes/presets/+page.svelte | screen | error | `error !== null` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/error.png · captured | web-v0 |
+| web/presets/loaded | Presets | main:src/routes/presets/+page.svelte | screen | loaded | `!loading && !error && presets.length > 0` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/loaded.png · captured | web-v0 |
+| web/presets/empty | Presets | main:src/routes/presets/+page.svelte | screen | empty | `presets.length === 0` (delegated to PresetList) | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | read | archive/web-v0/presets/empty.png · captured | web-v0 |
+| web/preset-list/empty | PresetList | main:src/lib/components/PresetList.svelte | component | empty | `presets.length === 0` | — | meal · Preset | none | archive/web-v0/preset-list/empty.png · captured | web-v0 |
+| web/preset-list/meals-only | PresetList | main:src/lib/components/PresetList.svelte | component | meals only | `groupedPresets.get('snack').length === 0` | — | meal · PresetCategory | none | archive/web-v0/preset-list/meals-only.png · captured | web-v0 |
+| web/preset-list/snacks-only | PresetList | main:src/lib/components/PresetList.svelte | component | snacks only | `groupedPresets.get('meal').length === 0` | — | meal · PresetCategory | none | archive/web-v0/preset-list/snacks-only.png · captured | web-v0 |
+| web/preset-list/both-groups | PresetList | main:src/lib/components/PresetList.svelte | component | both groups | both group arrays non-empty | — | meal · PresetCategory | none | archive/web-v0/preset-list/both-groups.png · captured | web-v0 |
+| web/preset-card/meal | PresetCard | main:src/lib/components/PresetCard.svelte | row | category meal | `preset.category === 'meal'` | — | meal · Preset | none | archive/web-v0/preset-card/meal.png · captured | web-v0 |
+| web/preset-card/snack | PresetCard | main:src/lib/components/PresetCard.svelte | row | category snack | `preset.category === 'snack'` | — | meal · Preset | none | archive/web-v0/preset-card/snack.png · captured | web-v0 |
+| web/preset-card/long-name | PresetCard | main:src/lib/components/PresetCard.svelte | row | truncated name | name overflows (`truncate`) | — | meal · Preset | none | archive/web-v0/preset-card/long-name.png · captured | web-v0 |
+| web/preset-card/focused | PresetCard | main:src/lib/components/PresetCard.svelte | row | keyboard focus | `focus:outline-none focus:ring-2 focus:ring-brand-accent` on `role="button"` (PresetCard.svelte:59) — the colour utility is focus-prefixed too, so a search for a bare `ring-brand-accent` finds nothing | — | meal · Preset | none | archive/web-v0/preset-card/focused.png · captured | web-v0 |
+| web/apply-preset-sheet/open | Apply Preset | main:src/routes/presets/+page.svelte | sheet | open | `applyingPreset !== null` | meal-api · preset-api · toast.svelte.ts | cosmos-meal-repository · CreateMealInput | write | archive/web-v0/apply-preset-sheet/open.png · captured | web-v0 |
+| web/edit-preset-modal/category-meal | Edit Preset | main:src/routes/presets/+page.svelte | overlay | category meal | `editCategory === 'meal'` | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/category-meal.png · captured | web-v0 |
+| web/edit-preset-modal/category-snack | Edit Preset | main:src/routes/presets/+page.svelte | overlay | category snack | `editCategory === 'snack'` | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/category-snack.png · captured | web-v0 |
+| web/edit-preset-modal/name-blank | Edit Preset | main:src/routes/presets/+page.svelte | overlay | name blank | `!editName.trim()` (Save disabled) | preset-api · toast.svelte.ts | cosmos-preset-repository · UpdatePresetInput | read-write | archive/web-v0/edit-preset-modal/name-blank.png · captured | web-v0 |
+| web/delete-preset-confirm/open | Delete Preset? | main:src/routes/presets/+page.svelte | overlay | open | `deleteConfirmPreset !== null` | preset-api · toast.svelte.ts | cosmos-preset-repository · Preset | write | archive/web-v0/delete-preset-confirm/open.png · captured | web-v0 |
+| web/toast/success | Toast | main:src/lib/components/Toast.svelte | overlay | success | `type === 'success'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/success.png · captured | web-v0 |
+| web/toast/error | Toast | main:src/lib/components/Toast.svelte | overlay | error | `type === 'error'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/error.png · captured | web-v0 |
+| web/toast/info | Toast | main:src/lib/components/Toast.svelte | overlay | info — a prop-level state the frozen app never produced: nothing under `src/routes` calls `toastStore.info(…)`. Byte-identical to `persistent` | `type === 'info'` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/info.png · captured | web-v0 |
+| web/toast/persistent | Toast | main:src/lib/components/Toast.svelte | overlay | no auto-dismiss — also unreachable from the app: every call site is `.success` (3000 ms) or `.error` (5000 ms), and none passes 0. Duration is not a visual property, so the frame matches `info` byte for byte | `duration === 0` | toast.svelte.ts | toast · ToastMessage | none | archive/web-v0/toast/persistent.png · captured | web-v0 |
+| web/toast-container/none | ToastContainer | main:src/lib/components/ToastContainer.svelte | component | no toasts | `toastStore.toasts.length === 0` | toast.svelte.ts | toast · ToastMessage | read | archive/web-v0/toast-container/none.png · captured | web-v0 |
+| web/toast-container/stacked | ToastContainer | main:src/lib/components/ToastContainer.svelte | component | two or more toasts — it does not stack: each `Toast` is rendered with no positional offset and every one is `fixed bottom-20 left-1/2`, so they pile pixel-on-pixel and only the last painted is legible. A frozen defect, not a layout | `toastStore.toasts.length > 1` over the offset-free `{#each}` at ToastContainer.svelte:10-17 | toast.svelte.ts | toast · ToastMessage | read | archive/web-v0/toast-container/stacked.png · captured | web-v0 |
+| web/toast-container/double-mounted | ToastContainer | main:src/routes/+layout.svelte | component | Mounted twice on `/`, `/manual` and `/presets` — once by the root layout and once by the page — so every toast on those three routes renders doubled at the one fixed coordinate. `/capture` mounts it once. Frozen, not fixed | `<ToastContainer />` at +layout.svelte:13, plus +page.svelte:290, manual/+page.svelte:79 and presets/+page.svelte:327 | toast.svelte.ts | toast · ToastMessage | read | n/a — a fact about mount sites; the archive’s ToastContainer frames were taken through the component harness, which mounts it once | web-v0 |
+| web/mock-mode-banner/shown | MockModeBanner | main:src/lib/components/MockModeBanner.svelte | control | shown | rendered by parent; copy is fixed | — | — | none | archive/web-v0/mock-mode-banner/shown.png · captured | web-v0 |
+| web/manual-entry-cta/shown | ManualEntryCTA | main:src/lib/components/ManualEntryCTA.svelte | component | shown | rendered when recognition unconfigured; copy is fixed | — | — | none | archive/web-v0/manual-entry-cta/shown.png · captured | web-v0 |
+| web/web-assets/theme-tokens | (no component — a build input) | main:src/app.css | asset | The web brand palette, and the only place it is written down: an `@theme` block carrying `--color-brand-accent: #63ff00`, `--color-brand-background: #064e3b` and `--color-primary-background: #0a0a0a`. `#064e3b` appears nowhere else in the repository — a screenshot cannot give it back | `@theme` in `main:src/app.css`, imported once by +layout.svelte:2 | — | — | none | archive/web-v0/_assets/app.css · archived | web-v0 |
+| web/web-assets/app-icon | (no component — a build input) | main:static/icon.svg | asset | The wordmark drawn by `AppShell` on every route: a 128-unit viewBox, one `#63ff00` path at 24-unit round-capped stroke | `<img src="/icon.svg">` at AppShell.svelte:13 | — | — | none | archive/web-v0/_assets/icon.svg · archived | web-v0 |
+| web/web-assets/manifest | (no component — a build input) | main:static/manifest.json | asset | The PWA install record: name, `display: standalone`, `background_color #0a0a0a`, `theme_color #63ff00`, and icons naming `/icon.svg` and `/favicon.ico`. This is what install-to-home-screen ran on | `<link rel="manifest">` at app.html:8 | — | — | none | archive/web-v0/_assets/manifest.json · archived | web-v0 |
+| web/web-assets/favicon-default | (no component — a build input) | main:static/favicon-default.svg | asset | The tab icon the frozen app actually used | `<link rel="icon">` at app.html:6 | — | — | none | archive/web-v0/_assets/favicon-default.svg · archived | web-v0 |
+| web/web-assets/favicon-colour | (no component — a build input) | main:static/favicon-colour.svg | asset | An unreferenced alternate: nothing on `main` links to it. A second attempt at the same surface, kept beside the one that shipped — the two-attempts convention, predating the spec that argues for it | no reference anywhere in `main:src/` | — | — | none | archive/web-v0/_assets/favicon-colour.svg · archived | web-v0 |
+| web/web-assets/favicon-contrast | (no component — a build input) | main:static/favicon-contrast.svg | asset | The other unreferenced alternate, by the same fact | no reference anywhere in `main:src/` | — | — | none | archive/web-v0/_assets/favicon-contrast.svg · archived | web-v0 |
+| web/web-assets/favicon-ico | (no component — a build input) | main:static/favicon.ico | asset | The raster fallback for browsers that will not take an SVG icon, and the 48x48 entry in the manifest | `<link rel="alternate icon">` at app.html:7 | — | — | none | archive/web-v0/_assets/favicon.ico · archived | web-v0 |
 
 ### Successor mapping
 
@@ -916,28 +1011,29 @@ replacements rather than state-to-state ones.
 | Home (`main:src/routes/+page.svelte`) | `HomeView` (`App/HomeView.swift`) | `home/*` | The web home was launcher **and** two-day logbook in one scroll. iOS splits it: `HomeView` launches, `RecordsView` holds history. Lost: recent meals visible on the launch screen. |
 | Edit Meal modal (`main:src/routes/+page.svelte`) | none — dropped | — | Lost: editing a meal after it is saved. `App/MealOverviewView.swift` offers only `Menu { Button("Delete", role: .destructive) }`; correction happens before the save, in `MealReviewView`. |
 | Delete Meal? (`main:src/routes/+page.svelte`) | `MealOverviewView` confirmation (`App/MealOverviewView.swift`) | `meal-overview/delete-confirm` | Same guard, native shape: `.confirmationDialog("Delete meal?", …)` with Delete/Cancel. |
-| Capture flow (`main:src/routes/capture/+page.svelte`) | `CaptureFlowView` (`App/CaptureFlowView.swift`) | `capture-flow/*` | Six web flow states replaced by the `CaptureState` machine. The `statusLoading` and `not-configured` states cannot occur offline. |
-| CameraCapture (`main:src/lib/components/CameraCapture.svelte`) | `CaptureFlowView` + `ARPreviewView` | `capture-flow/*` | Lost: the gallery/file fallback for meals — no `PhotosPicker` exists in the meal path (the only one in `App/` is `App/GlucoseImportView.swift`, for glucose screenshots). Also lost: the nutrition-label second photo leg, which on `main` is already dead (`handleCapture` never reads `result.labelImage`). |
-| ImagePreview (`main:src/lib/components/ImagePreview.svelte`) | `CapturedFramesView` / `NadirThumbnailView` (`App/CaptureFlowView.swift`) | `capture-flow/captured-frames` | Frames are shown as thumbnails inside the flow. Lost: the explicit full-bleed Confirm/Retake gate on a single still. |
+| Capture flow (`main:src/routes/capture/+page.svelte`) | `CaptureFlowView` (`App/CaptureFlowView.swift`) | `capture/*` | Six web flow states replaced by the `CaptureState` machine. The `statusLoading` and `not-configured` states cannot occur offline. |
+| CameraCapture (`main:src/lib/components/CameraCapture.svelte`) | `CaptureFlowView` + `ARPreviewView` | `capture/*` | Lost: the gallery/file fallback for meals — no `PhotosPicker` exists in the meal path (the only one in `App/` is `App/GlucoseImportView.swift`, for glucose screenshots). Also lost: the nutrition-label second photo leg, which on `main` is already dead (`handleCapture` never reads `result.labelImage`). |
+| ImagePreview (`main:src/lib/components/ImagePreview.svelte`) | `CapturedFramesView` / `NadirThumbnailView` (`App/CaptureFlowView.swift`) | `captured-frames/single-view`, `captured-frames/two-view`, `captured-frames/decode-failure` | Frames are shown as thumbnails inside the flow. Lost: the explicit full-bleed Confirm/Retake gate on a single still. |
 | FoodRecognitionResult (`main:src/lib/components/FoodRecognitionResult.svelte`) | `ResultView` (`App/ResultView.swift`) | `result/*` | Mechanism changed entirely — a remote model's per-item percentages became on-device estimation with `ConfidenceLevel` bands and `ConfidencePill`. Lost: an exact percentage per item. |
 | AIErrorFallback (`main:src/lib/components/AIErrorFallback.svelte`) | `CaptureErrorOverlay` (`App/CaptureErrorOverlay.swift`) + `ActiveRefusal` (`App/ActiveRefusal.swift`) | `capture-error/*` | `timeout` and `ai_failure` are structurally impossible offline. iOS refusals are geometric (tracking, scale, coverage) rather than transport failures. |
 | FoodItemCard (`main:src/lib/components/FoodItemCard.svelte`) | `MealReviewView` amount rows (`App/MealReviewView.swift`) | `meal-review/*` | Lost: typing carbs/protein/fat directly per named item. iOS derives macros from the bundled food database and edits the serving amount instead. |
 | MealEditor (`main:src/lib/components/MealEditor.svelte`) | `MealReviewView` (`App/MealReviewView.swift`) | `meal-review/*` | Same role (review before commit), different content: mask overlays and per-food serving adjustment in place of a macro form. |
-| Save as Preset (`main:src/lib/components/MealEditor.svelte`) | none — dropped | — | Lost: turning a captured meal into a reusable preset. iOS presets are created only from `IntakeView`'s add button, via `QuickPresetEditSheet`. |
+| Save as Preset (`main:src/lib/components/MealEditor.svelte`) | none — dropped | — | Lost: naming a meal you have just typed up and keeping it. **Not** lost from the capture flow: `onSaveAsPreset` has exactly one call site on `main` — presets/+page.svelte:225, inside the Apply Preset sheet — so the capture and manual routes never offered the button either. iOS presets are created from `IntakeView`'s add button, via `QuickPresetEditSheet`. |
 | LogbookList (`main:src/lib/components/LogbookList.svelte`) | `RecordsView` + `MealRecordRow` (`App/RecordsView.swift`) | `records/*` | Lost: Today/Yesterday date-group headers and expand-in-place rows. `RecordsView` is a flat, multi-type list (meal, insulin, glucose, intake, activity) with swipe/multi-select deletion. |
 | MealDetail (`main:src/lib/components/MealDetail.svelte`) | `MealOverviewView` (`App/MealOverviewView.swift`) | `meal-overview/*` | Carried over well, including the missing-image case: the photo-only fallback renders `overview.photoFallback` when the mask artefact or photo is unavailable. |
 | Manual entry (`main:src/routes/manual/+page.svelte`) | `IntakeView` + `CarbEntrySheet` (`App/IntakeView.swift`, `App/CarbEntrySheet.swift`) | `intake/*` | Two-step entry → review collapsed into one sheet with a single confirm. |
 | ManualEntryForm (`main:src/lib/components/ManualEntryForm.svelte`) | `CarbEntrySheet` (`App/CarbEntrySheet.swift`) | `carb-entry/*` | Protein and fat survive (`carb.protein`, `carb.fat`, plus fibre). Lost: several separately named food items inside one manual meal — the iOS sheet records one intake. |
-| Presets page (`main:src/routes/presets/+page.svelte`) | `IntakeView` preset grid (`App/IntakeView.swift`) | `intake/preset-grid` | Presets stopped being their own route and became a grid on the intake screen. |
-| PresetList (`main:src/lib/components/PresetList.svelte`) | `IntakeView` preset grid (`App/IntakeView.swift`) | `intake/preset-grid` | Lost: Meals/Snacks grouping. `QuickPreset` (`MedataCore/Sources/Persistence/PersistenceStore.swift`) carries `name`, `carbsG`, `macros`, `sortOrder` — there is no category field to group on. |
-| PresetCard (`main:src/lib/components/PresetCard.svelte`) | `IntakeView` preset button (`App/IntakeView.swift`) | `intake/preset-grid` | Kept and improved: one tap writes the preset straight to the ledger; edit and delete moved into a context menu. |
+| Presets page (`main:src/routes/presets/+page.svelte`) | `IntakeView` preset grid (`App/IntakeView.swift`) | `intake/presets`, `intake/no-presets` | Presets stopped being their own route and became a grid on the intake screen. |
+| PresetList (`main:src/lib/components/PresetList.svelte`) | `IntakeView` preset grid (`App/IntakeView.swift`) | `intake/presets`, `intake/no-presets` | Lost: Meals/Snacks grouping. `QuickPreset` (`MedataCore/Sources/Persistence/PersistenceStore.swift`) carries `name`, `carbsG`, `macros`, `sortOrder` — there is no category field to group on. |
+| PresetCard (`main:src/lib/components/PresetCard.svelte`) | `IntakeView` preset button (`App/IntakeView.swift`) | `intake/presets`, `intake/preset-context-menu` | Kept and improved: one tap writes the preset straight to the ledger; edit and delete moved into a context menu. |
 | Apply Preset sheet (`main:src/routes/presets/+page.svelte`) | none — dropped | — | Lost: adjusting a preset's items before logging it. The iOS tap commits immediately — deliberate speed, but there is no "this time it was half a portion" path. |
-| Edit Preset (`main:src/routes/presets/+page.svelte`) | `QuickPresetEditSheet` (`App/QuickPresetEditSheet.swift`) | `quick-preset-edit/edit` | Name survives; the Meal/Snack toggle does not (see PresetList). Gains a fibre field and a 1–999 g range check. |
-| Delete Preset? (`main:src/routes/presets/+page.svelte`) | `IntakeView` context menu Delete (`App/IntakeView.swift`) | `intake/preset-grid` | Lost: the confirmation step — the iOS context-menu Delete acts immediately. |
+| Edit Preset (`main:src/routes/presets/+page.svelte`) | `QuickPresetEditSheet` (`App/QuickPresetEditSheet.swift`) | `preset-edit/edit` | Name survives; the Meal/Snack toggle does not (see PresetList). Gains a fibre field and a 1–999 g range check. |
+| Delete Preset? (`main:src/routes/presets/+page.svelte`) | `IntakeView` context menu Delete (`App/IntakeView.swift`) | `intake/preset-context-menu` | Lost: the confirmation step — the iOS context-menu Delete acts immediately. |
 | Toast (`main:src/lib/components/Toast.svelte`) | none — dropped | — | Lost: transient confirmation of a write. No `App/` file mentions a toast; a save's only feedback is the screen it returns to. |
-| ToastContainer (`main:src/lib/components/ToastContainer.svelte`) | none — dropped | — | Follows Toast. Worth noting the bug it froze: stacked toasts render at identical fixed coordinates, so a second toast lands on top of the first. |
+| ToastContainer (`main:src/lib/components/ToastContainer.svelte`) | none — dropped | — | Follows Toast. Worth noting the three faults it froze: it renders each toast with no positional offset, so several pile on one coordinate rather than stacking; `Toast` itself is capped to 201 px of a 402 px viewport; and on `/`, `/manual` and `/presets` the container is mounted twice, so every toast there renders doubled. |
 | MockModeBanner (`main:src/lib/components/MockModeBanner.svelte`) | none — dropped | — | Lost: an on-screen marker that you are looking at simulated output. `DEV_STUB_SEGMENTER` swaps the segmenter silently; the only signal is `event=launch … segmenterSource=…` in the device log. |
 | ManualEntryCTA (`main:src/lib/components/ManualEntryCTA.svelte`) | none — dropped | — | Dropped correctly. Estimation is on-device and unconfigurable, so "recognition is not configured" cannot occur. |
+| Web build inputs (`main:src/app.css`, `main:static/*`) | none — a different mechanism | — | The `@theme` palette became `App/Colors.swift`, from which `design-system/tokens.css` is generated; `#63FF00` survives as `medataAccent` (tokens.css:23), and `#064e3b` appears nowhere in `research`. The SVG icon became an asset catalogue, and `manifest.json` has no native analogue at all — the App Store installs the app. Kept here because a hex value cannot be read back out of a screenshot. |
 
 ---
 
@@ -945,14 +1041,17 @@ replacements rather than state-to-state ones.
 
 Counted separately per half, because only the iOS half is ratcheted. `tools/check_surfaces.sh` reads the
 whole file but checks the iOS numbers: a drop in `covered` fails the check, and a rise is the only permitted
-movement. The web-v0 numbers are a frozen total — they change only if the freeze is found to have missed
-something on `main`.
+movement. The web-v0 numbers are a frozen total — they move only when the freeze is found to have got
+something wrong about `main`, which is what the 2026-09-25 capture did: it added the seven
+`web/web-assets/*` rows and `web/toast-container/double-mounted`, re-typed the 28 rows whose `kind` read
+`screen` for a file under `src/lib/components/`, and rewrote 28 further cells across 26 rows that claimed
+more than the code does. Every figure below was counted out of this file, not estimated.
 
 | measure | iOS | web-v0 | total |
 | --- | --- | --- | --- |
-| surfaces catalogued (distinct `<surface>` keys) | 67 | 28 | 95 |
-| state rows | 418 | 101 | 519 |
-| source files covered | 42 | 22 | 64 |
+| surfaces catalogued (distinct `<surface>` keys) | 67 | 29 | 96 |
+| rows | 421 | 109 | 530 |
+| source files covered | 44 | 29 | 73 |
 | surfaces declaring zones | 23, across 19 distinct lists — the five `row-*` record rows share one | 0 — frozen, no options pending | 23 |
 
 ### iOS detail
@@ -962,18 +1061,18 @@ The numbers `tools/check_surfaces.sh` ratchets against.
 | measure | count |
 | --- | --- |
 | surfaces catalogued (distinct `<surface>` keys) | 67 |
-| state rows | 418 |
-| files covered — `App/*.swift` | 40 of 65 |
+| state rows | 421 |
+| files covered — `App/*.swift` | 42 of 65 |
 | files covered — `MeData/MeDataWidgets/*.swift` | 2 of 2 |
 | renderable types with a row (`View` / `Shape` / `Layout` / `UIViewRepresentable` / `UIViewControllerRepresentable` / `Widget` / `WidgetBundle` / `App`) | 63 of 63 — 61 under the six protocols `tools/check_surfaces.sh` scans, plus `MedataApp: App` and `MeDataWidgetBundle: WidgetBundle` |
 | types with an explicit `exempt:` reason | 33 entries — none of them conforms to a scanned protocol, so the check reports `exempt=0` |
-| surfaces with no struct at all (rows keyed on the construction site) | 7 — every `dose-notification/*` row |
-| rows at `status: shipped` | 415 |
+| rows keyed on a construction site rather than a type | 9 — the 7 `dose-notification/*` rows, plus `capture/photo-permission-prompt` and `capture/photo-save-silent-failure` |
+| rows at `status: shipped` | 418 |
 | rows at `status: retired` | 3 — `tilt-guide/state-only`, `live-badge/state-only`, `result/legacy-portion-note` |
 | rows at `status: planned` | 0 |
-| rows whose `archive` cell is `pending` | 378 |
-| rows whose `archive` cell is `n/a` (nothing photographable in isolation, or retired) | 40 |
-| archive PNGs captured (`design-system/archive/ios-v0/`) | 0 of 378 |
+| rows whose `archive` cell is `pending` | 380 |
+| rows whose `archive` cell is `n/a` (nothing photographable in isolation, or retired) | 41 |
+| archive PNGs captured (`design-system/archive/ios-v0/`) | 0 of 380 — the directory does not exist yet |
 
 Closed-enum coverage — every case of each named enum appears as a state row:
 
@@ -1011,11 +1110,18 @@ Frozen. Nothing here is ratcheted, and no number moves unless the freeze is corr
 
 | measure | count |
 | --- | --- |
-| surfaces catalogued (distinct `<surface>` keys, all `web/`-prefixed) | 28 |
-| state rows | 101 |
-| files covered — `main:src/**` | 22 — 4 route files, 1 layout, 1 document template, 16 components |
-| rows at `status: web-v0` | 101 — all of them |
-| rows whose `archive` cell is `pending` | 101 |
-| archive PNGs captured (`design-system/archive/web-v0/`) | 0 of 101 |
-| successor-mapping entries (one per web surface) | 28 |
-| web surfaces with no iOS successor at all | 8 |
+| surfaces catalogued (distinct `<surface>` keys, all `web/`-prefixed) | 29 |
+| rows | 109 — 102 states of a screen or component, plus 7 `asset` rows under `web/web-assets/` |
+| files covered — `main:src/**` | 23 — 4 route files, 1 layout, 1 document template, 16 components, 1 stylesheet |
+| files covered — `main:static/**` | 6 — `icon.svg`, `manifest.json`, three favicon SVGs and `favicon.ico` |
+| rows at `status: web-v0` | 109 — all of them |
+| rows whose `archive` cell is `captured` | 97 |
+| rows whose `archive` cell is `archived` (a file copied into `_assets/`) | 7 |
+| rows whose `archive` cell is `unrenderable` | 4 — `web/capture/saving`, `web/manual-entry/saving`, `web/camera-capture/food-camera-active`, `/label-camera-active` |
+| rows whose `archive` cell is `n/a` | 1 — `web/toast-container/double-mounted` |
+| rows whose `archive` cell is `pending` | 0 — the capture is closed and cannot be re-run |
+| archive PNGs on disk (`design-system/archive/web-v0/`) | 97, each with a `.html` snapshot beside it |
+| files on disk in `design-system/archive/web-v0/_assets/` | 7 |
+| frames that are byte-identical to another frame | 4 pairs, each named in the rows — they are distinct code branches, not a capture fault |
+| successor-mapping entries (one per web surface) | 29 |
+| web surfaces with no iOS successor | 9 — 8 `none — dropped`, plus the build inputs, which changed mechanism rather than being lost |

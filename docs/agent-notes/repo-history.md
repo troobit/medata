@@ -24,6 +24,11 @@ web-era looks: `static/` (icon.svg is the AppIcon/brand-glyph source of
 truth; favicon SVGs are brand sources) and `.orbit.yaml` (consumed by
 the user's orbit orchestration tool, see specs/PROCESS.md §4).
 
+The screens themselves were photographed before `main` stopped being able to
+build them: `design-system/archive/web-v0/` holds 97 frames across 28 surfaces,
+captured from `origin/main` (`adc3b56`). How that was done, and what it costs to
+attempt again, is in `docs/agent-notes/web-v0-archive.md`.
+
 A Vercel GitHub integration may still be attached to the repository
 (the vercel bot commented on PR #25 in May 2026) — removing it is a
 GitHub/Vercel dashboard action, not something in-repo.

@@ -12,28 +12,49 @@ What must be true before and during this work. Not a task list — `tasks.md` ow
   `tools/check_spelling.sh`. System bash here is 3.2.57; the script must not need a newer one.
 - **A browser** to view wireframes. They open as files and link only `../../tokens.css` and
   `../../wireframe.css`, fetching nothing else, so no local server is needed.
-- **Xcode and the physical phone** for archive screenshots (below).
+- **Google Chrome** for `make wireshot` (`tools/wireshot.sh`), which renders an option to a PNG headlessly
+  so its author can see it. It is a host binary like Xcode, not a repository dependency: the script looks
+  for `/Applications/Google Chrome.app`, takes a `CHROME=` override for any Chromium binary, and exits 127
+  with a named reason rather than failing obscurely. Nothing else depends on it — no check calls it, and an
+  option can still be opened by double-clicking.
+- **Xcode and the physical phone** for the `ios-v0` archive screenshots (below).
 
 **No Node, no npm, no `node_modules`, no SaaS account.** If a step seems to need a package manager,
-the step is wrong — except the one-off `web-v0` capture, which runs the SvelteKit toolchain that
-already exists on `main` and leaves nothing behind on `research`.
+the step is wrong. The one exception was the one-off `web-v0` capture, which ran the SvelteKit toolchain
+that already exists on `main`; it ran in a `/tmp` extract and left nothing behind on `research`, and it is
+finished.
 
-## The expiring window — capture `web-v0` before `research` merges to `main`
+## The expiring window — closed on 2026-09-25, satisfied
 
-A **dated risk that disappears silently**. `CLAUDE.md` says the cycle "currently runs along the
-'research' branch, with intent to merge to main when the MVP work is done". `main` is still the
-SvelteKit app at `adc3b56`, committed **2026-03-18**; its `package.json` asks for
-`@sveltejs/kit ^2.15.0`, `vite ^6.0.0`, `svelte ^5.0.0`, which `pnpm-lock.yaml` resolved to 2.50.2,
-6.4.1 and 5.49.2, while this machine has node v26.7.0 and pnpm 11.22.0 — nothing has verified that
-install and dev server still resolve. Running it also wants backend configuration: `main`'s
-`.env.example` lists `AZURE_COSMOS_CONNECTION_STRING` and `AZURE_BLOB_STORAGE_URL`, and
-`RECOGNITION_MOCK_MODE=true` mocks recognition only, not persistence.
+This was a **dated risk that disappears silently**: `CLAUDE.md` says the cycle "currently runs along the
+'research' branch, with intent to merge to main when the MVP work is done", and once that happens the
+SvelteKit toolchain is no longer what `main` builds. The Svelte source survives in git at `adc3b56` either
+way; what expired was the ability to **run** it and photograph the screens.
 
-The Svelte source survives in git history at `adc3b56` either way. What expires is the ability to
-**run** it and photograph the screens. If the window closes first, record those surfaces as
-unarchivable rather than leaving `pending` rows that will never resolve.
+**That capture has been taken.** `design-system/archive/web-v0/` holds 97 of the 101 catalogued `web-v0`
+rows, captured 2026-09-25 from `origin/main` (`adc3b56`, committed 2026-03-18) on node 26.10.0 /
+pnpm 12.6.0 with `@sveltejs/kit` 2.50.2, `vite` 6.4.1 and `svelte` 5.49.2 — each row as a PNG at
+402x874 CSS px / `deviceScaleFactor: 3` and as a measurable static HTML snapshot, plus the `_assets/` a
+screenshot cannot recover. `design-system/archive/README.md` is the record of how and what.
 
-## Screenshot capture — `ios-v0`
+Two preconditions this section treated as binding turned out not to be. **No Azure credentials were
+needed**: every `+page.svelte` on `main` fetches client-side, with no `+page.server.ts` and no
+`hooks.server.ts`, so the API calls were intercepted in the browser before the request left and fulfilled
+from fixtures. And the lockfile still resolved — the window was open when it was tested, which is the only
+way that question is ever answered.
+
+Four rows were not photographed because they **cannot render on `main`**. They are recorded as
+`unrenderable`, with the reason, rather than left `pending` (requirement 3.8): a `pending` cell says a
+frame is owed, and nobody owes these.
+
+Nothing from the capture harness reaches `research`: it lived in a `/tmp` `git archive` extract of `main`
+and went with it.
+
+## Screenshot capture — `ios-v0`, the half still outstanding
+
+The `web-v0` preconditions above are met. These are not, and they are the reason the 378 `pending` iOS
+archive cells are still `pending`: this half needs the phone, and no amount of headless anything
+substitutes for it.
 
 Needs the device named in `CLAUDE.md`: "Primary device: iPhone 16 Pro (devicectl id
 `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, name `you`)", on the existing loop in
@@ -48,8 +69,10 @@ cannot be photographed on a normal install; those rows carry `n/a`, not `pending
 
 ## Inputs that already exist
 
-- `design-system/surfaces.md` — the catalogue, populated from the iOS surface inventory of `research`.
-  The SvelteKit surfaces on `main` are archive input, not rows.
+- `design-system/surfaces.md` — the catalogue, populated from the iOS surface inventory of `research` and
+  from the whole frozen SvelteKit app on `main`. The web surfaces are **both**: 101 rows at status
+  `web-v0` recording what those screens could do, and the input to the `web-v0` capture recording how they
+  looked (requirement 1.11). The rows are the half a screenshot cannot hold.
 - `design-system/MASTER.md` and the **14** prose page files in `design-system/pages/`, frozen
   verbatim by the archive as `pages-v0/`.
 - `design-system/wireframes/design-handoff-00/` — the prior handoff bundle, including the
@@ -68,7 +91,8 @@ cannot be photographed on a normal install; those rows carry `n/a`, not `pending
 - **`App/` does not change.** `App/Colors.swift` stays hand-written and authoritative; the generator
   reads it and never writes it. A diff from this work touching `App/` is a defect.
 - **`make surfaces` is green, and the ratchet is loaded**: `structs=61 missing=0`,
-  `enum_cases=30 missing=0`, `covered=61 total=61 baseline=61`, `layer_violations=19 (report-only)`.
+  `enum_cases=30 missing=0`, `covered=61 total=61 baseline=61`, `layer_violations=19 (report-only)`, and
+  the token generator's `--check` in the same target reporting `tokens=22 stale=0`.
   The four defects its first run found — two `Shape` rows naming `MedataLoadingSymbol.*` where the
   declarations are `MedataSymbolGeometry.*`, and two `MealRoute` cases missing from any `state source`
   cell — are fixed in the catalogue, which is what earned `covered_min=61` in

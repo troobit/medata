@@ -1,11 +1,11 @@
 <!--
   catalogue id: meal-review/dose-suggestion
-  attempt:      3  (branch `insulin-dosing-ui-3-on-research`)
+  attempt:      3  (tag `insulin-dosing-ui-attempt-3-on-research`)
   testing:      whether the readout belongs on meal review at all — attempt 3 leaves that
                 surface untouched and puts the dose where a dose is logged, in one
                 consolidated manual-entry sheet ("ONE manual-entry surface, three modes …
                 This is that third sheet refusing to exist" — App/LogSheet.swift).
-  zones:        photo · total-row · primary-action · scale-control · accessory-line · food-rows
+  zones:        photo · total · primary-action · scale-control · accessory · foods
                 (declared for `meal-review` in design-system/surfaces.md). The second frame
                 is a DIFFERENT surface with no zone vocabulary declared yet, so it is
                 deliberately unmarked rather than inventing names.
@@ -18,12 +18,13 @@
   <title>meal-review/dose-suggestion — attempt 3</title>
   <link rel="stylesheet" href="../../tokens.css">
   <link rel="stylesheet" href="../../wireframe.css">
+  <link rel="stylesheet" href="../view-mode.css">
 </head>
 <body>
 
 <div class="stage">
   <h1>meal-review/dose-suggestion — attempt 3 (meal review)</h1>
-  <p>Nothing. <code>git diff --name-only research...insulin-dosing-ui-3-on-research</code> does not
+  <p>Nothing. <code>git diff --name-only research...insulin-dosing-ui-attempt-3-on-research</code> does not
      list <code>App/MealReviewView.swift</code>: this option changes no zone of this surface. The
      second line is the one that ships today, and the dose is read one surface away.</p>
 
@@ -39,7 +40,7 @@
       <!-- totalRow, unchanged from research: `≈ 214 g on plate` and no second
            segment. App/MealReviewView.swift line 345 on this branch is the same
            line it is on research. -->
-      <div class="total" data-zone="total-row">
+      <div class="total" data-zone="total">
         <div class="figure-row">
           <span class="figure">60</span>
           <span class="unit">g carbs</span>
@@ -68,8 +69,8 @@
       <div class="divider"></div>
 
       <div class="scrollarea">
-        <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
-        <div class="rows" data-zone="food-rows">
+        <div class="row row--banner" data-zone="accessory">&#8964; uncalibrated &#183; unknown region</div>
+        <div class="rows" data-zone="foods">
           <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
           <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
         </div>
@@ -155,6 +156,60 @@
     record. The two artifacts are complementary and the limit is worth stating out loud.
   </p>
 </div>
+
+<!--
+  View mode. `compare.html` shows this file by pointing an <iframe> at it, and it
+  cannot reach inside: `contentDocument` throws cross-origin on a `file://` page.
+  The URL fragment is the whole channel — `#frame`, `#frame,zones`,
+  `#frame,zone=total`. See `../view-mode.css` for what each token does.
+
+  Classic inline script on purpose: ES module scripts do not load from `file://`,
+  because a local file is an opaque origin. Nothing here runs when the fragment
+  is empty, so opening this file by double-clicking is unchanged.
+-->
+<script>
+(function () {
+  var root = document.documentElement;
+  var hidden = [];
+
+  function apply() {
+    while (hidden.length) { hidden.pop().hidden = false; }
+
+    var parts = location.hash.replace(/^#/, '').split(',');
+    var want = '';
+    parts.forEach(function (part) {
+      if (part.slice(0, 5) === 'zone=') { want = part.slice(5); }
+    });
+
+    root.classList.toggle('mode-frame', parts.indexOf('frame') >= 0);
+    root.classList.toggle('zones', parts.indexOf('zones') >= 0);
+    root.classList.toggle('mode-zone', want !== '');
+
+    // Isolating a zone is hiding every sibling on the way up to the body: the
+    // region keeps its real ancestors, so it keeps the gutter and the palette
+    // the screen gives it.
+    var node = want ? document.querySelector('[data-zone="' + want + '"]') : null;
+    root.classList.toggle('mode-absent', want !== '' && !node);
+    for (; node && node !== document.body; node = node.parentNode) {
+      for (var sib = node.parentNode.firstElementChild; sib; sib = sib.nextElementSibling) {
+        if (sib !== node && !sib.hidden) { sib.hidden = true; hidden.push(sib); }
+      }
+    }
+
+    // The parent cannot measure this document, so this document tells it how
+    // tall it ended up. An opaque origin may still postMessage with '*'.
+    if (parent !== window) {
+      parent.postMessage({
+        wireframeHeight: Math.ceil(document.body.getBoundingClientRect().height)
+      }, '*');
+    }
+  }
+
+  apply();
+  addEventListener('hashchange', apply);
+  addEventListener('load', apply);
+})();
+</script>
 
 </body>
 </html>

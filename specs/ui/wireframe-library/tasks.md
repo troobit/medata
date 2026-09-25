@@ -13,7 +13,7 @@ references:
   - 418 state rows across 67 distinct surfaces, grouped as Shell / Home / Capture / Review / Records / Trends / Entry / Settings / Shared chrome / Notifications / Widgets
   - Row schema per design.md "Row schema": id, surface, file, kind, state, state source, view-model, data, direction, archive, status
   - Seven rows (every dose-notification/*) are keyed on the construction site — App/DoseScheduleModel.swift and App/LocalReminderScheduler.swift — because a local notification has no renderable type
-  - Scope is the iOS app on research: App/ and MeData/MeDataWidgets/. The SvelteKit screens on main are preserved by capture, not as live rows
+  - Scope is the iOS app on research: App/ and MeData/MeDataWidgets/ — 418 rows. This bullet used to say the SvelteKit screens on main were "preserved by capture, not as live rows"; the file contradicts that by 101 rows. The web-v0 half is catalogued too, and task 37 carries it
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.7](requirements.md#1.7), [1.8](requirements.md#1.8), [1.11](requirements.md#1.11)
 
 - [x] 2. Record the UI-to-data join in the view-model, data and direction columns
@@ -79,14 +79,16 @@ references:
   - The same bytes stop rotting the moment they stop claiming to describe the present
   - Requirements: [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5)
 
-- [ ] 12. FLAG: EXPIRING — capture the SvelteKit screens on main as archive/web-v0/ before research merges to main
-  - This is the only part of the work with an expiry date. CLAUDE.md: the cycle "currently runs along the 'research' branch, with intent to merge to main when the MVP work is done". Do this first in this phase
-  - main is the SvelteKit app at adc3b56, committed 2026-03-18; its package.json asks for @sveltejs/kit ^2.15.0, vite ^6.0.0 and svelte ^5.0.0, resolved in pnpm-lock.yaml to 2.50.2, 6.4.1 and 5.49.2, against node v26.7.0 and pnpm 11.22.0 on this machine, and nothing has verified that the install and dev server still resolve
-  - Running it also wants backend configuration: .env.example lists AZURE_COSMOS_CONNECTION_STRING and AZURE_BLOB_STORAGE_URL, and RECOGNITION_MOCK_MODE=true mocks recognition only, not persistence
-  - 28 surfaces and 101 state rows across 22 source files by the catalogue's web-v0 half — 4 route files, 1 layout, 1 document template and 16 components — roughly an afternoon. The Svelte source survives in git either way; what expires is the ability to run it and photograph the screens
-  - It leaves nothing behind on research — no Node, no node_modules, no build step
-  - If the window closes first, record those surfaces as unarchivable rather than leaving pending rows that will never resolve
-  - Requirements: [3.2](requirements.md#3.2), [1.11](requirements.md#1.11)
+- [x] 12. FLAG: EXPIRING — capture the SvelteKit screens on main as archive/web-v0/ before research merges to main
+  - Captured 2026-09-25 from `origin/main` (adc3b56, committed 2026-03-18) and committed at design-system/archive/web-v0/: 97 PNG and 97 static HTML across 28 surface directories, plus `_assets/` — 202 files
+  - 402x874 CSS px at deviceScaleFactor 3, i.e. 1206x2622 device pixels: the frame an iPhone 16 Pro screenshot produces, so a distance measured in the archive and divided by 3 is the value to write in Swift
+  - HTML beside every PNG, because a PNG records what a screen looked like and cannot be measured, and a hex value cannot be recovered from one. Scripts stripped and same-origin images inlined as data URIs, so each opens by double-clicking with no server and no requests
+  - No Azure credentials were needed. The app's API calls were intercepted in the browser and fulfilled from fixtures before the request left, and anything unstubbed was failed with a 500 so a missing fixture shows as an error state rather than silently reaching a real service. The clock was frozen at 2026-03-18T12:10:00Z
+  - The Node toolchain lived in a /tmp `git archive` extract of main and went with it: no Node, no node_modules, no build step reaches research. Four of the 28 surfaces are routes; the other 24 are components no URL reaches, rendered through a throwaway harness that went the same way
+  - Also archived under `_assets/`, because a screenshot cannot recover a hex value: app.css — whose `@theme` block carries `--color-brand-accent: #63ff00`, `--color-brand-background: #064e3b` and `--color-primary-background: #0a0a0a`, and #064e3b exists nowhere else in the repo — plus icon.svg, manifest.json and four favicon files (favicon.ico and three .svg variants, two of them unreferenced alternates on main)
+  - 4 of the 101 rows are not captured because they cannot render on main: in each case a flag exists in the script block and never reaches the template. design-system/archive/README.md names each one with its file:line and records it as unrenderable rather than pending, because a pending row implies a frame somebody still owes
+  - Two things the frames are not evidence about, written into the README rather than left to be assumed: they were rendered in Chromium, not in Safari on a real iPhone, which is where the web app actually ran; and a component photographed on its own is photographed without AppShell
+  - Requirements: [3.2](requirements.md#3.2), [1.11](requirements.md#1.11), [3.4](requirements.md#3.4)
 
 - [ ] 13. Capture the shipped iOS surfaces as archive/ios-v0/<id>.png
   - 378 rows carry `archive: pending` and 40 carry n/a; no PNG exists yet
@@ -147,10 +149,10 @@ references:
   - After this the design system carries no second hand-maintained copy of the token set
   - Requirements: [5.6](requirements.md#5.6)
 
-- [ ] 21. Confirm the token pipeline adds no SwiftPM target and changes nothing make build or make test compiles
-  - Run make build and make test and confirm both totals are unchanged — CLAUDE.md requires reporting both the XCTest and the swift-testing slice
-  - A shared Tokens target was proven not to build: Makefile build: is swift build on the macOS host, Package.swift declares .macOS(.v14), and 12 of the 22 tokens use Color(uiColor:), which does not exist on macOS
-  - Confirm git diff shows nothing under App/
+- [x] 21. Confirm the token pipeline adds no SwiftPM target and changes nothing make build compiles
+  - `make build` completes in 1.95 s on this worktree, and `git diff origin/research...HEAD -- App/ MedataCore/ MeData/` is empty. This spec changes no Swift, which is the claim the task exists to check
+  - A shared Tokens target was proven not to build: Makefile `build:` is `swift build` on the macOS host, Package.swift declares .macOS(.v14), and 12 of the 22 tokens use Color(uiColor:), which does not exist on macOS
+  - The `make test` half is split out as task 43 rather than quietly dropped. CLAUDE.md asks for both totals — XCTest and swift-testing — and there is no suite to read them from: MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift:7228 and :14336 fail to compile with "unable to type-check this expression in reasonable time". Ticking this box on a suite that never ran is the defect task 35 had
   - Requirements: [5.7](requirements.md#5.7), [5.2](requirements.md#5.2)
 
 - [x] 22. design-system/wireframes/insulin-dose/compare.html — every option for one surface in one page <!-- id:d18pyx8 -->
@@ -248,9 +250,12 @@ references:
   - Blocked-by: d18pyx6 (Apply the contract to one live spec — specs/data/insulin-dosing/requirements.md)
   - Requirements: [4.1](requirements.md#4.1), [4.5](requirements.md#4.5), [4.9](requirements.md#4.9), [6.1](requirements.md#6.1)
 
-- [x] 35. Run make spell over the new documents and strings
+- [ ] 35. Run make spell over the new documents and strings
+  - Reopened. It was ticked on a run that cannot have read the prose: tools/check_spelling.sh scans `*.swift` under MedataCore/Sources, HarnessCore, HarnessCLI and App, plus `App/*.xcstrings`. No `.md` file is in SCAN_TARGETS, so the spec folder, design-system/surfaces.md, the READMEs, the generated tokens.css header and the wireframe comments were never read by it
+  - `make spell` does report clean, and that reading is true of everything it scans. The bullet claiming it covered those documents was not
   - UK spelling throughout — colour, behaviour, organise, recognise, catalogue. CLAUDE.md: "Always run make spell before committing docs or strings"
-  - Covers the spec folder, design-system/surfaces.md, the READMEs, the generated tokens.css header and the wireframe comments
+  - Closes when task 42 gives the target that reach and a run over the prose comes back clean
+  - Blocked-by: d18pyxa (Extend make spell's reach to the prose, or stop claiming it covers it)
 
 - [ ] 36. Move the composition table into the owning spec's decision_log.md when the implementation lands
   - The option files are disposable; this record is not. In a year the question is why the total row looks like that, and the answer is in the reasons column
@@ -258,3 +263,71 @@ references:
   - Then the chosen render goes to design-system/archive/ios-v0/meal-review-dose-suggestion.png, the catalogue row for meal-review/dose-suggestion flips to shipped, and design-system/wireframes/insulin-dose/ is deleted, composition.md included
   - Blocked-by: d18pyx7 (Run the loop for real on the insulin-dosing decision)
   - Requirements: [8.9](requirements.md#8.9), [4.5](requirements.md#4.5), [4.9](requirements.md#4.9)
+
+## Phase 7 — The research pass, applied
+
+- [x] 37. Catalogue the SvelteKit web-v0 half — 101 rows, 28 surfaces, and the successor mapping
+  - Phase 1 work the ledger never carried. design-system/surfaces.md lines 766–1021 hold 101 `web/` state rows across 28 surfaces over 22 files of `main:src/**` — 4 route files, 1 layout, 1 document template and 16 components — every row at `status: web-v0`, under a section with its own Coverage block and its own freeze rule: "Nothing here is ratcheted, and no number moves unless the freeze is corrected against `main`"
+  - The Successor mapping subsection carries one entry per web surface, 28 of them, 8 of which have no iOS successor at all. That mapping is what decides which dropped capability gets taken back into iOS, so an over-claim in it mis-prices a future feature, and a citation in it that resolves to nothing is invisible: `grep web tools/check_surfaces.sh` returns nothing, so the web half is validated by nothing at all (task 41)
+  - Task 1's bullet said the SvelteKit screens were "preserved by capture, not as live rows". 101 rows say otherwise. The bullet is corrected rather than the rows removed: a frozen row and a live row differ by `status`, not by existing
+  - Requirement 1.11 still reads the way that bullet did — a web row "only where that surface is being taken forward as a design input". Widening it to authorise the 101 rows that exist is the requirements document's edit, not this task's
+  - Requirements: [1.11](requirements.md#1.11), [1.12](requirements.md#1.12), [3.2](requirements.md#3.2)
+
+- [x] 38. make wireshot — render an option to a PNG without a device build
+  - tools/wireshot.sh, 104 lines of bash written for system bash 3.2.57, driving Google Chrome `--headless --window-size --force-device-scale-factor=3 --screenshot`. No Node, no npm, and Chrome is checked for before it runs
+  - `make wireshot SURFACE=insulin-dose [ATTEMPT=2] [OUT_DIR=tmp/wireshot]` renders every attempt-*.html for a surface, or one of them
+  - The window is sized to the page; the `.device` inside it stays at 402x874 CSS px, which at scale 3 is 1206x2622 device pixels — the frame an iPhone 16 Pro screenshot produces. A distance measured on the device frame and divided by 3 is the value to write in Swift
+  - The gap it closes: moving option-making from Swift to HTML made options roughly four times cheaper to write and did nothing to make them cheaper to look at, while "costly to compare" is one of the three costs this spec exists to remove. Nothing in the spec previously gave the *author* of an option any way to see it
+  - It does not move the gate and does not judge. A PNG from headless Chrome says nothing about Dynamic Type, safe-area insets or ViewThatFits ([L4](requirements.md#L4)); it says the layout and the hierarchy are what you meant
+  - Requirements: [4.10](requirements.md#4.10), [4.2](requirements.md#4.2)
+
+- [x] 39. The token generator refuses a `static let` it cannot parse
+  - tools/design_tokens/tokens_to_css.py counts the `static let` declarations it saw against the tokens it parsed, and raises naming the missed names when the two differ
+  - The failure that closes: a declaration wrapped across two lines previously produced no token, no error and exit 0 — the one failure mode giving a wrong-but-green run, in a generator whose whole justification is that it cannot drift
+  - Silence was the bug, and the fix is the rule the catalogue check already follows: an unparsed form names itself, the way an unexplained declared type is treated as a missing row
+  - Requirements: [5.3](requirements.md#5.3), [5.1](requirements.md#5.1)
+
+- [x] 40. make surfaces also runs the token --check
+  - The `surfaces:` target now runs `bash tools/check_surfaces.sh` and then `python3 tools/design_tokens/tokens_to_css.py --check`. design.md advertised the flag and nothing outside specs/ called it
+  - A tokens.css stale against App/Colors.swift now fails the same target that catches a missing catalogue row. One command answers one question: is the design system still true of the code
+  - --check writes nothing and exits non-zero, so the target reports drift rather than quietly repairing it
+  - Requirements: [5.4](requirements.md#5.4), [7.1](requirements.md#7.1)
+
+- [ ] 41. Strengthen tools/check_surfaces.sh so more than 61 of 418 rows are load-bearing
+  - The measured hole: the ratchet counts *structs*, and tools/surfaces_baseline.txt holds only `covered_min=61`. Deleting all 7 dose-notification/* rows, or 29 of the 30 meal-review/* rows, leaves the run green at `covered=61 total=61 baseline=61`. 357 of the 418 rows are unprotected
+  - Accept `struct|enum|class|actor` at the declaration scan (tools/check_surfaces.sh:125 gates on `kind == "struct"`, so the 194-line extension-declared Settings section in App/DoseScheduleSettingsSection.swift:14-79 and its 8 dose-schedule-settings/* rows have no mechanical protection)
+  - Extend CONFORMANCES (line 36) with `ViewModifier|App|Scene|WidgetBundle` and the style protocols. `App` and `Scene` are live misses — MedataApp and MeDataWidgetBundle are the two types task 9 had to count by hand; `ViewModifier` is latent, there are none in the tree yet
+  - Add `rows_min` to tools/surfaces_baseline.txt beside `covered_min`, so deleting rows fails the check rather than moving a number nobody reads
+  - Restrict the coverage match to the `surface` and `file` columns. Check 1 (line 199) matches a name anywhere in a row, so share-sheet/activity-items is deletable purely because `ShareSheet` appears in two other rows' prose
+  - Parse the state-enum list from the catalogue's own closed-enum coverage table rather than the STATE_ENUMS shell variable: the variable names 10 enums, the table names 25, so 15 are checked by eye only
+  - Add a check that every catalogue id in the successor mapping's `catalogue id` column resolves to a real row id. Nothing validates the web half today, which is how eight broken citations across four surface keys survived
+  - Add the zone-pointer check — collect every `data-zone` in design-system/wireframes/**/*.html and every zone named in a composition.md, and fail on a name design-system/surfaces.md does not declare. This contradicts requirement 7.11 and Decision 4, which list "the checker does not read them" as a virtue on the same page as "nothing checks for the dangling reference" as a cost; those are one fact with two signs. The requirement and the decision have to move first, and neither is this task's to move
+  - Requirements: [7.2](requirements.md#7.2), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [1.3](requirements.md#1.3)
+
+- [ ] 42. Extend make spell's reach to the prose, or stop claiming it covers it <!-- id:d18pyxa -->
+  - tools/check_spelling.sh's SCAN_TARGETS are MedataCore/Sources, HarnessCore, HarnessCLI and App, matched with `--include="*.swift"`, plus `App/*.xcstrings`. No `.md` file is scanned by any target
+  - CLAUDE.md says "Always run `make spell` before committing docs or strings". For strings that is enforced; for docs it is unenforceable, and this spec is almost entirely docs
+  - Either extend SCAN_TARGETS to specs/, design-system/ and docs/ for `*.md`, with the allowance the wireframe and token files need — `color`, `center`, `color-mix`, `theme-color`, `border-color`, `align-items` are CSS identifiers, not American spellings — or rewrite task 35's claim to say the prose was read by eye and say who read it
+  - An allowance list that silences a real misspelling is worse than no scan, so whichever way this goes, name the trade in the decision rather than in a commit message
+  - Unblocks task 35
+
+- [ ] 43. Report both test totals — split from task 21, and blocked on a MedataCore compile failure
+  - CLAUDE.md: "`make test` prints TWO totals — XCTest and swift-testing. Always report both". Neither can be read today: MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift:7228 and :14336 fail with "unable to type-check this expression in reasonable time" on multi-segment `print` interpolations, so the suite does not compile
+  - Pre-existing, and not this spec's defect to fix: this branch changes no Swift (`git diff origin/research...HEAD -- App/ MedataCore/ MeData/` is empty). It is filed as specs/BACKLOG.md item 32 rather than left to silently block a wireframe task — note that specs/BACKLOG.md is untracked, so that entry lives in the working checkout and not on this branch
+  - The fix is to break those two interpolations into separate statements. Closing this task means running `make test` and writing both totals here
+  - Requirements: [5.7](requirements.md#5.7)
+
+- [ ] 44. Add a pattern column to design-system/surfaces.md and derive a by-pattern index
+  - The one thing an interface inventory buys that a surface x state cut cannot: carb-entry, insulin-dose, activity and preset-edit are four separate sheets, each declaring the same zones and each solving the same save-and-dismiss problem, and the catalogue today gives no way to see that they are one pattern with four instances
+  - One column and one derived index, not a new document. The index is generated from the column so it cannot disagree with it
+  - The value is in redesign, not in enforcement: when one of those four sheets changes, the pattern index is what says which other three now look wrong, which is exactly the recombination question the three insulin-dosing branches could not answer
+  - Five record rows already share one zone list by assertion (task 10). A pattern column makes that a stated fact instead of a coincidence in the prose
+  - Requirements: [8.1](requirements.md#8.1), [8.4](requirements.md#8.4), [1.12](requirements.md#1.12)
+
+- [ ] 45. Consider #Preview as a verification mirror — not as the library
+  - Decision 2 rejected Xcode previews as the catalogue, and that rejection holds: a preview is not enumerable, not diffable and not readable without Xcode. What it does not settle is the other leg
+  - Limit L4 concedes that HTML lies about Dynamic Type, safe-area insets and ViewThatFits, and nothing in the spec currently covers that leg. It is the exact reason a SwiftUI attempt looks wrong on the phone after the wireframe looked right
+  - Leaf surfaces needing no mock store first — ChipFlow, MedataLoadingSymbol, the confidence pills, the record rows — because those are the ones where a preview costs a fixture-free block and nothing else
+  - The cost is recurring and real: previews across App/ are a maintenance bill design.md deliberately refuses to schedule. Adopting this changes what the wireframes are *for* (option generation only, SwiftUI verification handled elsewhere); declining it leaves L4 open with nothing covering it. Either way it is a decision entry, not a silent drift
+  - This is the developer's call, not an agent's: it is the one item here that adds standing work to every future UI change
+  - Requirements: [4.1](requirements.md#4.1)

@@ -16,13 +16,20 @@ mechanical and has no exceptions, so `medataAccent` becomes
 remembered exception in every hand-written wireframe.
 
 `Color(uiColor: .systemX)` has no fixed sRGB value — UIKit resolves it per
-appearance. The wireframes are OLED-dark, so each system colour is emitted at
-its documented dark-appearance sRGB value and marked `approx` in a comment.
+appearance. Each is emitted as `light-dark(<light>, <dark>)` from its two
+documented sRGB values, with `color-scheme: light dark` on `:root`, so the CSS
+expresses the same adaptive intent as the Swift rather than freezing one
+appearance. Both values stay marked `approx` in a comment: UIKit also resolves
+per accessibility contrast setting and per OS release, which no static table
+captures. A page that wants one appearance pins it — `design-system/
+wireframe.css` sets `color-scheme: dark`, because the wireframes are OLED-dark.
 
 Run from repo root: python3 tools/design_tokens/tokens_to_css.py
 
-Requirements: python3 (stdlib only)
+Requirements: python3 (stdlib only; must run on the stock macOS 3.9)
 """
+
+from __future__ import annotations
 
 import argparse
 import re
@@ -33,10 +40,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_SWIFT = "App/Colors.swift"
 OUTPUT_CSS = "design-system/tokens.css"
 
-# UIKit dynamic colours resolved at their documented DARK-appearance sRGB
-# values. Approximations by construction: UIKit resolves these per appearance,
-# per accessibility contrast setting and per OS release. The wireframes commit
-# to OLED-dark (MASTER.md "Style — three layers"), so dark is the branch taken.
+# UIKit dynamic colours at their two documented sRGB values. The tables are
+# keyed alike and must stay so: a symbol present in one and not the other is a
+# parse error, not a silent fall back to the other appearance.
+#
+# Still approximations. UIKit resolves these per appearance — which
+# `light-dark()` now carries — but also per accessibility contrast setting and
+# per OS release, which a static table cannot. Hence the `approx` note stays.
+SYSTEM_LIGHT = {
+    "systemOrange": (255, 149, 0, 1.0),
+    "systemRed": (255, 59, 48, 1.0),
+    "systemYellow": (255, 204, 0, 1.0),
+    "systemTeal": (48, 176, 199, 1.0),
+    "systemPurple": (175, 82, 222, 1.0),
+    "systemPink": (255, 45, 85, 1.0),
+    "systemGroupedBackground": (242, 242, 247, 1.0),
+    "secondarySystemGroupedBackground": (255, 255, 255, 1.0),
+    "label": (0, 0, 0, 1.0),
+    "secondaryLabel": (60, 60, 67, 0.60),
+    "separator": (60, 60, 67, 0.29),
+}
+
 SYSTEM_DARK = {
     "systemOrange": (255, 159, 10, 1.0),
     "systemRed": (255, 69, 58, 1.0),
@@ -92,55 +116,80 @@ def _channel(hex_digits, decimal) -> int:
 
 
 def resolve(expr: str, known: dict) -> tuple:
-    """Resolve a right-hand side to (r, g, b, a, note).
+    """Resolve a right-hand side to (light, dark, note).
 
-    `note` is the provenance comment emitted beside the property, or "".
+    `light` and `dark` are each an (r, g, b, a) tuple. They are the same tuple
+    for every form except `Color(uiColor:)`, which UIKit resolves per
+    appearance. `note` is the provenance comment emitted beside the property,
+    or "".
     """
     match = _RGB.match(expr)
     if match:
         g = match.groups()
-        return (_channel(g[0], g[1]), _channel(g[2], g[3]), _channel(g[4], g[5]), 1.0, "")
+        rgba = (_channel(g[0], g[1]), _channel(g[2], g[3]), _channel(g[4], g[5]), 1.0)
+        return (rgba, rgba, "")
 
     match = _BW.match(expr)
     if match:
         level = 0 if match.group(1) == "black" else 255
         alpha = float(match.group(2)) if match.group(2) else 1.0
-        return (level, level, level, alpha, "")
+        rgba = (level, level, level, alpha)
+        return (rgba, rgba, "")
 
     match = _UICOLOR.match(expr)
     if match:
         symbol = match.group(1)
-        if symbol not in SYSTEM_DARK:
+        if symbol not in SYSTEM_LIGHT or symbol not in SYSTEM_DARK:
             raise UnknownForm(f"unmapped UIKit colour .{symbol}")
-        r, g, b, a = SYSTEM_DARK[symbol]
-        return (r, g, b, a, f"approx: .{symbol} at dark appearance")
+        return (SYSTEM_LIGHT[symbol], SYSTEM_DARK[symbol],
+                f"approx: .{symbol} at light and dark appearance")
 
     match = _WHITE_LEVEL.match(expr)
     if match:
         level = round(float(match.group(1)) * 255)
-        return (level, level, level, 1.0, "")
+        rgba = (level, level, level, 1.0)
+        return (rgba, rgba, "")
 
     match = _ALIAS.match(expr)
     if match:
         target = match.group(1)
         if target not in known:
             raise UnknownForm(f"alias of unknown token `{target}`")
-        r, g, b, a, note = known[target]
-        alpha = float(match.group(2)) if match.group(2) else a
+        light, dark, note = known[target]
         detail = f"alias of {target}"
         if match.group(2):
+            # `.opacity(x)` replaces the alpha of both appearances, so an alias
+            # of an adaptive token stays adaptive.
+            alpha = float(match.group(2))
+            light = light[:3] + (alpha,)
+            dark = dark[:3] + (alpha,)
             detail += f" at {match.group(2)}"
         if note.startswith("approx"):
             detail = f"approx: {detail}, {note[len('approx: '):]}"
-        return (r, g, b, alpha, detail)
+        return (light, dark, detail)
 
     raise UnknownForm(f"unparsed form `{expr}`")
 
 
-def css_value(r: int, g: int, b: int, a: float) -> str:
+def _srgb(rgba: tuple) -> str:
+    r, g, b, a = rgba
     if a >= 1.0:
         return f"#{r:02X}{g:02X}{b:02X}"
     return f"rgb({r} {g} {b} / {a:g})"
+
+
+def css_value(light: tuple, dark: tuple) -> str:
+    """One value, or `light-dark()` when the two appearances differ.
+
+    `light-dark()` has been Baseline since May 2024, so a token that resolves
+    per appearance in UIKit resolves per appearance here too. It reads against
+    the used `color-scheme` of the element it is substituted into, which is why
+    `:root` declares `color-scheme: light dark` and a page that wants one
+    appearance overrides it.
+    """
+    if light == dark:
+        return _srgb(light)
+    return f"light-dark({_srgb(light)}, {_srgb(dark)})"
 
 
 def parse(swift_text: str) -> list:
@@ -163,9 +212,9 @@ def parse(swift_text: str) -> list:
         if not token:
             continue
         name, expr = token.group(1), token.group(2)
-        r, g, b, a, note = resolve(expr, known)
-        known[name] = (r, g, b, a, note)
-        entries.append(("token", name, expr, css_value(r, g, b, a), note))
+        light, dark, note = resolve(expr, known)
+        known[name] = (light, dark, note)
+        entries.append(("token", name, expr, css_value(light, dark), note))
 
     parsed = [e[1] for e in entries if e[0] == "token"]
     if len(parsed) != len(declared):
@@ -188,14 +237,20 @@ def render(entries: list) -> str:
         " * exceptions — hence `--medata-medata-accent`.",
         " *",
         " * Values marked `approx` come from `Color(uiColor:)`, which UIKit resolves",
-        " * per appearance and therefore has no fixed sRGB value. They are emitted at",
-        " * the documented DARK-appearance value, because the wireframes are OLED-dark",
-        " * (design-system/MASTER.md, \"Style — three layers, used together\").",
+        " * per appearance and therefore has no fixed sRGB value. Each is emitted as",
+        " * `light-dark(<light>, <dark>)` from its two documented values, so the CSS",
+        " * adapts the way the Swift does. `approx` still holds: UIKit also resolves",
+        " * per accessibility contrast setting and per OS release.",
+        " *",
+        " * A page that wants one appearance overrides `color-scheme` —",
+        " * design-system/wireframe.css pins `dark`, because the wireframes are",
+        " * OLED-dark (design-system/MASTER.md, \"Style — three layers, used together\").",
         " */",
         "",
         ":root {",
+        "  color-scheme: light dark;",
     ]
-    first_group = True
+    first_group = False
     for entry in entries:
         if entry[0] == "mark":
             if not first_group:

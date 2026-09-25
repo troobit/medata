@@ -146,12 +146,19 @@ earlier attempts are a `git checkout <tag>` away. `activity-events` does this â€
 `research` shows sheet attempt 2 and graph attempt 2, and attempt 1 of either is
 one checkout back.
 
-**3. Off to the side on a branch, nothing merged.** When the variants are
-competing designs for the same screen and merging any of them would pre-empt the
-choice. `insulin-dosing` is here: three whole App layers for one readout, on
-`insulin-dosing-ui-{1,2,3}-on-research`, tagged
-`insulin-dosing-ui-attempt-{1,2,3}-on-research`. Nothing merges until a person
-looks at all three and picks one.
+**3. Off to the side, nothing merged.** When the variants are competing designs
+for the same screen and merging any of them would pre-empt the choice.
+`insulin-dosing` is here: three whole App layers for one readout, each built on a
+branch off `research` and tagged `insulin-dosing-ui-attempt-{1,2,3}-on-research`.
+Nothing merges until a person looks at all three and picks one.
+
+**The tag is the artefact; the branch is scaffolding.** Those three branches have
+since been deleted and the attempts are unaffected â€” `git checkout
+insulin-dosing-ui-attempt-2-on-research` still gives you attempt 2, because the
+tag holds the commit whether or not a branch points at it. Do not cite a branch
+name as the address of an attempt. Later rebase generations are tagged in the same
+way: `insulin-dosing-ui-attempt-{1,2,3}-on-research-2` and `-3` exist, each a
+rebuild of the same attempt on a moved `research` (see "Rebasing an attempt" below).
 
 ### Deploying each one
 

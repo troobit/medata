@@ -9,11 +9,17 @@
                 happened from memory across rebuilds. This page is the fix.
   opens:        by double-clicking the file. No server, no build step, no framework.
 
-  This page carries its own copy of each option's screen markup. That is deliberate:
-  a file:// page cannot read its siblings (no fetch, no cross-frame scripting), and
-  the whole folder — options and this page together — is deleted when the SwiftUI
-  lands. Edit an option here and in its own file, or edit it here and re-render the
-  option file from this one; the duplication lives for days, not months.
+  This page holds no copy of any option's markup. Each column is an <iframe> pointed
+  at the option's own file, so what you are looking at is the option, not a
+  transcription of it that can drift from it. A `file://` parent does render a
+  sibling `file://` page in a frame; what it cannot do is reach inside one, because
+  `contentDocument` throws cross-origin on an opaque origin. So this page drives the
+  child pages through the URL fragment instead — `#frame`, `#frame,zones`,
+  `#frame,zone=total` — which each option reads with the classic inline script at the
+  end of its body. `../view-mode.css` documents the tokens.
+
+  Every script here is a classic inline one: ES module scripts do not load from
+  `file://` at all.
 -->
 <!doctype html>
 <html lang="en-GB">
@@ -25,8 +31,9 @@
   <link rel="stylesheet" href="../../wireframe.css">
   <style>
     /* Page chrome for the comparison itself. Everything inside a device frame is
-     * `wireframe.css`; everything outside it is furniture and lives here, so the
-     * shared stylesheet does not grow a page-specific tail. */
+     * `wireframe.css`, loaded by the option page in its own frame; everything
+     * outside lives here, so the shared stylesheet does not grow a
+     * page-specific tail. */
     body {
       display: block;
       padding: 0;
@@ -120,7 +127,7 @@
       color: #6f6f78;
     }
 
-    /* Whole-screen view ----------------------------------------------------- */
+    /* The strip ------------------------------------------------------------- */
     .strip {
       display: flex;
       align-items: flex-start;
@@ -129,9 +136,9 @@
       overflow-x: auto;
     }
     .option { display: flex; flex-direction: column; gap: var(--space-2); flex: 0 0 auto; }
-    /* Fixed so the three frames start at the same y. Options that do not line up
-     * are options you compare by scrolling, which is the thing this page exists
-     * to stop. */
+    /* Fixed so the frames start at the same y. Options that do not line up are
+     * options you compare by scrolling, which is the thing this page exists to
+     * stop. */
     .option .cap { width: var(--device-w); min-height: 108px; }
     .option .cap b { color: #e6e6ea; font-size: var(--type-footnote); font-weight: 600; }
     .option .cap p {
@@ -140,9 +147,23 @@
       line-height: 1.45;
       color: var(--frame-note);
     }
-    .option .cap .branch { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: #6f6f78; }
-    /* Not true metrics any more, which is why the control says so. */
-    :root.fit .option, :root.fit .zone-card { zoom: 0.72; }
+    .option .cap .ref { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: #6f6f78; }
+    /* 402pt of screen plus the 1px frame edge on each side. The height here is
+     * only the starting value: each option measures itself once it has applied
+     * the fragment and posts its height back, because the parent cannot measure
+     * it. See the `message` listener below. */
+    .option iframe {
+      width: calc(var(--device-w) + 2px);
+      height: 878px;
+      border: 0;
+      display: block;
+      color-scheme: dark;
+    }
+    /* Not true metrics any more, which is why the control says so. `zoom` and
+     * not `transform`: zoom scales the frame's box as well as its picture, so
+     * the columns stay adjacent, and the option inside still lays out against a
+     * 402pt viewport. */
+    :root.fit .option { zoom: 0.72; }
 
     /* Per-zone view --------------------------------------------------------- */
     .zone-head { padding: var(--space-4) var(--space-4) 0; max-width: 96ch; }
@@ -154,32 +175,11 @@
       font-weight: 600;
     }
     .zone-head p { margin: 0; font-size: var(--type-caption); line-height: 1.5; color: var(--frame-note); }
-    .zone-card {
-      flex: 0 0 auto;
-      width: var(--device-w);
-      border: 1px solid var(--frame-edge);
-      border-radius: var(--radius-control);
-      overflow: hidden;
-      background: var(--medata-capture-background);
-      color: var(--medata-capture-chrome-text);
-    }
-    .zone-card .card-head {
-      padding: 6px 10px;
-      background: #17171a;
-      border-bottom: 1px solid var(--frame-edge);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      color: #9a9aa3;
-    }
-    /* The clone sits in the same 16pt gutter the screen gives it, so a width
-     * measured here is the width measured in the frame. */
-    .zone-card .card-body { padding: var(--space-3); display: flex; flex-direction: column; }
-    /* The photo is 40% of an 874 - 59 - 34 = 781pt screen. Out of the device it
-     * has nothing to take a percentage of, so the number is restated. */
-    .zone-card .card-body > .photo { flex: none; height: 312px; }
-    .zone-card .card-body > .rows { flex: none; }
-    .zone-card .card-body > .record { flex: none; }
+    /* One zone is a few points tall, so the caption block shrinks to its label
+     * and the regions sit near the top of the window together. */
+    :root.zoneview .option .cap { min-height: 0; }
+    :root.zoneview .option .cap p,
+    :root.zoneview .option .cap .ref { display: none; }
 
     .cmp-foot {
       padding: var(--space-4);
@@ -212,8 +212,12 @@
     <dd>a 60 g-carbohydrate meal on a 214 g plate: 60 g &divide; 5.0 g/U = 12.0 U. The large numeral
         and the mass segment are different quantities and are never the same number.</dd>
     <dt>options</dt>
-    <dd>branches <code>insulin-dosing-ui-{1,2,3}-on-research</code>, 542 / 1,565 / 1,015 lines of
-        Swift. Three options was the point; being unable to look at them together was the problem.</dd>
+    <dd>tags <code>insulin-dosing-ui-attempt-{1,2,3}-on-research</code>, 542 / 1,565 / 1,015 lines of
+        Swift inserted against <code>research</code>. Three options was the point; being unable to
+        look at them together was the problem.</dd>
+    <dt>what a column is</dt>
+    <dd>an <code>&lt;iframe&gt;</code> showing <code>attempt-N.html</code> itself. Nothing on this
+        page restates an option, so nothing on this page can disagree with one.</dd>
     <dt>not a gate</dt>
     <dd>this page moves the <em>choice</em> earlier. HTML can lie about Dynamic Type, safe areas and
         <code>ViewThatFits</code> &mdash; the phone remains the acceptance test.</dd>
@@ -234,181 +238,64 @@
     <span class="lbl">One zone, all three</span>
     <button data-view="zone" data-zone-pick="photo"
             data-question="~40% of height, 4:3 .fit, 16pt corners. All three options leave it exactly as it ships — a zone with nothing to choose is still worth seeing, because it is what makes the zones that do differ obvious.">photo <kbd>1</kbd></button>
-    <button data-view="zone" data-zone-pick="total-row"
-            data-question="The decision. Attempt 1 appends one segment to the line that already ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none. All three are the derived register — same font, same colour, emphasis by weight, never accent — so the only question is whether the line still reads as one quantity.">total-row <kbd>2</kbd></button>
+    <button data-view="zone" data-zone-pick="total"
+            data-question="The decision. Attempt 1 appends one segment to the line that already ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none. All three are the derived register — same font, same colour, emphasis by weight, never accent — so the only question is whether the line still reads as one quantity.">total <kbd>2</kbd></button>
     <button data-view="zone" data-zone-pick="primary-action"
             data-question="`Record 60 g` in the committed register: medataAccent fill, height 48, radius 12, the label naming the value it is about to write. No option proposed a change, and the accent budget on this screen is spent here — which is why no dose readout may be accent-coloured.">primary-action <kbd>3</kbd></button>
     <button data-view="zone" data-zone-pick="scale-control"
             data-question="44x34 capsules. specs/ui/meal-review/requirements.md: 'The scale control SHALL be visible without scrolling when the surface first appears.' — which is why no option is allowed to wrap the second line onto a second row.">scale-control <kbd>4</kbd></button>
-    <button data-view="zone" data-zone-pick="accessory-line"
-            data-question="Calibration state, liquid over-estimate, unknown region and unsupported liquid collapsed to one expandable line, icon plus text, never colour alone. First thing below the scroll boundary; unchanged by every option.">accessory-line <kbd>5</kbd></button>
-    <button data-view="zone" data-zone-pick="food-rows"
-            data-question="The scrolling rows. Untouched on this surface by all three options — what attempt 3 offers here is a vocabulary rather than a layout: App/EntryChrome.swift's chip treatment is, in its own words, 'the plate-fraction control's, moved to the grouped palette'.">food-rows <kbd>6</kbd></button>
+    <button data-view="zone" data-zone-pick="accessory"
+            data-question="Calibration state, liquid over-estimate, unknown region and unsupported liquid collapsed to one expandable line, icon plus text, never colour alone. First thing below the scroll boundary; unchanged by every option.">accessory <kbd>5</kbd></button>
+    <button data-view="zone" data-zone-pick="foods"
+            data-question="The scrolling rows. Untouched on this surface by all three options — what attempt 3 offers here is a vocabulary rather than a layout: App/EntryChrome.swift's chip treatment is, in its own words, 'the plate-fraction control's, moved to the grouped palette'.">foods <kbd>6</kbd></button>
   </div>
 </nav>
 
 <main>
 
-<!-- Whole screens ========================================================= -->
-<section id="view-screens" class="strip">
+<div class="zone-head" id="zone-head" hidden>
+  <h2 id="zone-name"></h2>
+  <p id="zone-question"></p>
+</div>
 
-  <article class="option" data-attempt="1" data-label="attempt 1 · two segments">
+<!-- One strip, three columns, in both views. The view is a property of what the
+     option pages are showing, not of a second copy of them on this page. -->
+<section class="strip">
+
+  <article class="option">
     <div class="cap">
       <b>attempt 1 &mdash; two segments</b>
-      <span class="branch">insulin-dosing-ui-1-on-research &middot; 8 files, 542 lines</span>
+      <span class="ref">insulin-dosing-ui-attempt-1-on-research &middot; 8 files, 542 lines</span>
       <p>The dose is appended to the line that already ships. Zero new rows, zero new controls, zero
          pixels of height. Built inline in <code>App/MealReviewView.swift</code>.</p>
     </div>
-    <div class="device">
-      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
-      <div class="screen">
-        <div class="toolbar">&#8943;</div>
-        <div class="photo" data-zone="photo">photo + class outlines</div>
-        <div class="gap-3"></div>
-        <div class="total" data-zone="total-row">
-          <div class="figure-row">
-            <span class="figure">60</span>
-            <span class="unit">g carbs</span>
-            <span class="spacer"></span>
-            <span class="pill pill--moderate">&#9650; Moderate</span>
-          </div>
-          <div class="dotline">
-            <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span>
-          </div>
-        </div>
-        <div class="gap-3"></div>
-        <button class="record" data-zone="primary-action">Record 60 g</button>
-        <div class="gap-3"></div>
-        <div class="scale" data-zone="scale-control">
-          <span class="label">PLATE</span>
-          <span class="spacer"></span>
-          <span class="frac is-active">All</span>
-          <span class="frac">&frac34;</span>
-          <span class="frac">&frac12;</span>
-          <span class="frac">&frac14;</span>
-        </div>
-        <div class="gap-3"></div>
-        <div class="divider"></div>
-        <div class="scrollarea">
-          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
-          <div class="rows" data-zone="food-rows">
-            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
-            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="homebar"></div>
-    </div>
+    <iframe src="attempt-1.html#frame" data-src="attempt-1.html" scrolling="no"
+            title="meal-review/dose-suggestion, attempt 1"></iframe>
   </article>
 
-  <article class="option" data-attempt="2" data-label="attempt 2 · three segments">
+  <article class="option">
     <div class="cap">
       <b>attempt 2 &mdash; three segments</b>
-      <span class="branch">insulin-dosing-ui-2-on-research &middot; 17 files, 1,565 lines</span>
+      <span class="ref">insulin-dosing-ui-attempt-2-on-research &middot; 17 files, 1,565 lines</span>
       <p>The divisor rides the line at every meal instead of living only in the dose sheet. Extracted
          as <code>App/DoseReadoutLine.swift</code>; the ratio segment is the first thing shed.</p>
     </div>
-    <div class="device">
-      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
-      <div class="screen">
-        <div class="toolbar">&#8943;</div>
-        <div class="photo" data-zone="photo">photo + class outlines</div>
-        <div class="gap-3"></div>
-        <div class="total" data-zone="total-row">
-          <div class="figure-row">
-            <span class="figure">60</span>
-            <span class="unit">g carbs</span>
-            <span class="spacer"></span>
-            <span class="pill pill--moderate">&#9650; Moderate</span>
-          </div>
-          <div class="dotline">
-            <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span><span class="sep"> &#183; </span><span>5 g/U</span>
-          </div>
-        </div>
-        <div class="gap-3"></div>
-        <button class="record" data-zone="primary-action">Record 60 g</button>
-        <div class="gap-3"></div>
-        <div class="scale" data-zone="scale-control">
-          <span class="label">PLATE</span>
-          <span class="spacer"></span>
-          <span class="frac is-active">All</span>
-          <span class="frac">&frac34;</span>
-          <span class="frac">&frac12;</span>
-          <span class="frac">&frac14;</span>
-        </div>
-        <div class="gap-3"></div>
-        <div class="divider"></div>
-        <div class="scrollarea">
-          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
-          <div class="rows" data-zone="food-rows">
-            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
-            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="homebar"></div>
-    </div>
+    <iframe src="attempt-2.html#frame" data-src="attempt-2.html" scrolling="no"
+            title="meal-review/dose-suggestion, attempt 2"></iframe>
   </article>
 
-  <article class="option" data-attempt="3" data-label="attempt 3 · no segment here">
+  <article class="option">
     <div class="cap">
       <b>attempt 3 &mdash; no segment here</b>
-      <span class="branch">insulin-dosing-ui-3-on-research &middot; 14 files, 1,015 lines</span>
-      <p>Consolidation: three manual-entry sheets become one, and the dose is read where a dose is
-         logged. <code>App/MealReviewView.swift</code> is not in this branch&rsquo;s diff at all &mdash;
-         every zone below is what ships today. See <code>attempt-3.html</code> for where it went.</p>
+      <span class="ref">insulin-dosing-ui-attempt-3-on-research &middot; 14 files, 1,015 lines</span>
+      <p>Consolidation: three manual-entry sheets become one. <code>App/MealReviewView.swift</code>
+         is not in this tag&rsquo;s diff, so the first frame is what ships today; the second frame,
+         below it, is the <code>log-sheet</code> the dose moved to.</p>
     </div>
-    <div class="device">
-      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
-      <div class="screen">
-        <div class="toolbar">&#8943;</div>
-        <div class="photo" data-zone="photo">photo + class outlines</div>
-        <div class="gap-3"></div>
-        <div class="total" data-zone="total-row">
-          <div class="figure-row">
-            <span class="figure">60</span>
-            <span class="unit">g carbs</span>
-            <span class="spacer"></span>
-            <span class="pill pill--moderate">&#9650; Moderate</span>
-          </div>
-          <div class="dotline">
-            <span>&#8776; 214 g on plate</span>
-          </div>
-        </div>
-        <div class="gap-3"></div>
-        <button class="record" data-zone="primary-action">Record 60 g</button>
-        <div class="gap-3"></div>
-        <div class="scale" data-zone="scale-control">
-          <span class="label">PLATE</span>
-          <span class="spacer"></span>
-          <span class="frac is-active">All</span>
-          <span class="frac">&frac34;</span>
-          <span class="frac">&frac12;</span>
-          <span class="frac">&frac14;</span>
-        </div>
-        <div class="gap-3"></div>
-        <div class="divider"></div>
-        <div class="scrollarea">
-          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
-          <div class="rows" data-zone="food-rows">
-            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
-            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="homebar"></div>
-    </div>
+    <iframe src="attempt-3.html#frame" data-src="attempt-3.html" scrolling="no"
+            title="meal-review/dose-suggestion, attempt 3"></iframe>
   </article>
 
-</section>
-
-<!-- One zone, all three ==================================================== -->
-<section id="view-zone" hidden>
-  <div class="zone-head">
-    <h2 id="zone-name"></h2>
-    <p id="zone-question"></p>
-  </div>
-  <div class="strip" id="zone-strip"></div>
 </section>
 
 </main>
@@ -419,6 +306,9 @@
     <li>Pick a zone above and the same region of all three options lands beside itself. That turns
         &ldquo;attempt 2&rsquo;s total row against attempt 1&rsquo;s&rdquo; into a two-second judgement instead
         of a memory exercise across two rebuilds.</li>
+    <li>Adding a fourth option is one <code>&lt;article&gt;</code> here and one
+        <code>attempt-4.html</code> beside it. Editing an option is editing that option, in one
+        place.</li>
     <li>Write the winning zones down in <code>composition.md</code>. A table of zone choices is a
         complete, unambiguous brief for the next option or for the SwiftUI &mdash; and a composed
         option is an ordinary option: build it as <code>attempt-4.html</code> and it appears here on
@@ -426,6 +316,9 @@
     <li>The zone-choice table outlives these files. When the implementation lands the folder is
         deleted and the table, with its reasons, moves to the owning spec&rsquo;s
         <code>decision_log.md</code>.</li>
+    <li><code>make wireshot SURFACE=insulin-dose</code> renders each option to a PNG, so the person
+        who wrote an option can see it before handing it over. It is the same picture, not a
+        different gate.</li>
   </ul>
   <h3>What this page does not do</h3>
   <ul>
@@ -442,77 +335,67 @@
 <script>
 // Three behaviours, no framework, no storage, no dependencies.
 //   1. outline the zones           2. switch views          3. keyboard shortcuts
+//
+// All three are the same act: recomputing one URL fragment and handing it to
+// every option page. This page never reaches into a frame — it cannot, and it
+// does not need to.
 (function () {
   var root = document.documentElement;
-  var options = Array.prototype.slice.call(document.querySelectorAll('.option'));
-  var viewScreens = document.getElementById('view-screens');
-  var viewZone = document.getElementById('view-zone');
-  var strip = document.getElementById('zone-strip');
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.option iframe'));
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.cmp-bar button'));
+  var zoneHead = document.getElementById('zone-head');
   var zoneName = document.getElementById('zone-name');
   var zoneQuestion = document.getElementById('zone-question');
-  var buttons = Array.prototype.slice.call(document.querySelectorAll('.cmp-bar button'));
   var zoneToggle = document.getElementById('zone-toggle');
   var fitToggle = document.getElementById('fit-toggle');
+  var picked = '';
 
-  zoneToggle.addEventListener('change', function () {
-    root.classList.toggle('zones', zoneToggle.checked);
-  });
-  fitToggle.addEventListener('change', function () {
-    root.classList.toggle('fit', fitToggle.checked);
-  });
-
-  // The zone view is built by cloning each option's own marked region, so it can
-  // never drift from the frame above it: there is one copy of the markup per
-  // option on this page, and both views read it.
-  function showZone(zone, question) {
-    strip.textContent = '';
-    options.forEach(function (option) {
-      var region = option.querySelector('[data-zone="' + zone + '"]');
-      var card = document.createElement('div');
-      card.className = 'zone-card';
-      var head = document.createElement('div');
-      head.className = 'card-head';
-      head.textContent = option.dataset.label;
-      var body = document.createElement('div');
-      body.className = 'card-body';
-      if (region) {
-        body.appendChild(region.cloneNode(true));
-      } else {
-        body.textContent = 'zone not present in this option';
-      }
-      card.appendChild(head);
-      card.appendChild(body);
-      strip.appendChild(card);
+  function push() {
+    var parts = ['frame'];
+    if (zoneToggle.checked) { parts.push('zones'); }
+    if (picked) { parts.push('zone=' + picked); }
+    var fragment = '#' + parts.join(',');
+    frames.forEach(function (frame) {
+      // Fragment-only navigation: the option page does not reload, it hears
+      // `hashchange` and re-applies.
+      frame.src = frame.dataset.src + fragment;
     });
-    zoneName.textContent = zone;
-    zoneQuestion.textContent = question || '';
-    viewScreens.hidden = true;
-    viewZone.hidden = false;
+    root.classList.toggle('zoneview', !!picked);
+    zoneHead.hidden = !picked;
   }
 
-  function showScreens() {
-    viewZone.hidden = true;
-    viewScreens.hidden = false;
-  }
+  // An option page is the only thing that knows how tall it ended up, so it
+  // says so. `contentDocument` would throw; `postMessage` from an opaque origin
+  // arrives with `origin` "null", which is why the source is matched by window
+  // identity rather than by origin.
+  addEventListener('message', function (event) {
+    var height = event.data && event.data.wireframeHeight;
+    if (!height) { return; }
+    frames.forEach(function (frame) {
+      if (frame.contentWindow === event.source) { frame.style.height = height + 'px'; }
+    });
+  });
 
   function activate(button) {
     buttons.forEach(function (other) { other.classList.remove('is-active'); });
     button.classList.add('is-active');
     // The picker buttons carry `data-zone-pick`, not `data-zone`: `data-zone`
     // means "this element IS that zone", and only regions inside a frame are.
-    if (button.dataset.view === 'zone') {
-      showZone(button.dataset.zonePick, button.dataset.question);
-      // So a view is linkable: `compare.html#zone=total-row` opens on that
-      // comparison, which is how you hand one to someone else.
-      location.replace('#zone=' + button.dataset.zonePick);
-    } else {
-      showScreens();
-      location.replace('#screens');
-    }
+    picked = button.dataset.view === 'zone' ? button.dataset.zonePick : '';
+    zoneName.textContent = picked;
+    zoneQuestion.textContent = button.dataset.question || '';
+    push();
+    // So a view is linkable: `compare.html#zone=total` opens on that
+    // comparison, which is how you hand one to someone else.
+    location.replace(picked ? '#zone=' + picked : '#screens');
   }
 
   buttons.forEach(function (button) {
     button.addEventListener('click', function () { activate(button); });
+  });
+  zoneToggle.addEventListener('change', push);
+  fitToggle.addEventListener('change', function () {
+    root.classList.toggle('fit', fitToggle.checked);
   });
 
   var wanted = (location.hash.match(/^#zone=(.+)$/) || [])[1];
@@ -526,7 +409,7 @@
   document.addEventListener('keydown', function (event) {
     if (event.metaKey || event.ctrlKey || event.altKey) { return; }
     var key = event.key;
-    if (key === 'z') { zoneToggle.checked = !zoneToggle.checked; zoneToggle.dispatchEvent(new Event('change')); return; }
+    if (key === 'z') { zoneToggle.checked = !zoneToggle.checked; push(); return; }
     if (key === 'f') { fitToggle.checked = !fitToggle.checked; fitToggle.dispatchEvent(new Event('change')); return; }
     var index = '0123456'.indexOf(key);
     if (index >= 0 && index < buttons.length) { activate(buttons[index]); }

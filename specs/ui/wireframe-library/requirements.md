@@ -10,11 +10,17 @@ merges until a person looks at all three and picks one." **Three options for one
 outcome of that convention, not a failure of it.** This spec exists because the options, once made, are
 unusable.
 
+The three branches that quote names no longer exist. The repository lists
+`insulin-dosing-ui-attempt-{1,2,3}-on-research` among its tags and carries no `insulin-dosing-ui-*` branch
+at all. That is the convention working as it is written — the tag is the durable ref and the branch was
+scaffolding — and it is why every measurement below is taken against the tags. Cite the tags.
+
 Three costs, all measured in this tree:
 
-- **Costly to produce.** `git diff --shortstat research...insulin-dosing-ui-{1,2,3}-on-research` reports 8
-  files / 542 insertions, 17 files / 1,565 insertions and 14 files / 1,015 insertions — **3,122 inserted
-  lines of Swift and supporting code across three branches** to try three versions of one readout.
+- **Costly to produce.** `git diff --shortstat research...insulin-dosing-ui-attempt-{1,2,3}-on-research`
+  reports 8 files / 542 insertions, 17 files / 1,565 insertions and 14 files / 1,015 insertions —
+  **3,122 inserted lines of Swift and supporting code across three attempts** to try three versions of one
+  readout. Re-measured against the tags on 2026-09-25; the figures are the same ones the branches gave.
 - **Costly to compare.** Each option needs `git checkout <tag-or-branch> && make deploy-device` to be seen at
   all, one at a time. The convention asks that "a person looks at all three"; nothing lets a person look at
   all three *at once*, so the comparison happens from memory, across rebuilds.
@@ -60,6 +66,13 @@ option does to the set of surfaces, so options can be combined at that level too
   web generation carry a `web/`-prefixed surface, so their ids read as three segments —
   `web/home/loaded` is the surface `web/home` in the state `loaded`.
 - **Generation** — one frozen capture of the app's appearance, named `-vN` (`ios-v0`, `web-v0`, `pages-v0`).
+- **Unrenderable** — a catalogued state that was reachable in its author's intent and never on screen: the
+  code declares the state, and the branch being archived cannot put it on a display. Four `web-v0` rows are
+  in this category (`design-system/archive/README.md`) — `web/capture/saving` and `web/manual-entry/saving`
+  declare a flag that never reaches the template, and `web/camera-capture/food-camera-active` and
+  `web/camera-capture/label-camera-active` need a live `getUserMedia` stream. Their archive cells read
+  `unrenderable` rather than `pending`, because `pending` says a frame is owed and nobody owes these. The
+  word describes one generation of one branch; it is not a claim that the state is unreachable in principle.
 - **Option** (an **attempt**) — one of several renderings or implementations of the same surface, made to be
   looked at beside the others and chosen between. Several options for one surface is the expected shape of
   UI work here, not a defect. Options are numbered to match the existing `<surface>-attempt-N` tag convention
@@ -125,6 +138,27 @@ These are known and accepted, not defects to be designed away. They are stated h
    `tools/check_spelling.sh`'s 168 for a materially easier job. Understating this would be dishonest about
    what is being taken on.
 
+## Surface delta
+
+Required of this document by [6.1](#6.1), and written out rather than omitted because [6.7](#6.7) makes an
+absent table a defect and never a claim.
+
+**This spec changes no iOS surface.** What it produces is `design-system/` — the catalogue, the generated
+tokens, the archive and the wireframes — together with `tools/check_surfaces.sh`,
+`tools/design_tokens/tokens_to_css.py`, `tools/wireshot.sh` and the `Makefile` targets that run them.
+Nothing under `App/`, `MeData/` or `MedataCore/` is touched, and [5.2](#5.2) makes a diff under `App/` a
+defect of this work rather than a side effect of it.
+
+| surface | change | catalogue id | note |
+| --- | --- | --- | --- |
+| Every iOS surface the catalogue carries | — | every `shipped` id in `design-system/surfaces.md` | Out of scope and must survive unchanged. This spec writes the surface set down; it does not alter it |
+| The frozen SvelteKit app on `main` | — | every `web/*` id, status `web-v0` ([1.11](#1.11)) | Recorded and photographed as-is. A frozen generation cannot be changed by definition |
+
+The wireframes under `design-system/wireframes/insulin-dose/` are options for
+`meal-review/dose-suggestion`, not changes to it. An option becomes a `modify` row in the spec that
+implements it ([4.5](#4.5)); the first `add`, `modify`, `delete` or `consolidate` row therefore belongs to
+that spec and not to this one.
+
 ## Requirements
 
 ### 1. <a name="1"></a>The Surface Catalogue
@@ -159,10 +193,15 @@ memory of the app.
    type.
 10. <a name="1.10"></a>WHERE a surface is reachable only under a Debug or UI-test harness path, it SHALL be
     catalogued, and its state source SHALL make the harness condition visible.
-11. <a name="1.11"></a>The catalogue SHALL cover the iOS app on the authoritative branch. The SvelteKit
-    screens on `main` SHALL be preserved by capture ([3.2](#3.2)) rather than as live rows; a row for a
-    web-generation surface SHALL be carried only where that surface is being taken forward as a design
-    input, and SHALL then carry status `web-v0`.
+11. <a name="1.11"></a>The catalogue SHALL cover the iOS app on the authoritative branch, and SHALL
+    additionally carry the SvelteKit app on `main` as-is — every surface and state it can render, each row
+    at status `web-v0`, with a successor mapping naming what each web surface became on iOS or recording
+    that it was dropped. The web half is the second half of the same baseline: `main` is what the app was,
+    `research` is what it is, and one file carrying both is the only place the difference can be read.
+    Capture ([3.2](#3.2)) preserves how those screens looked; the rows preserve what they could *do*, which
+    is the only written record of the capabilities the rewrite dropped and is not recoverable from a
+    screenshot of a screen that no longer exists. A web row SHALL NOT be gated on its surface being taken
+    forward as a design input: a dropped capability is worth recording precisely because it was dropped.
 12. <a name="1.12"></a>The catalogue SHALL state its own coverage figures — surfaces catalogued, state rows,
     renderable types covered, exemptions, rows by status, and screenshots captured — so a reader can see
     what is *not* yet covered without running anything.
@@ -220,6 +259,11 @@ preserve it.
    NOT hand-draw wireframes for catalogued states as a preservation exercise.
 7. <a name="3.7"></a>Once the prose pages are frozen, they SHALL NOT be maintained as a live reference; the
    catalogue and the archive together SHALL be the reference for how the app looks and behaves today.
+8. <a name="3.8"></a>WHERE a catalogued state cannot be rendered on the branch a generation is captured
+   from, its archive cell SHALL read `unrenderable` and SHALL NOT be left `pending`, and the generation
+   SHALL record why, per row, in its own README. A `pending` cell asserts that a frame is owed; an
+   `unrenderable` cell asserts that there is no frame to owe, which is a finding about the archived app
+   rather than an omission in the archive.
 
 ### 4. <a name="4"></a>Disposable Wireframes
 
@@ -233,8 +277,11 @@ has to be maintained afterwards.
    renderings of it. One rendering is a draft, not a decision. How the options are then compared and
    recombined is [8](#8).
 2. <a name="4.2"></a>Each rendering SHALL be at true iPhone 16 Pro portrait metrics — 402 × 874 points, one
-   point drawn as one pixel — so that a measurement taken from a wireframe is the measurement written in
-   Swift.
+   point drawn as one pixel — so that the layout is judged at the size it will ship at, and a value read off
+   a wireframe is the value to start from in Swift rather than a figure to convert. This is a claim about
+   layout fidelity, not about measurement identity: a wireframe is evidence about proportion, spacing and
+   hierarchy at one type size, never proof that a measured value survives Dynamic Type, safe-area insets or
+   `ViewThatFits` ([L4](#L4)).
 3. <a name="4.3"></a>Each rendering SHALL declare, in its own file, the catalogue id it renders, its attempt
    number, the one thing it is testing, and the zones it marks ([8.3](#8.3)).
 4. <a name="4.4"></a>Every hue in a rendering SHALL come from the generated token file ([5](#5)); a
@@ -258,6 +305,12 @@ has to be maintained afterwards.
    attempts totalled 3,122 inserted lines of Swift and supporting code.
 9. <a name="4.9"></a>WHEN an option is chosen, the reason SHALL be recorded in the owning spec's
    `decision_log.md`, because the wireframe that showed it is about to be deleted.
+10. <a name="4.10"></a>The system SHALL provide a single command, invoked through the repository
+    `Makefile`, that renders an option to an image file at the metrics of [4.2](#4.2), with no browser
+    window, no server and no JavaScript toolchain, so that whoever writes an option — a person or an agent
+    — can see what they wrote before anyone else is asked to look. It SHALL NOT compare, judge or gate: it
+    renders one file, and the limits of [4.2](#4.2) and [L4](#L4) apply to the image exactly as they apply
+    to the wireframe it was rendered from.
 
 ### 5. <a name="5"></a>The Colour Token Pipeline
 
@@ -324,7 +377,7 @@ the set of* surfaces. The two are complementary, and neither can express the oth
    surface that has no row yet, it SHALL state the id it will take.
 9. <a name="6.9"></a>WHERE an option's proposition is a change to the set of surfaces rather than to the
    inside of one, it SHALL be recorded here and SHALL NOT be forced into a zone table ([8.7](#8.7)).
-   Attempt 3 is the worked example: `App/LogSheet.swift` on `insulin-dosing-ui-3-on-research` describes
+   Attempt 3 is the worked example: `App/LogSheet.swift` at `insulin-dosing-ui-attempt-3-on-research` describes
    itself as "ONE manual-entry surface, three modes … This is that third sheet refusing to exist", which is
    a `consolidate` row naming the ids involved, and is not sayable as a choice of region.
 

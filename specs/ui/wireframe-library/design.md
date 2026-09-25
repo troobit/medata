@@ -23,9 +23,11 @@ deliverable — the developer wanted three things to look at.
 
 What failed is what happened **after** they existed. The options turned out to be almost unusable:
 
-- **Costly to generate.** `git diff --stat research...insulin-dosing-ui-{1,2,3}-on-research` measures
-  542 + 1,565 + 1,015 = **3,122 lines of SwiftUI across three branches**, to try three versions of one
-  readout. At that price, three options is a project rather than a routine.
+- **Costly to generate.** `git diff --stat research...insulin-dosing-ui-attempt-{1,2,3}-on-research`
+  measures 542 + 1,565 + 1,015 = **3,122 lines of SwiftUI across three attempts**, to try three versions
+  of one readout. At that price, three options is a project rather than a routine. The three branches
+  those attempts were made on have since been deleted; the tags are the surviving refs and every figure
+  here was re-measured against them on 2026-09-25, unchanged.
 - **Impossible to see together.** Each option needs `git checkout` plus `make deploy-device` to be seen
   at all, one at a time. The convention asks that "a person looks at all three"; nothing lets a person
   look at all three *at once*. The comparison happens from memory, across rebuilds.
@@ -237,7 +239,7 @@ to say becomes a table they can write. This is the worked one from
 | `primary-action` | attempt-1 | Unchanged `Record 60 g`. No option proposed anything else, and the screen's single accent budget is spent here |
 | `scale-control` | attempt-1 | 44x34 capsules kept where they are, because `specs/ui/meal-review/requirements.md` says "The scale control SHALL be visible without scrolling when the surface first appears." |
 | `accessory-line` | attempt-1 | One expandable line, unchanged; nothing in the three options touched it |
-| `food-rows` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` on `insulin-dosing-ui-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" |
+| `food-rows` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` at `insulin-dosing-ui-attempt-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" |
 
 Six lines, and the next artifact is unambiguous. **That table is the description of what you want to see
 next** — writable in a minute, buildable directly as the next wireframe or as the SwiftUI, and reviewable
@@ -249,8 +251,8 @@ Two things the table deliberately cannot say, and where each goes instead:
 - **A change to the set of surfaces is not a zone choice.** Attempt 3's actual proposition is that
   `meal-review` carries no dose readout at all and that three manual-entry sheets become one —
   `App/LogSheet.swift` calls itself "ONE manual-entry surface, three modes … This is that third sheet
-  refusing to exist", and `git diff --name-only research...insulin-dosing-ui-3-on-research` does not list
-  `App/MealReviewView.swift`. Zones compose *within* a surface; the surface-delta contract (§8) records
+  refusing to exist", and `git diff --name-only research...insulin-dosing-ui-attempt-3-on-research`
+  does not list `App/MealReviewView.swift`. Zones compose *within* a surface; the surface-delta contract (§8) records
   changes *to the set of* surfaces, as a `consolidate` row naming the ids involved. The two artifacts are
   complementary and neither substitutes for the other.
 - **A zone choice does not settle decomposition.** Attempts 1 and 2 render the second line identically in
@@ -407,9 +409,12 @@ Write-once. Never edited. Superseded only by a new generation.
 
 ```
 design-system/archive/
-├── ios-v0/<id>.png     rendered screenshots of shipped iOS surfaces
-├── web-v0/<id>.png     the SvelteKit screens on `main`
-└── pages-v0/*.md       the 14 current prose pages, frozen verbatim
+├── README.md                            what each generation holds, and how it was captured
+├── ios-v0/<id>.png                      shipped iOS surfaces — not yet captured, needs the device
+├── web-v0/<surface>/<state>.png         the SvelteKit screens on `main` — 97 frames, captured
+├── web-v0/<surface>/<state>.html        the same frame as static HTML, so it can be measured
+├── web-v0/_assets/                      app.css, icon.svg, manifest.json, three favicon variants
+└── pages-v0/*.md                        the 14 current prose pages, frozen verbatim — not yet frozen
 ```
 
 **Why frozen artifacts cannot drift.** Drift is the gap between what a document claims about the present
@@ -423,25 +428,41 @@ surface is redesigned enough that the old screenshot misleads, the *whole genera
 `ios-v1/` and the old one stays. `N` is a generation counter, not a version number — everything remains
 v0 until `main` (`docs/agent-notes/device-build-and-test.md`, "Everything stays v0 until main").
 
-**`pages-v0/` and the live pages.** Freezing a copy is not deleting the originals. `design-system/pages/`
-continues to exist and to be maintained where it is still used; `pages-v0/` fixes the 2026-08-17 state so
-that "what did the page say before we changed it" is answerable without archaeology.
+**`pages-v0/` and the live pages.** Freezing a copy is not deleting the originals. The files stay where
+they are, and `pages-v0/` fixes the 2026-08-17 state so that "what did the page say before we changed it"
+is answerable without archaeology. What stops is the *maintenance*: once frozen, `design-system/pages/` is
+no longer kept true and is no longer the reference for how the app looks — the catalogue and the archive
+are (requirement 3.7). Continuing to maintain them would recreate the bill §1.2 exists to retire, and
+would leave two live descriptions of one app to disagree with each other.
 
-**`web-v0/` is an expiring option.** The SvelteKit app on `main` is catalogued as **28 surfaces / 101
-state rows across 22 source files**, every row at `status: web-v0`, with a **Successor mapping**
-subsection naming what each web surface became on iOS — or that it was dropped, as for the Apply Preset
-sheet and the toast system. Cataloguing it costs nothing extra now that the rows exist; *photographing*
-it has a deadline, because the Node toolchain that renders those screens is no longer maintained on
-`research`. Roughly an afternoon now, impossible later. That asymmetry is the only expiry date in this
-work.
+**`web-v0/` was the expiring option, and it has been taken.** The SvelteKit app on `main` is catalogued
+as **28 surfaces / 101 state rows across 22 source files**, every row at `status: web-v0`, with a
+**Successor mapping** subsection naming what each web surface became on iOS — or that it was dropped, as
+for the Apply Preset sheet and the toast system. Cataloguing it cost nothing extra once the rows existed;
+*photographing* it had a deadline, because the Node toolchain that renders those screens is not
+maintained on `research`.
+
+**Captured 2026-09-25** from `origin/main` (`adc3b56`), as **97 of the 101 rows**, each as a PNG at
+402x874 CSS px / `deviceScaleFactor: 3` and as a measurable static HTML snapshot beside it, plus the
+`_assets/` a screenshot cannot recover. No Azure credentials were involved and none were needed: every
+`+page.svelte` on `main` fetches client-side, so the API calls were intercepted in the browser before the
+request left. The capture harness lived in a `/tmp` extract of `main` and went with it — no Node, no
+`node_modules`, no build step reaches `research`. `design-system/archive/README.md` is the record of how
+and what; it is the authority on that generation, not this section.
+
+The other **four rows are `unrenderable`, not `pending`** (requirement 3.8): `web/capture/saving` and
+`web/manual-entry/saving` declare a flag the template never reads, and the two
+`web/camera-capture/*-camera-active` rows need a live `getUserMedia` stream. A state reachable in its
+author's intent and never on screen is a finding about the frozen app, and the archive records it as one
+rather than as a frame somebody still owes.
 
 The web half is catalogued but **not ratcheted**: `tools/check_surfaces.sh` reads the whole file and
 checks only the iOS numbers, because there is no `main` code to keep the web rows honest against and no
 options being generated for a frozen app. It is a design input to point at, not a build target.
 
-**No PNGs exist yet.** 378 iOS rows and all 101 web rows carry a `pending` archive cell; the directories
-are created by the backfill work in [`tasks.md`](tasks.md). Which goal that work serves is stated plainly
-in §11.
+**The iOS half is still outstanding.** The 378 `pending` iOS rows need the phone and the two build modes
+(`make deploy-device`, `make deploy-release-stub`), which is the backfill work in [`tasks.md`](tasks.md).
+Which goal that work serves is stated plainly in §11.
 
 ---
 
@@ -477,6 +498,9 @@ vocabulary it marks — as the three committed files do:
 -->
 ```
 
+That header is quoted verbatim from the committed file, and the branch it names is gone — the surviving
+ref is the tag `insulin-dosing-ui-attempt-3-on-research`. A header written today cites the tag.
+
 Naming the question is not decoration. Two renderings with no stated difference are a mood board; two
 renderings with a stated difference are a decision with an answer. Naming the zones is what lets the
 answer be *"the second one's, but with the first one's capsules"*.
@@ -508,9 +532,10 @@ place it is working without a token. §7 covers generation.
 
 ### 6.4 Lifecycle
 
-1. **Generate two or more options.** One option is a draft, not a choice. This mirrors the standing
-   convention in `docs/agent-notes/device-build-and-test.md`: a UI surface worth deciding about ships as
-   several renderings because the gate is a person looking at a screen.
+1. **Generate two or more options, and render each one** (§6.6) to see it. One option is a draft, not a
+   choice. This mirrors the standing convention in `docs/agent-notes/device-build-and-test.md`: a UI
+   surface worth deciding about ships as several renderings because the gate is a person looking at a
+   screen.
 2. **Compare them side by side** in `compare.html` — whole screens first, then zone by zone.
 3. **Compose, if the answer is parts of each.** Write the zone-choice table in `composition.md` and, when
    it is worth seeing rather than only reading, build it as `attempt-4.html` and compare it on the same
@@ -529,13 +554,14 @@ because there is nothing left to be stale.
 
 The convention today generates options *in Swift*: build the variant, tag it, install it, look. It works,
 and the price is why three options is currently an expedition. The three insulin-dosing options measure
-(`git diff --stat research...<branch>`):
+(`git diff --stat research...<tag>`, re-measured 2026-09-25; the branches these were made on are deleted
+and the tags are what survive):
 
 | Attempt | Files changed | Insertions |
 | --- | --- | --- |
-| `insulin-dosing-ui-1-on-research` | 8 | 542 |
-| `insulin-dosing-ui-2-on-research` | 17 | 1,565 |
-| `insulin-dosing-ui-3-on-research` | 14 | 1,015 |
+| `insulin-dosing-ui-attempt-1-on-research` | 8 | 542 |
+| `insulin-dosing-ui-attempt-2-on-research` | 17 | 1,565 |
+| `insulin-dosing-ui-attempt-3-on-research` | 14 | 1,015 |
 
 The same three options in this design's medium — `design-system/wireframes/insulin-dose/attempt-{1,2,3}.html`
 — are **104, 100 and 160 lines**, the third being longer because it renders two surfaces to make its
@@ -561,6 +587,37 @@ render all of them.
 The tag convention is unchanged — the tags, the clean-tree rule, the three shapes, the build stamp all
 stay exactly as documented. What changes is *what gets tagged*: cheap options happen in HTML, and Swift
 options are reserved for the questions HTML cannot answer (§11).
+
+### 6.6 Seeing it — `make wireshot`
+
+Making options four times cheaper to *write* does nothing about the second of the three costs. An option
+nobody has looked at is prose again with angle brackets — and the author is often an agent, which cannot
+open a file in a browser at all.
+
+`tools/wireshot.sh`, wired to `make wireshot`, renders an option to a PNG with headless Chrome:
+
+```sh
+make wireshot SURFACE=insulin-dose                 # every attempt-*.html in the folder
+make wireshot SURFACE=insulin-dose ATTEMPT=2       # just attempt-2.html
+```
+
+It opens `design-system/wireframes/<surface>/attempt-N.html` as a `file://` URL and writes
+`tmp/wireshot/<surface>/attempt-N.png`, at `--force-device-scale-factor=3`. The window is sized to the
+*page* (1220x1500 by default, overridable with `SHOT_W`/`SHOT_H`) because an attempt file is a page
+carrying a heading and its testing note around a `.device` box; the phone inside it stays at exactly
+402x874 CSS px, which at scale 3 is 1206x2622 device pixels — the same frame an iPhone 16 Pro screenshot
+produces. A distance measured on the device frame and divided by 3 is the value to start from in Swift.
+The output is `tmp/`, not a committed artifact: it is disposable in exactly the way the option file is.
+Requirements: bash 3.2 and Google Chrome, checked for by path with a named failure. No Node, no npm, no
+server.
+
+**What it does not claim.** It is not a check: nothing passes or fails, and `make surfaces` neither calls
+it nor knows it exists. It is not a comparison — `compare.html` is where options are seen beside each
+other. And it is **not the gate**. A PNG from headless Chrome inherits every limit its source has
+(requirement 4.2, limit L4): it says nothing about Dynamic Type, safe-area insets or `ViewThatFits`, and
+Chrome is not WebKit, let alone SwiftUI. What it establishes is that the layout and the hierarchy are
+what the author meant — enough to be worth another person's attention, which is the whole job. The gate
+is still a person looking at the screen of an iPhone 16 Pro (§10).
 
 ---
 
@@ -655,8 +712,11 @@ Checked against each attempt branch's actual surface set:
 3. **Attempt 3 deleted `ChipFlow`** — 57 lines removed from `App/TrendsView.swift`, `private struct
    ChipFlow: Layout` and its comment, in a single hunk (`@@ -397,60 +397,6 @@`, 3 insertions against 57
    deletions in that file), incidental to the work and mentioned nowhere. The
-   `—` row makes the omission explicit rather than assumed, and §9's conformance regex catches the
-   deletion mechanically even when nobody thought to write the row.
+   `—` row makes the omission explicit rather than assumed. What §9 adds is thinner than it reads: there
+   is no catalogue-to-code pass that names a deleted surface, so the removal shows up only as the
+   coverage ratchet dropping — `ratchet_regression covered=60 baseline=61` — a count with no struct, no
+   file and no line. That is enough to stop the deletion landing silently, and not enough to say what was
+   deleted. The `—` row is what turns the number back into a name.
 
 Three gaps, three different mechanisms — one missing, one unauthorised, one incidental — and the same
 one-line table catches all three because it is written down before rather than reconstructed after. None

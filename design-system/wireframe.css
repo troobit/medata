@@ -2,6 +2,9 @@
  *
  * Hand-written. Only `tokens.css` is generated.
  *
+ * The page is pinned to `color-scheme: dark` below — see the note on that
+ * declaration for why an adaptive token is read at one appearance here.
+ *
  * Every hue comes from `tokens.css`; nothing here names a hue that
  * `App/Colors.swift` does not define. What is named outside the tokens is all
  * neutral: the three `--frame-*` greys of the page the phone sits on, the
@@ -26,6 +29,20 @@
 @import "tokens.css";
 
 :root {
+  /* Pinned, not inherited. `tokens.css` declares `color-scheme: light dark`
+   * and emits the twelve `Color(uiColor:)` tokens as `light-dark(…)`, which
+   * reads the used colour scheme of whatever element it is substituted into.
+   * A browser in light mode would therefore draw the sheet at
+   * `surfacePrimary` #F2F2F7 with black text, inside a device frame that is
+   * still pure black — a wireframe of a surface the app does not have. The
+   * wireframes are OLED-dark by convention (MASTER.md "Style — three layers,
+   * used together"), so the dark branch is taken here, once, for every page
+   * that imports this file. Nothing below depends on the viewer's settings.
+   *
+   * This is a choice about the wireframe page, not about the token: a future
+   * consumer that does want both appearances drops this line and gets them. */
+  color-scheme: dark;
+
   /* Device — iPhone 16 Pro logical points, portrait. */
   --device-w: 402px;
   --device-h: 874px;

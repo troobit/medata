@@ -1,0 +1,59 @@
+/* View modes — the channel between `compare.html` and an option page.
+ *
+ * `compare.html` shows each option by pointing an `<iframe>` at the option's
+ * own file. A `file://` parent does render a sibling `file://` page in a frame;
+ * what it cannot do is reach inside one, because `contentDocument` throws
+ * cross-origin on an opaque origin. So the parent drives the child through the
+ * URL fragment, and the child reads it with the classic inline script every
+ * option page carries at the end of its body.
+ *
+ * Fragment tokens, comma-separated:
+ *
+ *   attempt-1.html                    the option as a page — heading, notes, frame
+ *   attempt-1.html#frame              device frames only, no page furniture
+ *   attempt-1.html#frame,zones        ... with the zone outlines on
+ *   attempt-1.html#frame,zone=total   ... one zone, everything else hidden
+ *
+ * With no fragment none of these classes are set, so opening an option by
+ * double-clicking it gives exactly the page it gave before these modes existed.
+ *
+ * This lives beside the options rather than in `wireframe.css` because it is
+ * scaffolding for looking at an option, not part of how an option is drawn.
+ */
+
+/* The UA rule for `[hidden]` is `display: none` at UA origin, so any author
+ * `display: flex` in `wireframe.css` beats it. The zone isolation sets `hidden`
+ * on siblings, so it has to win. */
+[hidden] { display: none !important; }
+
+/* frame — the page furniture goes, the device stays at true metrics -------- */
+:root.mode-frame body { padding: 0; }
+:root.mode-frame .stage > h1,
+:root.mode-frame .stage > p,
+:root.mode-frame .note { display: none; }
+
+/* zone — one region, in the 16pt gutter the screen gives it, on the screen's
+ * own background. The frame collapses onto the region: an 874pt column with one
+ * row at the top of it is not a comparison. The 55px display radius goes with
+ * it, because a 90pt-tall box with a 55px corner is a pill, not a phone. ---- */
+:root.mode-zone .device {
+  height: auto;
+  border-radius: var(--radius-control);
+}
+:root.mode-zone .screen { padding: var(--space-3); }
+/* `.photo` is `flex: 0 0 40%` of the screen. Out of a fixed-height frame it has
+ * nothing to take a percentage of, so the number is restated: 40% of
+ * 874 - 59 - 34 = 312. */
+:root.mode-zone .photo { flex: 0 0 auto; height: 312px; }
+:root.mode-zone .scrollarea { flex: 0 0 auto; overflow: visible; }
+
+/* A zone declared for a surface need not appear in every option for it, and an
+ * option that drops a region is a legible answer rather than a mistake. */
+:root.mode-absent .stage { display: none; }
+:root.mode-absent body::before {
+  content: "zone not present in this option";
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption);
+  color: var(--frame-note);
+}

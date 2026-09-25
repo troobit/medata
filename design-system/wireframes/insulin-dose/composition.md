@@ -28,22 +28,22 @@ not change".
 | zone | what it is |
 |---|---|
 | `photo` | preview plus class outlines, ~40% of height, fixed |
-| `total-row` | the carbohydrate figure, the confidence pill and the middle-dot second line |
+| `total` | the carbohydrate figure, the confidence pill and the middle-dot second line |
 | `primary-action` | `Record 60 g` — the one accent-filled control on the screen |
 | `scale-control` | `PLATE` label and the fraction capsules, above the fold |
-| `accessory-line` | calibration and estimate signals, one expandable line |
-| `food-rows` | the scrolling per-food rows |
+| `accessory` | calibration and estimate signals, one expandable line |
+| `foods` | the scrolling per-food rows |
 
 ## The composition — `attempt-4`
 
 | zone | taken from | reason |
 |---|---|---|
 | `photo` | attempt-1 | Identical in all three; taken from the option that changed nothing. |
-| `total-row` | attempt-2 | The extracted middle-dot line. The divisor is the parameter the feature exists to measure, and it sheds first, so at any width where it does not fit the line is byte-identical to attempt 1's. |
+| `total` | attempt-2 | The extracted middle-dot line. The divisor is the parameter the feature exists to measure, and it sheds first, so at any width where it does not fit the line is byte-identical to attempt 1's. |
 | `primary-action` | attempt-1 | Unchanged `Record 60 g`. No option proposed anything else, and the screen's single accent budget is spent here. |
 | `scale-control` | attempt-1 | 44x34 capsules kept where they are, because `specs/ui/meal-review/requirements.md` says "The scale control SHALL be visible without scrolling when the surface first appears." |
-| `accessory-line` | attempt-1 | One expandable line, unchanged; nothing in the three options touched it. |
-| `food-rows` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` on `insulin-dosing-ui-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" — so the row affordances and the manual-entry sheets stop drifting apart. That file exists only on that branch; it is not in the `research` tree. |
+| `accessory` | attempt-1 | One expandable line, unchanged; nothing in the three options touched it. |
+| `foods` | attempt-3 | Its chip and commit treatments, which `App/EntryChrome.swift` at `insulin-dosing-ui-attempt-3-on-research` describes as "the plate-fraction control's, moved to the grouped palette" — so the row affordances and the manual-entry sheets stop drifting apart. That file exists only at that tag; it is not in the `research` tree. |
 
 Six lines, and the next artifact is unambiguous. Build it as `attempt-4.html` and it sits in
 `compare.html` beside the other three on exactly the same terms: **a composed option is an ordinary
@@ -54,7 +54,7 @@ option**, and it still has to be looked at on the phone before it is a decision.
 - **Attempt 3's actual proposition is not a zone choice.** Its move is that this surface carries no
   dose readout at all and that three manual-entry sheets become one — `App/LogSheet.swift` calls
   itself "ONE manual-entry surface, three modes … This is that third sheet refusing to exist", and
-  `git diff --name-only research...insulin-dosing-ui-3-on-research` does not list
+  `git diff --name-only research...insulin-dosing-ui-attempt-3-on-research` does not list
   `App/MealReviewView.swift`. A zone table describes regions *within* a surface; it has no row for
   "this surface, and two others, become one". That belongs in the surface-delta table in the owning
   spec's `requirements.md` as a `consolidate` row naming the ids involved. The two artifacts are

@@ -1,80 +1,139 @@
-# Wireframe intake (Claude artifacts → UI spec)
+# Wireframe intake — how a UI change gets designed before it is written
 
-> **Superseded in part — read `specs/ui/wireframe-library/` first.** That spec makes
-> `design-system/surfaces.md` the reference for what surfaces and states exist, and makes
-> wireframes disposable zone-marked HTML authored to compare options rather than one-way
-> handoff inputs. This note still describes the design-handoff archive correctly; its
-> "Translation pipeline" and "Landing zone" sections describe the older scheme. Rewriting
-> this file is a tracked task ("Rewrite docs/agent-notes/wireframe-intake.md for the new
-> pipeline", `specs/ui/wireframe-library/tasks.md`).
+This note is the loop. The reference documents are `specs/ui/wireframe-library/` (why it
+is shaped this way) and `design-system/wireframes/README.md` (what a wireframe folder
+contains). Read this one first; it is short and it tells you the order.
 
-How wireframes designed in Claude on the web get turned into a MeData UI spec.
-There is no claude.ai connector in the CLI session, so artifacts arrive by paste.
+The thing being replaced was one-way: a Claude artifact was pasted in, archived as a
+numbered `design-handoff-NN/` bundle, translated into a `design-system/pages/<screen>.md`
+page plus EARS requirements, and then implemented. One design in, one implementation out,
+no comparison anywhere. That is still how a *handoff bundle* is filed (below), but it is
+no longer how a surface gets designed.
 
-## Why paste, not a live connector
+## The loop
 
-Claude artifacts are self-contained HTML/React previews held in a claude.ai
-conversation or project. This repo's CLI has the Figma and Google Drive MCPs
-connected but **not** a claude.ai one, so the artifact source cannot be fetched
-directly. The reliable path is: paste the artifact's code (or drop the file into
-the repo / Google Drive) and translate it here.
+1. **Name the surface.** Find or add its rows in `design-system/surfaces.md`. The
+   catalogue id — `<surface>/<state>`, kebab-case, e.g. `meal-review/dose-suggestion` —
+   is the citation key shared by the catalogue row, the wireframe filenames, the archive
+   filename and the decision entry. One key, everywhere. If the surface has no declared
+   zone vocabulary yet, declare one now; a surface nobody can point at a region of is the
+   problem this whole loop exists to fix (Decision 1, Decision 4).
 
-## Landing zone
+2. **Write the surface-delta table** in the owning spec's `requirements.md`: which
+   surfaces this change adds, removes, merges or retitles. A zone table cannot express
+   "these three sheets become one", and that move is exactly the kind a prose spec loses.
+   A spec that changes no surface says so explicitly rather than omitting the table, so an
+   absent table is always a defect and never a claim (requirement 6.7, Decision 14).
 
-**Bulk-folder archive (current scheme — Decision 10, design-handoff-00).**
-Each design handoff arrives as a coherent bundle (wireframes + scaffold + README)
-whose internal cross-references must be preserved. Handoffs are committed verbatim
-as numbered folders:
+3. **Write two or more attempts** as `design-system/wireframes/<surface>/attempt-N.html`
+   — self-contained HTML at 402x874pt, linking `../../tokens.css` and `../../wireframe.css`,
+   opening with a comment naming the catalogue id, the attempt number, the one thing it is
+   testing, and the zones it marks. One attempt is a draft, not a decision. The three
+   `insulin-dose` attempts are 104, 100 and 160 lines. The three Swift attempts at the
+   same readout cost 542 + 1,565 + 1,015 = 3,122 inserted lines between them (tags
+   `insulin-dosing-ui-attempt-{1,2,3}-on-research`).
 
-```
-design-system/wireframes/design-handoff-NN/   # e.g. design-handoff-00/, design-handoff-01/
-```
+4. **Look at them.** `make wireshot SURFACE=<surface> [ATTEMPT=N]` renders each attempt to
+   a PNG under `tmp/wireshot/` through headless Chrome at
+   `--window-size=402,874 --force-device-scale-factor=3`, so the agent that wrote the
+   attempt can see it before the developer is asked to. `compare.html` in the same folder
+   puts every attempt side by side, outlines the zones on a toggle, and shows one zone
+   across all attempts in its own gutter. Neither replaces the phone.
 
-Each folder contains a `MANIFEST.md` recording the handoff id, date received,
-source description, and the list of behavioural deviations the adopting spec makes.
-No commit-SHA field — `git log -- design-system/wireframes/design-handoff-NN/`
-answers that question for free.
+5. **Compose, if the answer is parts of each.** Fill in `composition.md` — zone, which
+   attempt it comes from, one line of reason — and build `attempt-4.html` from it if it
+   needs to be seen before it is built. A composed attempt is an ordinary attempt.
 
-These are **inert reference inputs**: nothing imports them, and they carry no target
-membership. Future handoffs increment the number (01, 02, …) as new archive folders
-alongside their own spec.
+6. **Decide, in the owning spec's `decision_log.md`.** Enhanced Nygard, per
+   `rules/references/decision-log-format.md`. The zone-choice table with its reasons goes
+   in the entry: the wireframes are about to be deleted, and in a year the question is why
+   the total row looks like that. Zones not taken write the Alternatives Considered field
+   for you.
 
-**Superseded (one-file-per-screen scheme).**
-The earlier convention — one file per screen at
-`design-system/wireframes/<screen-name>.<ext>` — is superseded by the bulk-folder
-archive above. It is preserved here for history only.
+7. **Implement in Swift**, tagged `<surface>-attempt-N` on a clean tree only where a
+   question remains that HTML cannot answer — decomposition, state models, settings keys
+   and anything touching Dynamic Type, safe areas or `ViewThatFits`. The convention and
+   its three shapes are in `docs/agent-notes/device-build-and-test.md`, "Comparing UI
+   attempts on the phone".
 
-## Translation pipeline (per screen)
+8. **Delete the folder.** Whole of `design-system/wireframes/<surface>/`, `composition.md`
+   included. Screenshot the shipped surface to
+   `design-system/archive/ios-v0/<surface>-<state>.png` and flip that catalogue row to
+   `shipped`. A file that does not outlive its decision cannot go stale — that is the
+   entire maintenance strategy (Decision 6).
 
-Each wireframe becomes two kinds of spec output, never a direct code port:
+The gate does not move. It is still a person looking at the screen of an iPhone 16 Pro.
+The loop moves the *choice* earlier and makes it cheaper to have more than one option to
+choose between; it does not replace the device.
 
-1. **Design-system page file** — `design-system/pages/<screen>.md`, in the same
-   shape as the existing `photo-tab.md` / `meals-tab.md`: layout, the tokens it
-   uses (colour, type, spacing from `design-system/MASTER.md`), and any override
-   of the master. Non-token values in the wireframe are reconciled to the master
-   or flagged as a proposed token change.
-2. **Requirements** — EARS acceptance criteria in the owning UI spec's
-   `requirements.md` (a new `specs/ui/<capability>/` spec, or an addition to an
-   existing one), describing observable behaviour, not markup.
+## Handoff bundles still arrive, and are still archived whole
 
-The artifact's literal HTML/CSS/JSX is **not** copied into `App/*.swift`. It is a
-picture of intent; the SwiftUI implementation follows the design-system page +
-requirements, using existing components and tokens.
+There is no claude.ai connector in the CLI session, so an artifact designed on the web
+arrives by paste. When it arrives as a coherent bundle — wireframes plus scaffold plus its
+own README, with internal cross-references that only make sense together — it is committed
+verbatim as `design-system/wireframes/design-handoff-NN/` with a `MANIFEST.md` recording
+the handoff id, the date received, the source, and the list of behavioural deviations the
+adopting spec makes. No commit-SHA field:
+`git log -- design-system/wireframes/design-handoff-NN/` answers that for free.
 
-## Reconciliation rules
+These folders are **inert reference inputs**. Nothing imports them, they carry no target
+membership, and they are not disposable wireframe folders — they do not get deleted when
+an implementation lands. Future handoffs increment the number.
 
-- Web artifacts use web idioms (hover, `px`, web fonts, `#hex`). Map these to the
-  iOS equivalents: touch/press states, points, SF/system type, `Color` tokens.
-- Any colour that is not already a MASTER.md token is either mapped to the nearest
-  token or raised as a proposed token addition in the spec's decision log — never
-  hard-coded silently.
-- Glassmorphism / neumorphism / heavy shadow in a wireframe are anti-patterns here
-  (MASTER.md "Style"); note the intent they were expressing and realise it with the
-  approved flat/OLED/exaggerated-minimalism layers instead.
+`design-handoff-00/` stays readable, and its `MANIFEST.md` is cited as evidence in both
+`specs/ui/wireframe-library/requirements.md` and that spec's `decision_log.md`. Read it for
+provenance; do not edit it, do not extend it, and do not trust its statements about the
+current app — its manifest still calls Graph the launch root while `App/AppRoot.swift:102`
+presents `HomeView`.
 
-## Figma option (heavier, deferred)
+A single pasted screen is not a bundle. It goes straight into step 3 as an `attempt-N.html`
+under the surface it is an attempt at.
 
-If a living, editable design source is wanted later, the same artifacts can be
-pushed into a Figma file via the Figma MCP and Code-Connected back to the SwiftUI
-components. That is a separate, larger effort than the paste→spec path above and
-is not required to seed a spec.
+## Reconciling a web artifact to this app
+
+- Web idioms map to iOS ones: hover to touch and press states, `px` to points, web fonts
+  to SF/system type, `#hex` to a `Color` token.
+- Every hue in a wireframe comes from a `--medata-*` token in `design-system/tokens.css`
+  or it is wrong. That file is **generated** from `App/Colors.swift` by
+  `tools/design_tokens/tokens_to_css.py`; the Swift owns the palette and nothing edits the
+  CSS by hand. A colour with no token is either mapped to the nearest one or raised as a
+  proposed token addition in the owning spec's decision log — never hard-coded silently.
+  Neutrals are the exception: black, white and white-at-opacity are the OLED chrome
+  convention rather than a token set.
+- Glassmorphism, neumorphism and heavy shadow are anti-patterns here
+  (`design-system/MASTER.md`, "Style"). Note the intent they were expressing and realise it
+  with the flat/OLED/exaggerated-minimalism layers instead.
+- Developer-phase copy rule: no reassurance or disclaimer messaging anywhere. An artifact
+  drawn by someone who does not know that will carry it.
+
+## What this loop cannot catch
+
+`design-system/wireframes/design-handoff-00/MANIFEST.md` attributes rows 10 and 11 of its
+own deviation table (`MANIFEST.md:36-37`) to user direction after seeing the
+implementation: full-screen covers instead of sheets over Capture, and Graph as the launch
+root instead of the camera-first launch the handoff drew, because "camera-first launch was
+unwanted in developer use". That is the design changing **after** the phone showed it,
+which is the dominant historical cause of the handoff going stale — and **no
+forward-only wireframe-to-code flow
+catches it**, this one included. Wireframes make the option cheaper to produce and the
+choice earlier; they cannot make the developer's reaction to a running build predictable.
+
+What the catalogue and the surface-delta table can do is make the resulting change cheap to
+write down, so the next reader finds the change recorded instead of inferring it from a
+diff. What they cannot do is make the change unnecessary.
+
+Two smaller limits worth saying out loud:
+
+- Nothing mechanically forces a wireframe to precede the implementation. That stays a
+  habit, held up by wireframing being the cheaper way to get an option, not by a rule.
+- HTML lies about Dynamic Type, safe areas and `ViewThatFits`. Every metric in a wireframe
+  is a starting position to check on the phone, never a result.
+
+## External design tools are rejected, not deferred
+
+Figma, Penpot, Supernova, Tokens Studio, Storybook and the design-token platforms were all
+assessed and rejected in `specs/ui/wireframe-library/decision_log.md` Decision 2. The
+structural reasons are that the source of truth leaves git and a GUI step enters an
+agent-authored workflow; the token platforms additionally cannot represent an OS-resolved
+colour, which is more than half of `App/Colors.swift`. Do not re-propose one without
+reading that entry first.
