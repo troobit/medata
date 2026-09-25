@@ -541,9 +541,9 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.arWorldTrackingLost
             }
-            let obliqueSeg: SegmentationResult
+            let rawObliqueSeg: SegmentationResult
             do {
-                obliqueSeg = try await segmenter.segment(oblique)
+                rawObliqueSeg = try await segmenter.segment(oblique)
             } catch SegmentationError.noFoodPixels {
                 #if DEBUG
                 logStageEnd(name: "Volume", startedAt: volumeStartedAt)
@@ -551,8 +551,25 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.noFoodPixels
             }
-            diagnostics.recordSegmentation(view: .oblique, measurements: Self.segmentationMeasurements(obliqueSeg))
-            diagnostics.debugObliqueSegmentation = obliqueSeg
+            diagnostics.recordSegmentation(view: .oblique, measurements: Self.segmentationMeasurements(rawObliqueSeg))
+            diagnostics.debugObliqueSegmentation = rawObliqueSeg
+            // Both views relabelled to one carvable class so the carve has a
+            // matched class with both silhouettes (two-view-trust Req 2.1).
+            // The bundle keeps the raw segmenter outputs assigned above.
+            let reconciled = TwoViewReconciler.reconcile(
+                nadir: nadirSeg, oblique: rawObliqueSeg, palette: palette, userClass: nil)
+            let reconciliation = reconciled.reconciliation
+            diagnostics.recordTwoViewReconciliation(reconciliation)
+            supportPlaneLog.info(
+                """
+                event=two_view.reconcile applied=\(reconciliation.applied, privacy: .public) \
+                nadir=\(reconciliation.nadirClasses, privacy: .public) \
+                oblique=\(reconciliation.obliqueClasses, privacy: .public) \
+                chosen=\(String(describing: reconciliation.chosenClass), privacy: .public)
+                """
+            )
+            let nadirSeg = reconciled.nadir
+            let obliqueSeg = reconciled.oblique
             let matching = MaskMatcher.match(
                 view1: nadirSeg.argmax,
                 view2: obliqueSeg.argmax,

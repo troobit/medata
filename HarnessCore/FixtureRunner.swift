@@ -49,7 +49,8 @@ public enum FixtureRunner {
         database: any FoodDatabase,
         voxelEdgeMm: Float = 3.0,
         regularisation: MaskRegularisationConfig = .standard,
-        growth: FoodRegionGrowthConfig = .standard
+        growth: FoodRegionGrowthConfig = .standard,
+        twoViewReconciliation: Bool = true
     ) throws -> MealCalibrationInput {
         guard let capturePath = CapturePath(rawValue: fixture.capturePathCanonical) else {
             throw Error.invalidCapturePath(fixture.capturePathCanonical)
@@ -188,7 +189,8 @@ public enum FixtureRunner {
                 nadirIntrinsics: nadirIntrinsics, obliqueIntrinsics: obliqueIntrinsics,
                 t1to2: t1to2, plane: plane, gravity: gravity,
                 beta: unityBeta, palette: palette,
-                voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID
+                voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID,
+                reconcile: twoViewReconciliation
             )
             perClassVolumesCm3 = est.perClassVolumesCm3
         }
@@ -542,8 +544,19 @@ public enum FixtureRunner {
         beta: BetaCorrection,
         palette: ClassPalette,
         voxelEdgeMm: Float,
-        fixtureID: String
+        fixtureID: String,
+        reconcile: Bool
     ) throws -> VoxelCarveEstimate {
+        // Same pass, same place as Pipeline (two-view-trust Req 2.1), so a
+        // replay carves what the device carved. `reconcile: false` replays the
+        // raw labels for comparison.
+        var nadirSeg = nadirSeg, obliqueSeg = obliqueSeg
+        if reconcile {
+            let r = TwoViewReconciler.reconcile(
+                nadir: nadirSeg, oblique: obliqueSeg, palette: palette, userClass: nil)
+            nadirSeg = r.nadir
+            obliqueSeg = r.oblique
+        }
         let matching = MaskMatcher.match(
             view1: nadirSeg.argmax,
             view2: obliqueSeg.argmax,

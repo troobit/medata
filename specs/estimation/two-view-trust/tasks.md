@@ -31,8 +31,10 @@ references:
 
 - [ ] 11. Debug switch runs the non-LiDAR path on a LiDAR phone (Req 4.5, device half)
 
+- [ ] 12. The review outline shades the accepted card's quadrilateral as the reference, distinct from food (owner note 2026-09-25)
+
 ## User-identified regions
 
-- [ ] 12. Cross-view label reconciliation before the carve (Req 2)
+- [x] 13. Cross-view label reconciliation before the carve (Req 2)
 
-- [ ] 13. Two-tap confirmation of the food in both photos (Req 3)
+- [ ] 14. Two-tap confirmation of the food in both photos (Req 3)
