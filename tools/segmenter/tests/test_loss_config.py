@@ -71,6 +71,11 @@ def test_dice_spec_is_parameter_free():
     assert loss_config.resolve_loss_spec("dice") == {"loss": "dice"}
 
 
+def test_combined_spec_takes_an_explicit_dice_weight():
+    spec = loss_config.resolve_loss_spec("combined", dice_weight=0.75)
+    assert spec["dice_weight"] == 0.75
+
+
 def test_combined_spec_carries_mix_and_weighting():
     spec = loss_config.resolve_loss_spec("combined")
     assert spec == {

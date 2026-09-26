@@ -550,6 +550,22 @@ print({k: v for k, v in s.items() if k not in ('model', 'optimizer')})"
 # Resume: SAME flags + --resume <out>.resume.pt, appending to the same log
 ```
 
+### Seeded runs and the serial queue (2026-09-26)
+
+`--seed N` pins the trainer's own randomness (RNGs, shuffle order, per-worker
+augmentation) and lands in lineage `train_config.seed`; `--dice-weight W` sets
+the dice share of the `combined` loss (default 0.5). Both are checked by the
+resume drift-check. An unseeded exact repeat of R3 (R7) showed the anchor mean
+stable to 0.001 but single classes moving by up to 0.45 and staples by 0.05, so
+recipe comparisons are seeded from here on and read against the seeded
+reference R8 (`--seed 1`).
+
+Multi-hour runs go through the serial queue rather than hand-launched
+`nohup` lines: entries in `tools/segmenter/queue/`, runner
+`tools/segmenter/run_queue.sh`, state under `tools/segmenter/build/queue/`.
+Mechanics, the pause window for trainer edits and the reading rules are in
+`docs/agent-notes/segmenter-run-queue.md`.
+
 ## 5. Validating the segmenter
 
 ### Why
