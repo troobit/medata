@@ -40,6 +40,11 @@ mIoU plateaued around 0.34 by epoch 22 of 60. OPT-IN extensions (both default
 to the historical recipe when omitted): ``--loss`` selects a class-imbalance-
 aware loss (see ``loss_config``) and ``--photometric-augment`` adds train-only
 colour/brightness/contrast jitter to the IMAGE (never the mask).
+``--seed`` fixes the Python/torch RNGs, the shuffle order and each DataLoader
+worker's augmentation stream; omitted, the run is unseeded as every run before
+2026-09-26 was. Seeding pins what the trainer controls — MPS kernels are not all
+deterministic, so two same-seed runs measure the residual (the R8/R9 pair).
+``--dice-weight`` sets the dice share of the ``combined`` loss (default 0.5).
 
 NEVER edit this file while a run is live: DataLoader workers are respawned each
 epoch and re-import the script from disk, so they execute NEW code against the
@@ -391,17 +396,56 @@ class FoodSegDataset:
         return canvas, mask_canvas
 
 
+def _seed_everything(seed: int) -> None:
+    """Seed ``random``, numpy (when present) and torch (CPU + MPS + CUDA)."""
+    import random
+
+    torch = _import_torch()
+    random.seed(seed)
+    try:
+        import numpy as np
+        np.random.seed(seed % 2**32)
+    except ImportError:  # numpy is a torch dependency, but stay defensive
+        pass
+    torch.manual_seed(seed)
+
+
+def _seed_worker(worker_id: int) -> None:
+    """DataLoader ``worker_init_fn``: derive each worker's ``random`` stream from
+    the torch base seed (already offset by worker id), so the augmentation draws
+    are reproducible under ``--seed`` and still differ per worker. Module-level
+    so spawn-mode workers can pickle it."""
+    import random
+
+    torch = _import_torch()
+    seed = torch.initial_seed() % 2**32
+    random.seed(seed)
+    try:
+        import numpy as np
+        np.random.seed(seed)
+    except ImportError:
+        pass
+
+
 def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int,
-                 drop_last: bool = False):
+                 drop_last: bool = False, seed: int | None = None):
     _import_torch()  # ensure torch is present before importing its DataLoader
+    import torch
     from torch.utils.data import DataLoader
 
+    extra = {}
+    if seed is not None:
+        # Own generator so the shuffle order depends only on --seed, not on how
+        # many random draws happened before the loader was built.
+        extra["generator"] = torch.Generator().manual_seed(seed)
+        extra["worker_init_fn"] = _seed_worker
     return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
         drop_last=drop_last,
+        **extra,
     )
 
 
@@ -660,6 +704,8 @@ def _load_resume_state(args) -> dict:
         "init_checkpoint": args.init_checkpoint,
         "arch": args.arch,
         "class_weighting": args.class_weighting,
+        "seed": args.seed,
+        "dice_weight": args.dice_weight,
     }
     # Sidecars written before the opt-in loss/photometric/init/arch/weighting
     # flags existed lack these keys; absence means the historical defaults, not
@@ -677,7 +723,9 @@ def _load_resume_state(args) -> dict:
         )
     legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
                        "init_checkpoint": None, "arch": archs.DEFAULT_ARCH,
-                       "class_weighting": loss_config.DEFAULT_WEIGHTING}
+                       "class_weighting": loss_config.DEFAULT_WEIGHTING,
+                       "seed": None,
+                       "dice_weight": loss_config.DEFAULT_DICE_WEIGHT}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -712,6 +760,8 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "init_checkpoint": args.init_checkpoint,
         "arch": args.arch,
         "class_weighting": args.class_weighting,
+        "seed": args.seed,
+        "dice_weight": args.dice_weight,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -725,6 +775,7 @@ def _loss_spec(args) -> dict:
     criterion and the recorded provenance can never disagree on co_lambda or
     the class-weighting scheme)."""
     return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda,
+                                         dice_weight=args.dice_weight,
                                          class_weighting=args.class_weighting)
 
 
@@ -741,6 +792,9 @@ def train(args) -> int:
 
     device = _resolve_device(args.device)
     print(f"[train] device = {device}")
+    if args.seed is not None:
+        _seed_everything(args.seed)
+        print(f"[train] seed = {args.seed}")
 
     loss_spec = _loss_spec(args)
 
@@ -784,7 +838,7 @@ def train(args) -> int:
     # (ASPP's global-pool branch yields [1, C, 1, 1] — one value per channel).
     # Val keeps every sample: eval mode uses running stats, so size-1 is fine.
     train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers,
-                                drop_last=True)
+                                drop_last=True, seed=args.seed)
 
     arch_spec = archs.get(args.arch)
     if resume_state is not None:
@@ -918,6 +972,9 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     recipe_extras = loss_config.loss_train_config(_loss_spec(args))
     if args.photometric_augment:
         recipe_extras["photometric_augment"] = True
+    if args.seed is not None:
+        # Absence means an unseeded run (every run before 2026-09-26).
+        recipe_extras["seed"] = int(args.seed)
     if args.arch != archs.DEFAULT_ARCH:
         # Non-default architecture (snaq-parity Req 5.4): recorded in checkpoint
         # + lineage train_config so run_validation.py and export.py resolve the
@@ -1064,8 +1121,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--photometric-augment", action="store_true",
                         help="Opt-in brightness/contrast/colour jitter on the "
                              "TRAIN images only (never the mask); off by default.")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Seed the Python/torch RNGs, the shuffle order and "
+                             "the per-worker augmentation streams. Omitted = "
+                             "unseeded (the historical runs). Recorded in the "
+                             "checkpoint/lineage train_config and checked by "
+                             "the resume drift-check. Does not make MPS "
+                             "kernels deterministic; it pins what the trainer "
+                             "controls.")
+    parser.add_argument("--dice-weight", type=float,
+                        default=loss_config.DEFAULT_DICE_WEIGHT,
+                        help="Dice share of the combined loss: total = w * dice "
+                             "+ (1 - w) * ce. Only read by --loss combined; "
+                             "recorded in lineage as dice_weight.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
+
+    if not 0.0 <= args.dice_weight <= 1.0:
+        parser.error("--dice-weight must be within [0, 1]")
 
     if args.init_checkpoint and args.no_pretrained:
         parser.error(
