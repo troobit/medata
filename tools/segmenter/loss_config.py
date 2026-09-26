@@ -22,6 +22,10 @@ torch-free pattern of ``lineage.py`` / ``validation.py``). Everything here is:
     derivation for the ``--class-weighting`` scheme. Pure arithmetic; no torch
     tensor is constructed here — ``train.py`` wraps the returned list in a
     ``torch.tensor`` on the training device.
+  - ``repeat_factors(present, num_classes, threshold)`` — LVIS repeat-factor
+    sampling weights for ``--repeat-factor-threshold`` (research note §4.4),
+    from per-image present-class sets; ``train.py`` feeds them to a
+    ``WeightedRandomSampler``.
 
 CLASS-WEIGHTING SCHEMES (snaq-parity Req 6.3, Decision 13): inverse-frequency
 weighting was attributed as the staple-regression cause (segmenter-foundation
@@ -46,7 +50,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 # The CLI --loss choices. "ce" is the historical default (plain unweighted
 # cross-entropy); the rest are the class-imbalance-aware options.
@@ -310,6 +314,51 @@ def class_weights(
         1.0 if c in pinned else _clamp(raw[c] / mean_kept)
         for c in range(num_classes)
     ]
+
+
+# ── Repeat-factor sampling (research note §4.4) — pure, torch-free ──────────────
+
+def class_image_frequencies(
+    present: Sequence[Iterable[int]], num_classes: int,
+) -> list[float]:
+    """Fraction of images containing each class, from per-image present-class
+    sets (one entry per train image; a class counted once per image however
+    many pixels it covers). Zero for classes absent from every image."""
+    n = len(present)
+    counts = [0] * num_classes
+    for classes in present:
+        for c in set(classes):
+            counts[c] += 1
+    return [count / n if n else 0.0 for count in counts]
+
+
+def repeat_factors(
+    present: Sequence[Iterable[int]],
+    num_classes: int,
+    threshold: float,
+    *,
+    exclude: Sequence[int] = (),
+) -> list[float]:
+    """LVIS repeat factor per image (Gupta et al. 2019): ``r_i = max(1,
+    max_c sqrt(t / f_c))`` over the classes present in image ``i``, where
+    ``f_c`` is the image frequency of class ``c``. An image whose rarest class
+    appears in fewer than the fraction ``t`` of images is oversampled by the
+    square root of the shortfall; every other image keeps weight 1.
+    ``exclude`` (the background channel) never drives the max — it is in every
+    image and would only ever contribute 1. The result feeds a
+    ``WeightedRandomSampler`` in ``train.py`` as its weight vector."""
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError("repeat-factor threshold must be within (0, 1]")
+    freq = class_image_frequencies(present, num_classes)
+    skip = set(exclude)
+    factors = []
+    for classes in present:
+        r = 1.0
+        for c in set(classes):
+            if c not in skip and freq[c] > 0:
+                r = max(r, math.sqrt(threshold / freq[c]))
+        factors.append(r)
+    return factors
 
 
 # ── Co-occurrence loss helpers (design §4.3) — pure, torch-free ─────────────────

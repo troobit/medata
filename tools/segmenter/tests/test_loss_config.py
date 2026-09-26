@@ -7,11 +7,12 @@ cross-entropy byte-for-byte in the recorded train_config, and the opt-in losses
 record enough in provenance to reproduce a run from lineage alone.
 """
 
+import math
+
 import pytest
 
 import loss_config
 import train  # torch-free import: heavy deps are lazy, loss_config is pure
-
 
 # ── Loss-name normalisation / selection ─────────────────────────────────────────
 
@@ -124,3 +125,51 @@ def test_train_help_lists_the_opt_in_flags(capsys):
     out = capsys.readouterr().out
     assert "--loss" in out
     assert "--photometric-augment" in out
+
+
+# ── Repeat-factor sampling (research note §4.4, task 15) ────────────────────────
+
+# Four images over a 4-class palette with background at index 3: class 0 in
+# every image, class 1 in half, class 2 in one image. Background is in all.
+PRESENT = [[0, 3], [0, 1, 3], [0, 3], [0, 1, 2, 3]]
+
+
+def test_class_image_frequencies_count_each_class_once_per_image():
+    assert loss_config.class_image_frequencies(PRESENT, 4) == [1.0, 0.5, 0.25, 1.0]
+    # A class repeated within one image's list still counts once.
+    assert loss_config.class_image_frequencies([[1, 1]], 2) == [0.0, 1.0]
+
+
+def test_repeat_factor_is_max_over_present_classes_of_sqrt_t_over_f():
+    factors = loss_config.repeat_factors(PRESENT, 4, 0.5, exclude=(3,))
+    # Image 0: f=1 → 1. Image 1: sqrt(0.5/0.5) = 1. Image 3: sqrt(0.5/0.25).
+    assert factors == pytest.approx([1.0, 1.0, 1.0, math.sqrt(2.0)])
+
+
+def test_threshold_at_or_below_every_frequency_gives_all_ones():
+    assert loss_config.repeat_factors(PRESENT, 4, 0.25, exclude=(3,)) == [1.0] * 4
+
+
+def test_background_never_drives_the_repeat_factor():
+    # Only background in image 0 and only a rare class in image 1: without the
+    # exclusion the rare image would still win, but with background as the
+    # rarest "class" it must not be boosted.
+    present = [[3], [3], [3], [0, 3]]
+    assert loss_config.repeat_factors(present, 4, 0.5, exclude=(3,)) == \
+        pytest.approx([1.0, 1.0, 1.0, math.sqrt(2.0)])
+    present = [[0], [0], [0], [0, 3]]
+    assert loss_config.repeat_factors(present, 4, 0.5, exclude=(3,)) == [1.0] * 4
+
+
+def test_repeat_factor_threshold_must_be_in_unit_interval():
+    with pytest.raises(ValueError, match="threshold"):
+        loss_config.repeat_factors(PRESENT, 4, 0.0)
+    with pytest.raises(ValueError, match="threshold"):
+        loss_config.repeat_factors(PRESENT, 4, 1.5)
+
+
+def test_train_cli_rejects_out_of_range_repeat_factor_threshold(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(["--repeat-factor-threshold", "2"])
+    assert excinfo.value.code == 2
+    assert "--repeat-factor-threshold" in capsys.readouterr().err

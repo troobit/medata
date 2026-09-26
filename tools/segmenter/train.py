@@ -45,6 +45,13 @@ worker's augmentation stream; omitted, the run is unseeded as every run before
 2026-09-26 was. Seeding pins what the trainer controls — MPS kernels are not all
 deterministic, so two same-seed runs measure the residual (the R8/R9 pair).
 ``--dice-weight`` sets the dice share of the ``combined`` loss (default 0.5).
+``--repeat-factor-threshold T`` turns on LVIS repeat-factor sampling (research
+note §4.4): each train image is drawn with weight ``max(1, max_c sqrt(T / f_c))``
+over the food classes it contains, ``f_c`` being the fraction of train images
+with class c, so images holding a class rarer than ``T`` are seen more often per
+epoch; omitted, every image is drawn once per epoch as every run before
+2026-09-26 was. The per-image class presence comes from one scan of the train
+masks, cached as JSON under ``tools/segmenter/build/class_presence/``.
 
 NEVER edit this file while a run is live: DataLoader workers are respawned each
 epoch and re-import the script from disk, so they execute NEW code against the
@@ -62,9 +69,12 @@ device pre-processor.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 # Pure, torch-free loss selection + class-weight derivation. Safe to import at
@@ -111,6 +121,11 @@ _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG")
 # range per sample. Mild by design — the goal is robustness to kitchen
 # lighting, not a new colour distribution.
 PHOTOMETRIC_JITTER_RANGE = (0.8, 1.2)
+
+# Cache of per-image present-class sets for --repeat-factor-threshold, keyed by
+# train split path + image count so a second run skips the 45k-mask scan and a
+# changed split (count mismatch) is rescanned. Gitignored with the rest of build/.
+PRESENCE_CACHE_DIR = Path(__file__).resolve().parent / "build" / "class_presence"
 
 
 def _photometric_jitter(img):
@@ -428,17 +443,31 @@ def _seed_worker(worker_id: int) -> None:
 
 
 def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int,
-                 drop_last: bool = False, seed: int | None = None):
+                 drop_last: bool = False, seed: int | None = None,
+                 sample_weights: list[float] | None = None):
+    """``sample_weights`` (the repeat factors) replaces the shuffle with a
+    ``WeightedRandomSampler`` drawing ``len(dataset)`` indices with replacement
+    per epoch; it shares the per-seed generator so the draw is pinned by
+    ``--seed`` alongside the worker streams. Sampler and ``shuffle=True`` are
+    mutually exclusive in DataLoader, hence the explicit ``shuffle=False``."""
     _import_torch()  # ensure torch is present before importing its DataLoader
     import torch
-    from torch.utils.data import DataLoader
+    from torch.utils.data import DataLoader, WeightedRandomSampler
 
     extra = {}
+    generator = None
     if seed is not None:
         # Own generator so the shuffle order depends only on --seed, not on how
         # many random draws happened before the loader was built.
-        extra["generator"] = torch.Generator().manual_seed(seed)
+        generator = torch.Generator().manual_seed(seed)
+        extra["generator"] = generator
         extra["worker_init_fn"] = _seed_worker
+    if sample_weights is not None:
+        extra["sampler"] = WeightedRandomSampler(
+            sample_weights, num_samples=len(dataset), replacement=True,
+            generator=generator,
+        )
+        shuffle = False
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -485,6 +514,47 @@ def _train_pixel_counts(dataset: FoodSegDataset, num_classes: int) -> list[int]:
             )
         total += counts
     return total.tolist()
+
+
+def _train_class_presence(dataset: FoodSegDataset) -> list[list[int]]:
+    """Per-image sorted lists of the class ids present in each train mask (the
+    input to ``loss_config.repeat_factors``), scanning only the pairs the
+    dataset will use (so ``--limit`` caps the scan too).
+
+    Cached under ``PRESENCE_CACHE_DIR`` as ``<split-hash>_<count>.json``: the
+    file name carries the split path and the pair count, so a second run reads
+    one small JSON instead of every mask and a changed split lands in a
+    different file. A file that does not parse is rebuilt.
+    """
+    import numpy as np
+
+    Image = _import_pillow()
+    split_dir = str(dataset.pairs[0][1].resolve().parent.parent)
+    key = hashlib.sha256(split_dir.encode("utf-8")).hexdigest()[:12]
+    cache = PRESENCE_CACHE_DIR / f"{key}_{len(dataset)}.json"
+    if cache.is_file():
+        try:
+            cached = json.loads(cache.read_text(encoding="utf-8"))
+            if cached.get("split_dir") == split_dir and len(cached["present"]) == len(dataset):
+                print(f"[train] class presence from cache {cache}")
+                return cached["present"]
+        except (ValueError, KeyError, TypeError):
+            pass  # torn or foreign file — rescan below
+
+    started = time.monotonic()
+    present = []
+    for _, mask_path in dataset.pairs:
+        arr = np.asarray(Image.open(mask_path))
+        if arr.ndim == 3:  # defensive: collapse an accidental RGB mask
+            arr = arr[..., 0]
+        present.append([int(c) for c in np.unique(arr)])
+    print(f"[train] scanned {len(present)} train masks for class presence "
+          f"in {time.monotonic() - started:.1f}s")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cache.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"split_dir": split_dir, "present": present}), encoding="utf-8")
+    os.replace(tmp, cache)
+    return present
 
 
 def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
@@ -706,6 +776,7 @@ def _load_resume_state(args) -> dict:
         "class_weighting": args.class_weighting,
         "seed": args.seed,
         "dice_weight": args.dice_weight,
+        "repeat_factor_threshold": args.repeat_factor_threshold,
     }
     # Sidecars written before the opt-in loss/photometric/init/arch/weighting
     # flags existed lack these keys; absence means the historical defaults, not
@@ -725,7 +796,8 @@ def _load_resume_state(args) -> dict:
                        "init_checkpoint": None, "arch": archs.DEFAULT_ARCH,
                        "class_weighting": loss_config.DEFAULT_WEIGHTING,
                        "seed": None,
-                       "dice_weight": loss_config.DEFAULT_DICE_WEIGHT}
+                       "dice_weight": loss_config.DEFAULT_DICE_WEIGHT,
+                       "repeat_factor_threshold": None}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -762,6 +834,7 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "class_weighting": args.class_weighting,
         "seed": args.seed,
         "dice_weight": args.dice_weight,
+        "repeat_factor_threshold": args.repeat_factor_threshold,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -834,11 +907,24 @@ def train(args) -> int:
     else:
         print("[train] no val split found; skipping mIoU eval")
 
+    sample_weights = None
+    if args.repeat_factor_threshold is not None:
+        present = _train_class_presence(train_ds)
+        sample_weights = loss_config.repeat_factors(
+            present, args.num_classes, args.repeat_factor_threshold,
+            exclude=(PALETTE_BACKGROUND,),
+        )
+        boosted = sum(1 for r in sample_weights if r > 1.0)
+        print(f"[train] repeat-factor sampling: threshold {args.repeat_factor_threshold}, "
+              f"{boosted}/{len(sample_weights)} images with r > 1, "
+              f"max r = {max(sample_weights):.2f}")
+
     # drop_last: a trailing batch of size 1 crashes BatchNorm in train mode
     # (ASPP's global-pool branch yields [1, C, 1, 1] — one value per channel).
     # Val keeps every sample: eval mode uses running stats, so size-1 is fine.
     train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers,
-                                drop_last=True, seed=args.seed)
+                                drop_last=True, seed=args.seed,
+                                sample_weights=sample_weights)
 
     arch_spec = archs.get(args.arch)
     if resume_state is not None:
@@ -975,6 +1061,9 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     if args.seed is not None:
         # Absence means an unseeded run (every run before 2026-09-26).
         recipe_extras["seed"] = int(args.seed)
+    if args.repeat_factor_threshold is not None:
+        # Absence means plain once-per-epoch shuffling (every run before 2026-09-26).
+        recipe_extras["repeat_factor_threshold"] = float(args.repeat_factor_threshold)
     if args.arch != archs.DEFAULT_ARCH:
         # Non-default architecture (snaq-parity Req 5.4): recorded in checkpoint
         # + lineage train_config so run_validation.py and export.py resolve the
@@ -1134,11 +1223,25 @@ def main(argv: list[str] | None = None) -> int:
                         help="Dice share of the combined loss: total = w * dice "
                              "+ (1 - w) * ce. Only read by --loss combined; "
                              "recorded in lineage as dice_weight.")
+    parser.add_argument("--repeat-factor-threshold", type=float, default=None,
+                        metavar="T",
+                        help="Opt-in LVIS repeat-factor sampling (research "
+                             "note 4.4): each train image is drawn with weight "
+                             "max(1, max_c sqrt(T / f_c)) over its food "
+                             "classes, f_c the fraction of train images "
+                             "containing class c. Omitted = every image once "
+                             "per epoch. Recorded in the checkpoint/lineage "
+                             "train_config and checked by the resume "
+                             "drift-check.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
 
     if not 0.0 <= args.dice_weight <= 1.0:
         parser.error("--dice-weight must be within [0, 1]")
+
+    if (args.repeat_factor_threshold is not None
+            and not 0.0 < args.repeat_factor_threshold <= 1.0):
+        parser.error("--repeat-factor-threshold must be within (0, 1]")
 
     if args.init_checkpoint and args.no_pretrained:
         parser.error(

@@ -566,6 +566,19 @@ Multi-hour runs go through the serial queue rather than hand-launched
 Mechanics, the pause window for trainer edits and the reading rules are in
 `docs/agent-notes/segmenter-run-queue.md`.
 
+### Repeat-factor sampling (2026-09-26)
+
+`--repeat-factor-threshold T` turns on LVIS repeat-factor sampling (research
+note §4.4): each train image is drawn with weight `max(1, max_c sqrt(T / f_c))`
+over the food classes it contains, `f_c` being the fraction of train images
+holding class c, so images with a class rarer than `T` are seen more often per
+epoch while the epoch length stays `len(train)`. The per-image class presence
+comes from one scan of the train masks, cached under
+`tools/segmenter/build/class_presence/` and keyed by split path and image
+count. Omitted, sampling is the plain once-per-epoch shuffle; the value lands
+in lineage `train_config.repeat_factor_threshold` and is checked by the resume
+drift-check.
+
 ## 5. Validating the segmenter
 
 ### Why

@@ -87,7 +87,8 @@ def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
                 "num_classes", "target_size", "epochs", "lr", "lr_schedule",
                 "augment", "pretrained", "arch", "loss", "weighting",
                 "focal_gamma", "dice_weight", "co_lambda", "co_pooling",
-                "photometric_augment", "init_checkpoint", "seed"
+                "photometric_augment", "init_checkpoint", "seed",
+                "repeat_factor_threshold",
             ) if k in raw
         }
     manifest = lineage.build_lineage(
