@@ -329,15 +329,23 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         // `edgeBand` value here means the first plane was kept.
         public let refitReference: String?
         public let refitRefused: Bool
+        // true on the two-view branch, where growth is a plane-fitting
+        // instrument only and the carve silhouette stays the segmenter's
+        // (two-view-trust Decision 10); false on the single-view branch,
+        // which integrates over the grown map. Absent on rows written before
+        // the field existed (all single-view growth).
+        public let planeOnly: Bool?
 
         public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
-                    foodPixelsAfter: Int, refitReference: String?, refitRefused: Bool) {
+                    foodPixelsAfter: Int, refitReference: String?, refitRefused: Bool,
+                    planeOnly: Bool? = nil) {
             self.applied = applied
             self.capTripped = capTripped
             self.foodPixelsBefore = foodPixelsBefore
             self.foodPixelsAfter = foodPixelsAfter
             self.refitReference = refitReference
             self.refitRefused = refitRefused
+            self.planeOnly = planeOnly
         }
     }
 

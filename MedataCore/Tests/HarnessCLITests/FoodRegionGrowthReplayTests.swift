@@ -80,6 +80,115 @@ struct FoodRegionGrowthReplayTests {
         #expect(vGrown > 8 && vGrown < 12, "grown volume \(vGrown) cm³")
         #expect(vGrown > vUngrown * 2, "ungrown volume \(vUngrown) cm³")
     }
+
+    // MARK: - two-view (Decision 10)
+
+    // The same disc with a pre-shutter mask covering the whole PLATE, so the
+    // first fit's bands fall on the table and the plane sits 20 mm under the
+    // food's support; the grown disc refits on the plate. Colour-grid mask, as
+    // the device records it.
+    static func plateMasked(_ fx: PbMealFixture) -> PbMealFixture {
+        var fx = fx
+        let w = ParityScene.colourWidth, h = ParityScene.colourHeight
+        fx.preShutterMask = Data(ParityScene.colourMask(
+            ParityScene.grid { x, y in (0, ParityScene.radius(x, y) <= 28) }).pixels)
+        fx.preShutterMaskWidth = Int32(w)
+        fx.preShutterMaskHeight = Int32(h)
+        return fx
+    }
+
+    // An oblique camera orbited `tiltDeg` about +X through the seed's centre
+    // (T(F)·R_x(−θ)·T(−F), as CarveResidualAuditTests builds it), and the
+    // seed cylinder's exact silhouette in that view: the segmenter saw the
+    // seed in both photos, nothing more. Seed radius 6 depth cells is
+    // 6 · z / 175 mm at depth z (2 mm per cell at the 350 mm table).
+    static func twoViewFixture(seedRadius: Float, tiltDeg: Float) -> PbMealFixture {
+        var fx = plateMasked(fixture(seedRadius: seedRadius))
+        fx.fixtureID = "growth-replay-two-view"
+        fx.capturePathCanonical = "two_view_sfs"
+        let plateTop: Float = -(ParityScene.tableDepthMm - 20)   // −330
+        let discTop: Float = plateTop + 8                          // −322
+        let f = (plateTop + discTop) / 2
+        let t = tiltDeg * .pi / 180
+        let c = cos(t), s = sin(t)
+        let t1to2 = Mat4(columns: [[1, 0, 0, 0], [0, c, -s, 0], [0, s, c, 0],
+                                   [0, -(s * f), f - (c * f), 1]])
+        let k = ParityScene.colourIntrinsics
+        var points: [SIMD2<Float>] = []
+        for i in 0..<48 {
+            let a = Float(i) * 2 * .pi / 48
+            for z in [plateTop, discTop] {
+                let r = seedRadius * -z / 175
+                let p = Vec3(r * cos(a), r * sin(a), z)
+                if let q = CarveResidualAudit.project(k, CarveResidualAudit.apply(t1to2, p)) {
+                    points.append(q)
+                }
+            }
+        }
+        let mask = CarveResidualAudit.polygonMask(
+            CarveResidualAudit.convexHull(points), width: k.imageWidth, height: k.imageHeight)
+        let classes = palette.totalClasses
+        var values = [Float](repeating: 0, count: k.imageWidth * k.imageHeight * classes)
+        var argmax = [UInt8](repeating: UInt8(palette.background), count: k.imageWidth * k.imageHeight)
+        for p in 0..<(k.imageWidth * k.imageHeight) {
+            let food = mask.pixels[p] != 0
+            argmax[p] = food ? 0 : UInt8(palette.background)
+            values[p * classes + (food ? 0 : palette.background)] = 0.9
+        }
+        fx.obliqueIntrinsics = k.pb
+        fx.obliqueProbs = FP16Bytes.encode(values)
+        fx.obliqueArgmax = Data(argmax)
+        fx.t1To2 = t1to2.pb
+        return fx
+    }
+
+    @Test("the two-view replay adopts the grown region's plane, plane only, and carves less from it")
+    func twoViewRefitsThePlaneOnly() throws {
+        let fx = Self.twoViewFixture(seedRadius: Self.seedRadiusCells, tiltDeg: 15)
+        let refitted = try FixtureRunner.run(
+            fixture: fx, palette: Self.palette, database: EmptyDB(),
+            regularisation: .disabled, growth: .standard)
+        let held = try FixtureRunner.run(
+            fixture: fx, palette: Self.palette, database: EmptyDB(),
+            regularisation: .disabled, growth: .disabled)
+        #expect(refitted.capturePath == .twoViewSfS)
+        #expect(held.regionGrowth?.applied == false)
+        let g = try #require(refitted.regionGrowth)
+        #expect(g.applied)
+        #expect(g.refitReference == .foodSupport)
+        #expect(refitted.supportPlaneReference == .foodSupport)
+        let vRefit = try #require(refitted.perClassVolumesCm3["food_0"])
+        let vHeld = try #require(held.perClassVolumesCm3["food_0"])
+        // The plane rose to the plate, so the carve lost the slab of hull the
+        // first plane put under the seed.
+        #expect(held.supportPlaneResidualMm != refitted.supportPlaneResidualMm)
+        #expect(vRefit < vHeld, "refit \(vRefit) cm³ against held \(vHeld) cm³")
+        // Plane only: the silhouette stayed the seed's. Labelling the whole
+        // disc in both views carves the disc's own footprint, ~2.8× the seed's.
+        let disc = try FixtureRunner.run(
+            fixture: Self.twoViewFixture(seedRadius: Self.foodRadiusCells, tiltDeg: 15),
+            palette: Self.palette, database: EmptyDB(),
+            regularisation: .disabled, growth: .standard)
+        let vDisc = try #require(disc.perClassVolumesCm3["food_0"])
+        #expect(vRefit < vDisc * 0.6, "refit \(vRefit) cm³ against disc \(vDisc) cm³")
+    }
+
+    @Test("both branches adopt the same plane from the same nadir inputs")
+    func twoViewPlaneMatchesTheSingleViewPlane() throws {
+        let single = try FixtureRunner.run(
+            fixture: Self.plateMasked(Self.fixture(seedRadius: Self.seedRadiusCells)),
+            palette: Self.palette, database: EmptyDB(),
+            regularisation: .disabled, growth: .standard)
+        let twoView = try FixtureRunner.run(
+            fixture: Self.twoViewFixture(seedRadius: Self.seedRadiusCells, tiltDeg: 15),
+            palette: Self.palette, database: EmptyDB(),
+            regularisation: .disabled, growth: .standard)
+        #expect(single.supportPlaneReference == .foodSupport)
+        #expect(single.supportPlaneReference == twoView.supportPlaneReference)
+        #expect(single.supportPlaneResidualMm == twoView.supportPlaneResidualMm)
+        #expect(single.regionGrowth?.refitReference == twoView.regionGrowth?.refitReference)
+        #expect(single.regionGrowth?.foodPixelsAfter == twoView.regionGrowth?.foodPixelsAfter)
+    }
 }
 
 private struct EmptyDB: FoodDatabase {
