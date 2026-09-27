@@ -66,6 +66,12 @@ def special_channel_names() -> tuple[str, ...]:
     return tuple(_mapping()["special_channels"].keys())
 
 
+def special_channel_indices() -> tuple[int, ...]:
+    """Channel indices of the non-food channels — the ``non_food`` set the
+    class-agnostic mask metrics exclude (mask_quality.py)."""
+    return tuple(int(i) for i in _mapping()["special_channels"].values())
+
+
 def food_class_names() -> tuple[str, ...]:
     """The 33 food-class names in palette/index order (the 36-channel palette
     minus the 3 special channels)."""
@@ -255,5 +261,19 @@ def update_lineage_file(
     path = Path(lineage_path)
     lineage = json.loads(path.read_text())
     record_metrics_into_lineage(lineage, per_class_iou)
+    path.write_text(json.dumps(lineage, indent=2, sort_keys=True) + "\n")
+    return lineage
+
+
+def update_lineage_mask_quality(
+    block: Mapping[str, Any], lineage_path: str | Path
+) -> dict[str, Any]:
+    """Record the class-agnostic mask metrics (MD-29; ``mask_quality.lineage_block``)
+    under ``metrics.mask_quality`` without touching the class metrics or the
+    gate verdict — so an old checkpoint can be re-scored in place. Record only:
+    no bar reads this block yet."""
+    path = Path(lineage_path)
+    lineage = json.loads(path.read_text())
+    lineage.setdefault("metrics", empty_metrics())["mask_quality"] = dict(block)
     path.write_text(json.dumps(lineage, indent=2, sort_keys=True) + "\n")
     return lineage
