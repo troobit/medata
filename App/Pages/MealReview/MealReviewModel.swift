@@ -104,10 +104,25 @@ final class MealReviewModel {
     private(set) var foods: [ReviewFood]        // order fixed at init (Req 6.10)
     private(set) var selected: String?
     private(set) var scale: PlateFraction = .all
-    // The food whose relabel alternatives are open, and its recency shortlist
-    // (Req 3.1, Decision 18). Loaded by openAlternatives.
+    // The food whose relabel alternatives are open, and its shortlist
+    // (Req 3.1, Decision 18). Set by openAlternatives from the prepared cache.
     private(set) var alternativesFor: String?
     private(set) var shortlist: [FoodCandidate] = []
+    // The section header the sheet shows over `shortlist`: "Recent" only when
+    // the pure recency ordering produced at least one entry, "Suggested"
+    // otherwise (review-swap-loop). The blind top-up and candidate-evidence
+    // fills are not things the user chose, so they are never called recent.
+    private(set) var shortlistHeader = ""
+    // One shortlist per row, built during start() so the sheet opens populated
+    // instead of reflowing when the recency read lands (review-swap-loop).
+    private var preparedShortlists: [String: PreparedShortlist] = [:]
+
+    private struct PreparedShortlist {
+        let candidates: [FoodCandidate]
+        let fromRecency: Bool
+
+        var header: String { fromRecency ? "Recent" : "Suggested" }
+    }
     // The accepted ID-1 card's nadir quadrilateral, TL TR BR BL in nadir image
     // pixels (two-view-trust Req 4.2, task 12). Read off this meal's outcome
     // row; nil whenever no card was picked, so the review draws nothing extra.
@@ -242,6 +257,9 @@ final class MealReviewModel {
     // side (Req 9.2). Existing corrected state is adopted so a back-gesture
     // re-push does not clear a correction already made.
     func start() async {
+        // First, before the outcome lookup's possible 500 ms retry: the
+        // shortlists need only the database and one recency read per row.
+        await prepareShortlists()
         await resolveOutcomeID()
         let initial = foods.map { food -> PbCorrectionRecord in
             var seeded = food
@@ -283,11 +301,21 @@ final class MealReviewModel {
         selected = (selected == classId) ? nil : classId
     }
 
-    // Opens the relabel picker and arms the abandonment signal (Req 9.5).
+    // Opens the relabel picker and arms the abandonment signal (Req 9.5). The
+    // prepared shortlist is set before the sheet is presented; the lazy build
+    // remains for a row start() has not reached.
     func openAlternatives(for classId: String) async {
+        let prepared: PreparedShortlist
+        if let cached = preparedShortlists[classId] {
+            prepared = cached
+        } else {
+            prepared = await buildShortlist(for: classId)
+            preparedShortlists[classId] = prepared
+        }
+        shortlist = prepared.candidates
+        shortlistHeader = prepared.header
         alternativesFor = classId
         pickerFoodChanged = false
-        shortlist = await buildShortlist(for: classId)
     }
 
     // Writes picker_opened_unchanged when the picker closes with nothing
@@ -297,6 +325,7 @@ final class MealReviewModel {
         defer {
             alternativesFor = nil
             shortlist = []
+            shortlistHeader = ""
         }
         guard let classId = alternativesFor, !pickerFoodChanged,
               let index = index(of: classId) else { return }
@@ -779,23 +808,32 @@ final class MealReviewModel {
     // MARK: - Shortlist (Req 3.1, 3.2 — Decision 18 recency ordering,
     // alternative-class-candidates Req 7 combined ordering)
 
-    private func buildShortlist(for classId: String) async -> [FoodCandidate] {
+    private func prepareShortlists() async {
+        for food in foods {
+            preparedShortlists[food.classId] = await buildShortlist(for: food.classId)
+        }
+    }
+
+    private func buildShortlist(for classId: String) async -> PreparedShortlist {
         let eligible = eligibleFoods(for: classId)
         let eligibleIds = Dictionary(uniqueKeysWithValues: eligible.map { ($0.classId, $0) })
-        let recents = (try? await store.recentCorrectedClassIds(
+        let recents = ((try? await store.recentCorrectedClassIds(
             forPredictedClass: classId, limit: Self.shortlistLimit
-        )) ?? []
+        )) ?? []).filter { eligibleIds[$0] != nil }
         // ShortlistOrdering takes already-eligible ids: eligibility and the
         // solid/liquid boundary stay here, exactly as shipped (Req 7.8, 7.9).
         // With no evidence the fills layer is empty and the result is the
         // recency + top-up list `ui/meal-review` shipped (Req 7.4).
         let ordered = ShortlistOrdering.combined(
-            recency: recents.filter { eligibleIds[$0] != nil },
+            recency: recents,
             candidates: candidateFills(for: classId).filter { eligibleIds[$0] != nil },
             topUp: eligible.map(\.classId),
             limit: Self.shortlistLimit
         )
-        return ordered.compactMap { eligibleIds[$0] }
+        return PreparedShortlist(
+            candidates: ordered.compactMap { eligibleIds[$0] },
+            fromRecency: shortlistSource == ShortlistOrdering.recencySource && !recents.isEmpty
+        )
     }
 
     // Evidence-ranked alternatives for a detected food, read only where the

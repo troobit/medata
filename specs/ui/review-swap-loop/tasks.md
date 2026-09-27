@@ -8,13 +8,13 @@ references:
 - [x] 1. Spec: smolspec and this task file <!-- id:ki67gke -->
   - Stream: 1
 
-- [ ] 2. Attempt 1 model: prepared shortlists, honest header, keep path <!-- id:ki67gkf -->
+- [x] 2. Attempt 1 model: prepared shortlists, honest header, keep path <!-- id:ki67gkf -->
   - Stream: 1
 
-- [ ] 3. Attempt 1 sheet: reorder, searchable, Keep row, refused line <!-- id:ki67gkg -->
+- [x] 3. Attempt 1 sheet: reorder, searchable, Keep row, refused line <!-- id:ki67gkg -->
   - Stream: 1
 
-- [ ] 4. Attempt 1 verify: build, spell, commit, tag review-swap-attempt-1 <!-- id:ki67gkh -->
+- [x] 4. Attempt 1 verify: build, spell, commit, tag review-swap-attempt-1 <!-- id:ki67gkh -->
   - Stream: 1
 
 - [ ] 5. Attempt 2 switch: Inline food chips in DeveloperFlags and Settings <!-- id:ki67gki -->
