@@ -1246,3 +1246,69 @@ non-defects and builds throwaway crutches that hide the real bug.
 - **Negative:** Requires Release measurement and on-device captures before diagnosis.
 
 ---
+
+## MD-29: Volume and the swap-and-record loop outrank segmenter class accuracy
+
+**Status**: accepted
+**Sources**: developer direction 2026-09-27; two-view-trust D8, D9; estimation-quality tasks 11–15 (R6–R9 readings); alternative-class-candidates; unknown-food-nameable
+
+### Context
+
+Through September the estimation work concentrated on the segmenter's class accuracy: five
+training runs (R3–R9) moved the leak-free anchor mean between 0.40 and 0.43 against a 0.48 bar,
+and the R7/R9 repeats showed single-class scores swinging by up to 0.45 between identical
+runs. Meanwhile the two-view carve reads two to three times the single-view volume, the corpus
+holds three weighed plates, and the review screen already lets the user pick the food from a
+ranked list when the model is wrong.
+
+### Decision
+
+A wrong class is not a blocker; a wrong volume is. Priority order for estimation work is now:
+(1) volume correctness on the two-view and LiDAR paths, (2) the review screen's swap-a-food and
+record loop, made fast enough that a wrong class costs the user one or two taps, (3) the
+segmenter, re-scoped from "predict the right class" to "produce clean, coherent food masks
+with a good ranked shortlist", where mask quality is measured class-agnostically. Training
+runs on the current recipe continue only while they answer a measurement question; the serial
+queue stops after R10 (which completes the run-to-run noise measurement), and the next
+model effort is research first: whether a newer on-device model (no network) gives better masks,
+or a metric-depth height prior for the non-LiDAR volume path, inside the budget (≤ 24 MiB FP16,
+ANE-resident, ≤ 250 ms per view). Volume may be the more tangible target for a newer model.
+
+### Rationale
+
+Effectiveness. The class error is recoverable by the user at the cost of a tap; the volume
+error is not recoverable at all, and it is the number the carb reading is built on. The
+recipe experiments have plateaued inside their own noise, so machine time spent on R11–R14
+buys attribution, not accuracy. A model whose masks are right regardless of class serves the
+new loop directly: the region and its volume stay correct while the user fixes the label.
+
+### Alternatives Considered
+
+- **Keep running the recipe queue to completion (R11–R14)**: answers photometric attribution,
+  dice share, schedule length and rare-class sampling. Rejected as the priority use of the
+  machine: each is a ≤ 0.03 lever on a metric that no longer gates the product; the entries
+  stay in the queue and can be resumed if a specific question becomes load-bearing.
+- **Treat class accuracy as the gate and defer the swap UX**: the original PRD position.
+  Rejected because the user is a better classifier than the model will be for a long time,
+  and the swap already exists; making it fast is cheaper than any training run.
+- **Replace the segmenter with a large promptable model now**: rejected until the spike shows
+  it fits the on-device budget and the ANE (SegFormer-B0 failed on accuracy, not budget;
+  transformer attention has historically fallen off the ANE).
+
+### Consequences
+
+**Positive:**
+- Work goes to the number that cannot be fixed by the user.
+- The segmenter's acceptance measure becomes one the product needs: mask IoU regardless of
+  class, plus shortlist hit rate.
+- The review loop gets a measurable target: taps from review to a recorded meal with the
+  right food.
+
+**Negative:**
+- The 0.48 class-mean bar (segmenter-foundation D5) stops being the gate without a replacement
+  bar yet; the spike must propose one.
+- R11–R14 remain unanswered; the queue is stopped, not deleted.
+- Weighed truth is still the bottleneck for every volume verdict and needs a sitting with a
+  kitchen scale before the plane-refit change can be judged on device.
+
+---
