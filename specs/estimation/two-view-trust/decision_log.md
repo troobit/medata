@@ -642,3 +642,173 @@ refit sees the reconciled map, as on device), `HarnessCore/CarveResidualAudit.sw
 `docs/agent-notes/two-view-geometry-audit.md` §7 (c).
 
 ---
+
+## Decision 11: A per-class height cap bounds the carve where no height is measured
+
+**Date**: 2026-09-27
+
+**Status**: accepted
+
+### Context
+
+Decision 8 measured where the non-LiDAR two-view error lives: two silhouette
+cones at the tilts the aim guide allows never close over a low food, so the
+voxel grid's vertical extent is not a safety cap on the carve, it is the
+answer. With nadir depth the grid is sized to the measured food height
+(task 16); without it the shipped 120 mm constant stands and a bread roll
+reads 2.5x. Decision 8 rejected a height-from-footprint prior as the first
+move because its error was unbounded, and asked for a height bound before a
+no-depth two-view number could be called a measurement.
+
+`docs/research/on-device-models-2026-09.md` ("Job B") found no monocular
+depth model whose absolute error at 20–60 cm is small beside a 2–5 cm food
+height, and ranked a class height prior first: zero bytes, deterministic,
+offline. `tools/metafood3d/HEIGHT_PRIORS.md` then measured every MetaFood3D
+mesh seated on its support plane and read the result plainly: a P90 cap
+bites the Decision 8 sweep by about 18 % and does not solve it, because the
+bread category spans a 17 mm slice, a 32 mm roll and a 104 mm loaf and the
+palette does not carry form. The five §7 audit bundles are all rolls; their
+LiDAR maxima run 30–51 mm against a class P50 of 31.6, so a P50 cap would
+clip three of them.
+
+### Decision
+
+The voxel carve takes a per-class height cap, `ClassHeightPriors`, from the
+bundled `height_priors.json` (a byte-identical copy of the MetaFood3D
+output): `cap = class max-height P90 + the shipped 5 mm margin`, and the
+global P90 (71.8 mm) plus the margin for a class with no meshes or fewer
+than four, `unknown_food` included. The cap is the loosest of the caps of the
+carvable classes the reconciled nadir map carries. Where no height is
+measured the cap is the grid's vertical extent; where one is, the extent is
+`min(measured + margin, cap)` and the cap can never raise it
+(`VoxelGridSizer.verticalBound`). `Pipeline`'s two-view branch and the
+harness replay size the grid by the same rule, the outcome row's `voxelGrid`
+records `classCapMm` and `capSource` (`measured` / `classPrior` / `global` /
+`constant`), and `event=grid.height` prints `cap_mm` and `cap_source`.
+
+The Decision 8 flag stands: a two-view estimate without depth is still
+`unbounded_carve_height`, degraded, and not offered for dosing. The cap
+bounds that number; it does not make it a measurement.
+
+### Rationale
+
+Measured offline with `HarnessCLI carve-audit --no-depth --tilts
+22.2,26,40,60 --caps 120,85.9,40` and `volumes`, on the five §7 bundles and
+the two single-view controls, before and after.
+
+**The LiDAR path is unchanged.** Every two-view bundle replays to the
+Decision 10 figure — 397.1, 390.1, 350.3, 268.0, 358.9 cm³ — and the
+single-view controls `1790315900185` and `1790315865030` stay 298.9 and
+309.5. The measured P98 extents (36–54 mm) all sit under the 85.9 mm bread
+cap, so the cap never bites where a height was measured, and it is written
+so that it cannot raise an extent.
+
+**The no-depth carve, at the plane production adopts** (depth withheld from
+the sizer only; no card-only plane replay exists, `two-view-geometry-audit.md`
+§4, so the plane is held fixed and only the height bound varies):
+
+| bundle | class | 120 mm cap | class cap (85.9 → 87 mm) | LiDAR reference (Decision 10) | 120 ÷ LiDAR | cap ÷ LiDAR |
+|---|---|---|---|---|---|---|
+| `1790318627741` | bread_wholemeal | 709.8 | 583.1 | 397.1 | 1.79 | **1.47** |
+| `1790315814452` | bread_wholemeal | 690.0 | 610.7 | 390.1 | 1.77 | **1.57** |
+| `1790310086654` | bread_wholemeal | 678.9 | 595.4 | 350.3 | 1.94 | **1.70** |
+| `1790315734391` | bread_white | 632.8 | 534.7 | 268.0 | 2.36 | **2.00** |
+| `1790325380366` | bread_wholemeal | 749.6 | 663.6 | 358.9 | 2.09 | **1.85** |
+
+The cap takes 11–18 % off every bundle and the ratio improves on all five.
+The research's pass line — two-view ÷ LiDAR under 1.3 on at least four of
+five — is met on **none**: a roll is a third of the bread class's P90, and
+the cap cannot know that.
+
+**The Decision 8 synthetic control**, a 120 x 70 x 40 mm box with exact
+silhouettes on `1790310086654`'s intrinsics and plane (voxelised truth
+337.0 cm³), the oblique orbited about the grid's x axis through the food
+point at each tilt, plus the bundle's own stored transform (23.9°):
+
+| oblique tilt | 120 mm cap | class cap (87 mm) | truth cap (42 mm) |
+|---|---|---|---|
+| stored (23.9°) | 806.9 | 675.8 | 379.1 |
+| 22.2° | 735.0 | 643.4 | 372.6 |
+| 26° | 705.2 | 632.0 | 373.3 |
+| 40° | 596.3 | 584.6 | 374.5 |
+| 60° | 481.4 | 481.4 | 375.4 |
+
+The truth-cap column reproduces Decision 8's ~372–376. The class cap is
+worth 12–16 % at the aim-guide tilts and nothing at 60°, where the hull
+closes below the cap on its own, which is the same geometry Decision 8
+described. The 120 mm column sits below Decision 8's own figures (833 → 552);
+that sweep's orbit axis and baseline were not recorded, so the columns are
+not like for like, but the ordering and the truth column agree.
+
+Why P90 and not a tighter statistic: a cap must not clip real food, and P90
+of per-item maximum height is the loosest choice that is still
+class-specific. On the one-form classes it is within 5 mm of every item
+(egg 44, apple 81, banana 46 mm) and the cap acts as a near-measurement; on
+the mixed-form classes it is the tallest common form, the honest ceiling
+when the form is unknown. Why the global P90 for thin classes: 72 mm is
+below the shipped constant for every unmapped class and above every mesh
+outside the tall tail.
+
+### Alternatives Considered
+
+- **A P50 cap (class median, 31.6 mm on bread)**: Would land the audited
+  rolls near the LiDAR figure. Rejected because it clips three of the five
+  real rolls (LiDAR maxima 47.6, 50.7 and 37.1 mm): the category's median
+  is a slightly flatter roll than the ones photographed, and a cap that
+  removes measured food is the failure mode Decision 9 declined.
+- **No cap; wait for a height model**: Keeps the no-depth number purely
+  geometric. Rejected because the research found no credible on-device
+  height source at 2–5 cm — absolute monocular depth error at tabletop
+  range equals the food height — and the 120 mm constant is itself a prior,
+  just a worse one.
+- **Form-level priors through the swap list (slice / roll / loaf, handful /
+  basket)**: The real lever; a roll-level cap would put every bundle above
+  within the hull bias. Deferred, not rejected: the palette does not carry
+  form, so this is a review-loop question — the swap-and-record loop can
+  seed a form and the cap follows the label — and it needs its own decision.
+- **Cap at the class P98 or maximum**: Looser still, safer against
+  clipping. Rejected because on bread it is the loaf (104 mm), above the
+  measured constant's useful range and worth under 5 % on the sweep.
+
+### Consequences
+
+**Positive:**
+- The no-depth two-view carve has a bound that follows the class: 87 mm on
+  bread instead of 120, 49 mm on egg, 77 mm on an unmapped class.
+- The LiDAR path is byte-identical on all seven corpus bundles, by
+  construction: the cap can only lower a measured extent.
+- What bounded the carve is on every row and in the log, so a capped row is
+  distinguishable from a measured one.
+- `carve-audit --no-depth` and the tilt/cap sweep re-run the accounting on
+  any bundle.
+
+**Negative:**
+- It bounds, it does not fix. The non-LiDAR path still reads 1.5–2x the
+  LiDAR figure on a roll, and any tall-form class (bread, chips, broccoli)
+  keeps that over-read until a form-level prior exists.
+- An item taller than its class P90 is clipped: a loaf photographed without
+  LiDAR reads as an 87 mm object. The cap is a ceiling on what the carve
+  can see, and `capSource` is the only witness.
+- A regenerated `height_priors.json` changes every no-depth row's meaning;
+  the copy under `Volume/Resources` must stay byte-identical to the tool's
+  output, and `ClassHeightPriorsTests` pins the numbers on purpose.
+- The rule is measured against the LiDAR plane; the card-only plane a
+  non-LiDAR phone would fit is still unmeasured (§4), and today that path
+  refuses before the carve (§6), so the cap is exercised offline and by
+  tests, not yet on a phone.
+
+### Impact
+
+`MedataCore/Sources/Volume/ClassHeightPriors.swift` (new),
+`MedataCore/Sources/Volume/Resources/height_priors.json` (new, bundled),
+`Package.swift` (Volume resource), `MedataCore/Sources/Volume/VoxelGridSizer.swift`
+(`Inputs.classCap`, `verticalBound`), `MedataCore/Sources/Pipeline/Pipeline.swift`
+(two-view branch), `MedataCore/Sources/Pipeline/PipelineDiagnostics.swift`
+(`VoxelGridMeasurements.classCapMm`, `capSource`), `HarnessCore/FixtureRunner.swift`
+(`runVoxelCarve`), `HarnessCore/CarveResidualAudit.swift` (`NoDepthRow`,
+tilt and cap sweeps, `orbitTransform`), `HarnessCLI` (`--no-depth`,
+`--tilts`, `--caps`), `MedataCore/Tests/VolumeTests/ClassHeightPriorsTests.swift`,
+`MedataCore/Tests/PipelineTests/EstimationAttemptRecordTests.swift`,
+`docs/agent-notes/two-view-geometry-audit.md` §8.
+
+---

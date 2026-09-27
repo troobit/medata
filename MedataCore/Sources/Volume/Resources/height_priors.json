@@ -1,0 +1,368 @@
+{
+  "schema": "height_priors.v1",
+  "source": "MetaFood3D 3D_Mesh",
+  "units": "mm",
+  "generated": "2026-09-27",
+  "base_plane_rule": "largest convex-hull facet within 30 deg of the scanner vertical (raw +/-z) on z=0, body in +z",
+  "seat_cone_deg": 30.0,
+  "n_meshes": 637,
+  "n_meshes_mapped": 97,
+  "height_only_categories": [
+    "rice",
+    "yeast_bread"
+  ],
+  "global": {
+    "max_height_p50_mm": 41.0,
+    "max_height_p90_mm": 71.8,
+    "max_height_p98_mm": 117.5
+  },
+  "classes": {
+    "white_rice": {
+      "index": 0,
+      "n_items": 8,
+      "n_items_strict_mapping": 0,
+      "categories": [
+        "Rice"
+      ],
+      "max_height_p50_mm": 52.9,
+      "max_height_p90_mm": 77.7,
+      "max_height_min_mm": 26.2,
+      "max_height_max_mm": 84.0,
+      "p98_height_p50_mm": 51.4,
+      "surface_p50_p50_mm": 45.0,
+      "footprint_cm2_p50": 103.7,
+      "volume_cm3_p50": 207.7
+    },
+    "brown_rice": {
+      "index": 1,
+      "n_items": 8,
+      "n_items_strict_mapping": 0,
+      "categories": [
+        "Rice"
+      ],
+      "max_height_p50_mm": 52.9,
+      "max_height_p90_mm": 77.7,
+      "max_height_min_mm": 26.2,
+      "max_height_max_mm": 84.0,
+      "p98_height_p50_mm": 51.4,
+      "surface_p50_p50_mm": 45.0,
+      "footprint_cm2_p50": 103.7,
+      "volume_cm3_p50": 207.7
+    },
+    "pasta": {
+      "index": 2,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "bread_white": {
+      "index": 3,
+      "n_items": 9,
+      "n_items_strict_mapping": 0,
+      "categories": [
+        "Yeast_bread"
+      ],
+      "max_height_p50_mm": 31.6,
+      "max_height_p90_mm": 80.9,
+      "max_height_min_mm": 16.7,
+      "max_height_max_mm": 104.2,
+      "p98_height_p50_mm": 29.8,
+      "surface_p50_p50_mm": 25.1,
+      "footprint_cm2_p50": 104.6,
+      "volume_cm3_p50": 123.4
+    },
+    "bread_wholemeal": {
+      "index": 4,
+      "n_items": 9,
+      "n_items_strict_mapping": 0,
+      "categories": [
+        "Yeast_bread"
+      ],
+      "max_height_p50_mm": 31.6,
+      "max_height_p90_mm": 80.9,
+      "max_height_min_mm": 16.7,
+      "max_height_max_mm": 104.2,
+      "p98_height_p50_mm": 29.8,
+      "surface_p50_p50_mm": 25.1,
+      "footprint_cm2_p50": 104.6,
+      "volume_cm3_p50": 123.4
+    },
+    "potato_boiled": {
+      "index": 5,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "potato_mashed": {
+      "index": 6,
+      "n_items": 4,
+      "n_items_strict_mapping": 4,
+      "categories": [
+        "Mashed_Potato"
+      ],
+      "max_height_p50_mm": 42.6,
+      "max_height_p90_mm": 48.6,
+      "max_height_min_mm": 38.7,
+      "max_height_max_mm": 50.4,
+      "p98_height_p50_mm": 38.0,
+      "surface_p50_p50_mm": 26.9,
+      "footprint_cm2_p50": 81.9,
+      "volume_cm3_p50": 145.9
+    },
+    "chips_fries": {
+      "index": 7,
+      "n_items": 6,
+      "n_items_strict_mapping": 6,
+      "categories": [
+        "French_Fry"
+      ],
+      "max_height_p50_mm": 68.6,
+      "max_height_p90_mm": 122.6,
+      "max_height_min_mm": 15.1,
+      "max_height_max_mm": 144.2,
+      "p98_height_p50_mm": 59.6,
+      "surface_p50_p50_mm": 47.4,
+      "footprint_cm2_p50": 112.8,
+      "volume_cm3_p50": 279.8
+    },
+    "chicken": {
+      "index": 8,
+      "n_items": 10,
+      "n_items_strict_mapping": 10,
+      "categories": [
+        "Chicken_breast",
+        "Chicken_thighs"
+      ],
+      "max_height_p50_mm": 53.5,
+      "max_height_p90_mm": 70.4,
+      "max_height_min_mm": 32.2,
+      "max_height_max_mm": 70.5,
+      "p98_height_p50_mm": 50.4,
+      "surface_p50_p50_mm": 41.3,
+      "footprint_cm2_p50": 77.8,
+      "volume_cm3_p50": 193.6
+    },
+    "beef": {
+      "index": 9,
+      "n_items": 4,
+      "n_items_strict_mapping": 4,
+      "categories": [
+        "Steak"
+      ],
+      "max_height_p50_mm": 29.3,
+      "max_height_p90_mm": 33.6,
+      "max_height_min_mm": 23.0,
+      "max_height_max_mm": 34.4,
+      "p98_height_p50_mm": 27.7,
+      "surface_p50_p50_mm": 23.9,
+      "footprint_cm2_p50": 73.3,
+      "volume_cm3_p50": 130.9
+    },
+    "pork": {
+      "index": 10,
+      "n_items": 5,
+      "n_items_strict_mapping": 5,
+      "categories": [
+        "Pork_Chop"
+      ],
+      "max_height_p50_mm": 27.6,
+      "max_height_p90_mm": 31.9,
+      "max_height_min_mm": 23.2,
+      "max_height_max_mm": 33.0,
+      "p98_height_p50_mm": 26.3,
+      "surface_p50_p50_mm": 23.1,
+      "footprint_cm2_p50": 108.3,
+      "volume_cm3_p50": 187.0
+    },
+    "fish_white": {
+      "index": 11,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "egg": {
+      "index": 12,
+      "n_items": 5,
+      "n_items_strict_mapping": 5,
+      "categories": [
+        "Egg"
+      ],
+      "max_height_p50_mm": 43.2,
+      "max_height_p90_mm": 44.3,
+      "max_height_min_mm": 41.2,
+      "max_height_max_mm": 44.5,
+      "p98_height_p50_mm": 41.9,
+      "surface_p50_p50_mm": 36.9,
+      "footprint_cm2_p50": 21.1,
+      "volume_cm3_p50": 53.2
+    },
+    "cheese": {
+      "index": 13,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "salad_leaves": {
+      "index": 14,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "broccoli": {
+      "index": 15,
+      "n_items": 9,
+      "n_items_strict_mapping": 9,
+      "categories": [
+        "Broccoli"
+      ],
+      "max_height_p50_mm": 51.4,
+      "max_height_p90_mm": 112.5,
+      "max_height_min_mm": 35.3,
+      "max_height_max_mm": 118.4,
+      "p98_height_p50_mm": 47.5,
+      "surface_p50_p50_mm": 39.8,
+      "footprint_cm2_p50": 22.0,
+      "volume_cm3_p50": 32.7
+    },
+    "carrot": {
+      "index": 16,
+      "n_items": 12,
+      "n_items_strict_mapping": 12,
+      "categories": [
+        "Carrot"
+      ],
+      "max_height_p50_mm": 32.8,
+      "max_height_p90_mm": 54.2,
+      "max_height_min_mm": 10.8,
+      "max_height_max_mm": 63.0,
+      "p98_height_p50_mm": 31.3,
+      "surface_p50_p50_mm": 21.6,
+      "footprint_cm2_p50": 51.7,
+      "volume_cm3_p50": 91.3
+    },
+    "peas": {
+      "index": 17,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "beans_baked": {
+      "index": 18,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "lentils": {
+      "index": 19,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "apple": {
+      "index": 20,
+      "n_items": 7,
+      "n_items_strict_mapping": 7,
+      "categories": [
+        "Apple"
+      ],
+      "max_height_p50_mm": 78.1,
+      "max_height_p90_mm": 81.0,
+      "max_height_min_mm": 70.0,
+      "max_height_max_mm": 82.1,
+      "p98_height_p50_mm": 73.8,
+      "surface_p50_p50_mm": 66.4,
+      "footprint_cm2_p50": 49.9,
+      "volume_cm3_p50": 240.9
+    },
+    "banana": {
+      "index": 21,
+      "n_items": 7,
+      "n_items_strict_mapping": 7,
+      "categories": [
+        "Banana"
+      ],
+      "max_height_p50_mm": 41.0,
+      "max_height_p90_mm": 45.9,
+      "max_height_min_mm": 32.5,
+      "max_height_max_mm": 46.4,
+      "p98_height_p50_mm": 39.7,
+      "surface_p50_p50_mm": 32.4,
+      "footprint_cm2_p50": 83.2,
+      "volume_cm3_p50": 197.8
+    },
+    "tomato": {
+      "index": 22,
+      "n_items": 11,
+      "n_items_strict_mapping": 11,
+      "categories": [
+        "Tomato",
+        "Tomato_slice"
+      ],
+      "max_height_p50_mm": 41.6,
+      "max_height_p90_mm": 61.5,
+      "max_height_min_mm": 8.8,
+      "max_height_max_mm": 65.3,
+      "p98_height_p50_mm": 40.7,
+      "surface_p50_p50_mm": 33.6,
+      "footprint_cm2_p50": 27.8,
+      "volume_cm3_p50": 74.2
+    },
+    "mixed_vegetables": {
+      "index": 23,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "cereal": {
+      "index": 24,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "water": {
+      "index": 25,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "coffee": {
+      "index": 26,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "tea": {
+      "index": 27,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "milk": {
+      "index": 28,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "fruit_juice": {
+      "index": 29,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "soup": {
+      "index": 30,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "beer": {
+      "index": 31,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "wine": {
+      "index": 32,
+      "n_items": 0,
+      "note": "no MetaFood3D category maps to this class"
+    },
+    "background": {
+      "index": 33,
+      "n_items": 0,
+      "note": "palette sentinel, not a food"
+    },
+    "unknown_food": {
+      "index": 34,
+      "n_items": 0,
+      "note": "palette sentinel, not a food"
+    },
+    "unsupported_liquid": {
+      "index": 35,
+      "n_items": 0,
+      "note": "palette sentinel, not a food"
+    }
+  }
+}

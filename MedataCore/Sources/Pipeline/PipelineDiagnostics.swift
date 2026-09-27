@@ -359,13 +359,24 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         public let verticalExtentMm: Float
         public let dimsZ: Int
         public let edgeMm: Float
+        /// The class height cap handed to the sizer, mm, margin included
+        /// (two-view-trust Decision 11). nil on rows written before the cap
+        /// existed, or when the priors did not load.
+        public let classCapMm: Float?
+        /// What set the extent, a `VoxelGridSizer.VerticalBoundSource` raw
+        /// value: `measured`, `classPrior`, `global` or `constant`. nil on
+        /// rows written before the cap existed.
+        public let capSource: String?
 
         public init(measuredFoodHeightMm: Float?, verticalExtentMm: Float,
-                    dimsZ: Int, edgeMm: Float) {
+                    dimsZ: Int, edgeMm: Float,
+                    classCapMm: Float? = nil, capSource: String? = nil) {
             self.measuredFoodHeightMm = measuredFoodHeightMm
             self.verticalExtentMm = verticalExtentMm
             self.dimsZ = dimsZ
             self.edgeMm = edgeMm
+            self.classCapMm = classCapMm
+            self.capSource = capSource
         }
     }
 

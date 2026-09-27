@@ -54,20 +54,72 @@ public enum VoxelGridSizer {
         public let edgeMm: Float
         /// Food height above the support plane measured from the nadir depth
         /// (`measuredFoodHeightMm`), mm. nil — no depth, or too few usable
-        /// samples — keeps the `verticalExtentMm` constant and its rounding
-        /// exactly as they were, so the no-LiDAR path is unchanged.
+        /// samples — leaves the extent to `classCap`, and with neither the
+        /// `verticalExtentMm` constant and its rounding stand exactly as they
+        /// were.
         public let measuredFoodHeightMm: Float?
+        /// The class height cap (two-view-trust Decision 11,
+        /// `ClassHeightPriors`), mm, margin included. The extent where no
+        /// height is measured; a ceiling on the measured extent otherwise. It
+        /// never raises a measured extent (`verticalBound`).
+        public let classCap: ClassHeightPriors.Cap?
 
         public init(foodMask: BinaryMask, nadirIntrinsics: CameraIntrinsics,
                     supportPlane: SupportPlane, gravityCamera: Vec3,
                     edgeMm: Float = VoxelGridSizer.defaultEdgeMm,
-                    measuredFoodHeightMm: Float? = nil) {
+                    measuredFoodHeightMm: Float? = nil,
+                    classCap: ClassHeightPriors.Cap? = nil) {
             self.foodMask = foodMask
             self.nadirIntrinsics = nadirIntrinsics
             self.supportPlane = supportPlane
             self.gravityCamera = gravityCamera
             self.edgeMm = edgeMm
             self.measuredFoodHeightMm = measuredFoodHeightMm
+            self.classCap = classCap
+        }
+    }
+
+    // ── Vertical bound (two-view-trust Decision 11) ──────────────────────────
+    /// What set the grid's vertical extent.
+    public enum VerticalBoundSource: String, Sendable, Codable {
+        /// The measured food height plus `heightMarginMm`, below the class cap.
+        case measured
+        /// The class's own height prior (`ClassHeightPriors.CapSource.classPrior`).
+        case classPrior
+        /// The global height prior (`ClassHeightPriors.CapSource.global`).
+        case global
+        /// Neither a measurement nor a cap: the `verticalExtentMm` constant.
+        case constant
+    }
+
+    public struct VerticalBound: Sendable, Equatable {
+        /// Before rounding to whole voxels; clamped to
+        /// [`minVerticalExtentMm`, `verticalExtentMm`].
+        public let extentMm: Float
+        public let source: VerticalBoundSource
+    }
+
+    /// The extent the grid takes and what set it. With a measurement the
+    /// extent is the measurement plus the margin, and the cap only lowers it
+    /// — a LiDAR phone's grid is never taller for a class prior. Without a
+    /// measurement the cap is the extent. Without either, the constant.
+    public static func verticalBound(
+        measuredFoodHeightMm: Float?, classCap: ClassHeightPriors.Cap?
+    ) -> VerticalBound {
+        func clamp(_ v: Float) -> Float { min(max(v, minVerticalExtentMm), verticalExtentMm) }
+        switch (measuredFoodHeightMm, classCap) {
+        case let (measured?, cap?):
+            let fromMeasurement = measured + heightMarginMm
+            if cap.mm < fromMeasurement {
+                return VerticalBound(extentMm: clamp(cap.mm), source: cap.source.boundSource)
+            }
+            return VerticalBound(extentMm: clamp(fromMeasurement), source: .measured)
+        case let (measured?, nil):
+            return VerticalBound(extentMm: clamp(measured + heightMarginMm), source: .measured)
+        case let (nil, cap?):
+            return VerticalBound(extentMm: clamp(cap.mm), source: cap.source.boundSource)
+        case (nil, nil):
+            return VerticalBound(extentMm: verticalExtentMm, source: .constant)
         }
     }
 
@@ -133,20 +185,21 @@ public enum VoxelGridSizer {
         // Step 3: extents and dims, rounded up to multiples of threadgroupAlignment.
         let extentXyMm = min(bboxHorizontalMm + horizontalMarginMm, horizontalCapMm)
         let dimsXY = roundUpToMultiple(ceilDiv(extentXyMm, inputs.edgeMm), threadgroupAlignment)
-        // Vertical dims. With a measured height the extent is that height plus
-        // the margin, floored and capped, and rounded up to a whole voxel only:
-        // the threadgroup alignment quantises the vertical extent in steps of
-        // 8 * edge (24 mm at the default edge), which on a 40 mm food is most of
-        // the measurement. The kernel guards `gid.z >= dims_z` (voxel_carve.metal),
-        // so a dims_z that is not a multiple of 8 costs a partly idle tail
-        // threadgroup and nothing else. Without a measured height the old
+        // Vertical dims. With a measured height or a class cap the extent is
+        // `verticalBound`, floored and capped, and rounded up to a whole voxel
+        // only: the threadgroup alignment quantises the vertical extent in
+        // steps of 8 * edge (24 mm at the default edge), which on a 40 mm food
+        // is most of the measurement. The kernel guards `gid.z >= dims_z`
+        // (voxel_carve.metal), so a dims_z that is not a multiple of 8 costs a
+        // partly idle tail threadgroup and nothing else. With neither the old
         // constant AND the old rounding are kept, byte for byte.
+        let bound = verticalBound(
+            measuredFoodHeightMm: inputs.measuredFoodHeightMm, classCap: inputs.classCap)
         let dimsZ: Int
-        if let measured = inputs.measuredFoodHeightMm {
-            let extentZMm = min(max(measured + heightMarginMm, minVerticalExtentMm), verticalExtentMm)
-            dimsZ = max(1, ceilDiv(extentZMm, inputs.edgeMm))
-        } else {
+        if bound.source == .constant {
             dimsZ = roundUpToMultiple(ceilDiv(verticalExtentMm, inputs.edgeMm), threadgroupAlignment)
+        } else {
+            dimsZ = max(1, ceilDiv(bound.extentMm, inputs.edgeMm))
         }
 
         // Step 4: origin = centroid pixel of food mask projected onto π_sup.
@@ -322,5 +375,14 @@ public enum VoxelGridSizer {
         precondition(multiple > 0)
         let r = value % multiple
         return r == 0 ? value : value + (multiple - r)
+    }
+}
+
+extension ClassHeightPriors.CapSource {
+    var boundSource: VoxelGridSizer.VerticalBoundSource {
+        switch self {
+        case .classPrior: return .classPrior
+        case .global: return .global
+        }
     }
 }
