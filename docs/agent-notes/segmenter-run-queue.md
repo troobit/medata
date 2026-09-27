@@ -32,16 +32,24 @@ this note is the mechanics and the reading rules.
 - Dry run: `MEDATA_QUEUE_DIR=<scratch queue> MEDATA_QUEUE_STATE=<scratch state>
   tools/segmenter/run_queue.sh` with entries that just echo and exit.
 
-## Stalls
+## Stalls and sleep
 
-2026-09-27: R11 hung at 16:41 on its first epoch — main thread parked on the Metal
-command queue, five spawn workers idle, no log line, no sidecar — and sat there
-four hours until noticed. `lib.sh` now runs `train.py` in the background and kills
-it when the train log has not changed for `MEDATA_STALL_SECS` (default 5400 s, an
-epoch takes ~32 min at 513); the entry then returns 124 and the runner moves on.
-To re-run a stalled entry: `rm build/queue/done/<entry>`, move its train log
-aside (a fresh start appends), and relaunch or `rm PAUSE`. A `.resume.pt` sidecar
-means an epoch completed; resume with identical flags instead of starting fresh.
+2026-09-27: R11 showed no epoch for four hours (main thread on the Metal command
+queue, workers idle) and was killed as a hang. It was not a hang: `pmset -g log`
+shows the Mac asleep — lid closed, then "Low Power Sleep" on battery at 22:09 and
+hibernation until the power button at 09:24 next morning. `caffeinate -is` does
+not survive a lid close without an external display, nor a battery low-power
+sleep. Training needs AC power and either the lid open or clamshell mode on the
+hub (docs/ml-training.md §4 run hygiene). A run that stopped writing but whose
+process is alive and whose CPU time is barely advancing is a sleeping Mac, not a
+stalled trainer; it resumes on wake.
+
+`lib.sh` keeps a watchdog for real stalls (no log line for `MEDATA_STALL_SECS`,
+default 5400 s, then kill, exit 124) but measures from the later of the last log
+line and `kern.waketime`, so time asleep never counts. To re-run an entry that
+the watchdog killed: `rm build/queue/done/<entry>`, move its train log aside (a
+fresh start appends), `rm PAUSE`. A `.resume.pt` sidecar means an epoch completed;
+resume with identical flags instead of starting fresh.
 
 ## Never edit train.py while a run is live
 
