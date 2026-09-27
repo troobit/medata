@@ -23,6 +23,7 @@ struct DeveloperSettingsView: View {
     @AppStorage(DeveloperFlags.forceNonLiDARKey) private var forceNonLiDAR = false
     @AppStorage(DeveloperFlags.unlockObliqueTiltKey) private var unlockObliqueTilt = false
     @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
+    @AppStorage(DeveloperFlags.inlineFoodChipsKey) private var inlineFoodChips = false
 
     #if DEBUG
     @State private var isSeeding = false
@@ -55,6 +56,11 @@ struct DeveloperSettingsView: View {
                 // the column and crops top and bottom.
                 Toggle("Review photo fills width", isOn: $reviewPhotoFillsWidth)
                     .accessibilityIdentifier("settings.reviewPhotoFillsWidth")
+                // Swap loop, attempt 1 versus attempt 2 (review-swap-loop):
+                // off swaps through the sheet, on adds a one-tap chip line
+                // to every row.
+                Toggle("Inline food chips", isOn: $inlineFoodChips)
+                    .accessibilityIdentifier("settings.inlineFoodChips")
             }
 
             #if DEBUG

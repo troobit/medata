@@ -62,12 +62,24 @@ struct MealReviewView: View {
     // every other `DeveloperFlags` mirror, so ProductRelease compiles attempt 1
     // with no flag to read.
     @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
+    // Swap-loop attempt switch (review-swap-loop): the chip line on each row.
+    @AppStorage(DeveloperFlags.inlineFoodChipsKey) private var inlineFoodChips = false
     #endif
+    // "Add a food" picker (review-swap-loop attempt 2).
+    @State private var addingFood = false
 
     // Attempt 1 is the shipped treatment; attempt 2 only exists in field builds.
     private var photoFillsWidth: Bool {
         #if DEBUG
         return reviewPhotoFillsWidth
+        #else
+        return false
+        #endif
+    }
+
+    private var showsInlineChips: Bool {
+        #if FIELD_LOOP
+        return inlineFoodChips
         #else
         return false
         #endif
@@ -164,6 +176,7 @@ struct MealReviewView: View {
                         ForEach(model.activeFoods) { food in
                             foodRow(food)
                         }
+                        addFoodRow
                         ForEach(model.rejectedFoods) { food in
                             rejectedRow(food)
                         }
@@ -830,6 +843,9 @@ struct MealReviewView: View {
                     .foregroundStyle(Color.captureChromeText.opacity(0.75))
                     .contentTransition(reduceMotion ? .identity : .numericText())
             }
+            if showsInlineChips {
+                chipLine(food)
+            }
             // One line of five controls cannot hold at accessibility sizes:
             // the amount takes its own line and the buttons keep theirs
             // (device finding 2026-09-05). Below AX, the shipped single line.
@@ -913,12 +929,94 @@ struct MealReviewView: View {
         rejectButton(food)
     }
 
+    // Attempt 2 of the swap loop (review-swap-loop): the swap without the
+    // sheet. Predicted first, then the top three of the prepared shortlist;
+    // the current class is the filled chip (the plate control's active
+    // style), so the predicted chip doubles as the one-tap undo. The ⇄
+    // button still opens the full sheet for anything not on the line.
+    @ViewBuilder
+    private func chipLine(_ food: ReviewFood) -> some View {
+        let chips = model.chipCandidates(for: food.classId)
+        if !chips.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(chips) { chip in
+                        let isCurrent = chip.classId == food.currentClassId
+                        Button {
+                            Task { await model.chooseChip(classId: food.classId, candidate: chip) }
+                        } label: {
+                            Text(chip.displayName)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    isCurrent ? Color.captureChromeText : Color.captureBackground.opacity(0.6),
+                                    in: Capsule()
+                                )
+                                .foregroundStyle(
+                                    isCurrent ? Color.captureBackground : Color.captureChromeText
+                                )
+                                // The capsule is drawn tight; the hit target
+                                // is still 44 pt (Req 10.4).
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .disabled(isCurrent)
+                        .accessibilityAddTraits(isCurrent ? [.isSelected] : [])
+                        .accessibilityIdentifier("review.row.\(food.classId).chip.\(chip.classId)")
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Food")
+        }
+    }
+
+    // Attempt 2 of the swap loop (review-swap-loop): a food the segmenter
+    // missed. Food row metrics so the list rhythm holds; the sheet picks the
+    // food and the new row opens its gram editor for the amount.
+    private var addFoodRow: some View {
+        Button {
+            addingFood = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.circle")
+                    .font(.body.weight(.semibold))
+                Text("Add a food")
+                    .font(.headline)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Color.captureChromeText)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .background(Color.captureChromeBG.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .accessibilityIdentifier("review.addFood")
+        // Its own modifier site, like the surface's other sheets.
+        .sheet(isPresented: $addingFood) {
+            AddFoodSheet(foods: model.addableFoods) { candidate in
+                Task { await addFood(candidate) }
+            }
+        }
+    }
+
+    private func addFood(_ candidate: FoodCandidate) async {
+        guard let classId = await model.addFood(candidate),
+              let food = model.food(classId) else { return }
+        editingClassId = classId
+        gramEditText = String(Int(food.currentMassG.rounded()))
+        gramFieldFocused = true
+    }
+
     // De-emphasised remnant for a rejected food: predicted name struck
     // through, contribution gone, restore affordance (Req 4.2, 4.3).
     private func rejectedRow(_ food: ReviewFood) -> some View {
         HStack(spacing: 10) {
             rowBadge(food)
-            Text(MealReviewModel.prettify(food.predicted.classID))
+            Text(MealReviewModel.prettify(food.titleClassId))
                 .font(.headline)
                 .strikethrough()
                 .foregroundStyle(Color.captureChromeText)
@@ -966,7 +1064,17 @@ struct MealReviewView: View {
     @ViewBuilder
     private func nameLine(_ food: ReviewFood) -> some View {
         let predicted = MealReviewModel.prettify(food.predicted.classID)
-        if food.flags.classCorrected, let corrected = food.corrected?.classID, !corrected.isEmpty {
+        if food.isAdded {
+            // No prediction to strike through: the chosen food, marked added.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(MealReviewModel.prettify(food.titleClassId))
+                    .font(.headline)
+                    .foregroundStyle(Color.captureChromeText)
+                Text("added")
+                    .font(.caption)
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
+            }
+        } else if food.flags.classCorrected, let corrected = food.corrected?.classID, !corrected.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(predicted)
@@ -1072,7 +1180,9 @@ private struct RelabelSheet: View {
     private var canRelabel: Bool { model.canRelabel(classId) }
     private var trimmedSearch: String { searchText.trimmingCharacters(in: .whitespaces) }
     private var isSearching: Bool { !trimmedSearch.isEmpty }
-    private var isRelabelled: Bool { food?.flags.classCorrected ?? false }
+    private var isAdded: Bool { food?.isAdded ?? false }
+    // An added row is relabelled by construction and has nothing to keep.
+    private var isRelabelled: Bool { (food?.flags.classCorrected ?? false) && !isAdded }
 
     private var filteredEligible: [FoodCandidate] {
         let all = model.eligibleFoods(for: classId)
@@ -1113,21 +1223,24 @@ private struct RelabelSheet: View {
                     }
                 }
                 // Still offered from both lists (Req 5.1); the typed search
-                // travels with it as the absent query (Req 5.2).
-                Section {
-                    Button {
-                        Task {
-                            await model.markAbsent(classId: classId, query: trimmedSearch)
-                            dismiss()
+                // travels with it as the absent query (Req 5.2). Not for an
+                // added row, which exists to carry a class.
+                if !isAdded {
+                    Section {
+                        Button {
+                            Task {
+                                await model.markAbsent(classId: classId, query: trimmedSearch)
+                                dismiss()
+                            }
+                        } label: {
+                            Label("Not in the database", systemImage: "questionmark.square.dashed")
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
-                    } label: {
-                        Label("Not in the database", systemImage: "questionmark.square.dashed")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
+                        .accessibilityIdentifier("relabel.absent")
                     }
-                    .accessibilityIdentifier("relabel.absent")
                 }
             }
             .searchable(
@@ -1149,7 +1262,7 @@ private struct RelabelSheet: View {
 
     private var sheetTitle: String {
         guard let food else { return "Change food" }
-        return MealReviewModel.prettify(food.predicted.classID)
+        return MealReviewModel.prettify(food.titleClassId)
     }
 
     // The reversal path (Req 3.11), reachable from the sheet: the predicted
@@ -1192,6 +1305,56 @@ private struct RelabelSheet: View {
         // fallback); reject, absent and amount stay available.
         .disabled(!canRelabel)
         .accessibilityIdentifier("relabel.candidate.\(candidate.classId)")
+    }
+}
+
+// MARK: - Add-a-food sheet (review-swap-loop attempt 2)
+
+// Every solid the database can derive, under the same pinned search as the
+// relabel sheet. Picking one inserts the row and closes; the amount is typed
+// on the row itself.
+private struct AddFoodSheet: View {
+    let foods: [FoodCandidate]
+    let onPick: (FoodCandidate) -> Void
+
+    @State private var searchText = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var filtered: [FoodCandidate] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return foods }
+        return foods.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filtered) { candidate in
+                Button {
+                    onPick(candidate)
+                    dismiss()
+                } label: {
+                    Text(candidate.displayName)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("addFood.candidate.\(candidate.classId)")
+            }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search foods"
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .navigationTitle("Add a food")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
     }
 }
 

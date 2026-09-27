@@ -54,6 +54,14 @@ nonisolated enum DeveloperFlags {
     /// whole image, visible or clipped.
     static let reviewPhotoFillsWidthKey = "medata.debug.reviewPhotoFillsWidth"
 
+    /// Review swap loop, attempt 2 (specs/ui/review-swap-loop, MD-29). Off
+    /// (attempt 1): a wrong food is swapped through the ⇄ sheet — two taps
+    /// on the shortlist. On (attempt 2): each row also carries a chip line —
+    /// the predicted food and the top three shortlist entries — so the swap
+    /// is one tap and the predicted chip is the one-tap undo. The sheet stays
+    /// either way; the chips only shortcut it.
+    static let inlineFoodChipsKey = "medata.debug.inlineFoodChips"
+
     static var forceNonLiDAR: Bool {
         UserDefaults.standard.bool(forKey: forceNonLiDARKey)
     }
@@ -64,6 +72,10 @@ nonisolated enum DeveloperFlags {
 
     static var reviewPhotoFillsWidth: Bool {
         UserDefaults.standard.bool(forKey: reviewPhotoFillsWidthKey)
+    }
+
+    static var inlineFoodChips: Bool {
+        UserDefaults.standard.bool(forKey: inlineFoodChipsKey)
     }
 }
 
