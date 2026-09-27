@@ -54,6 +54,11 @@ public enum CarveResidualAudit {
     /// The visual hull's intrinsic bias at this bundle's geometry.
     public struct SyntheticRow: Sendable, Encodable {
         public let boxMm: [Float]              // L × W × H, grid axes
+        /// The oblique's orbit about the food point in degrees when the row
+        /// is a tilt-sweep row; nil for the bundle's own stored transform.
+        public let tiltDeg: Float?
+        /// The grid extent handed to the sizer before rounding, mm.
+        public let capMm: Float
         public let extentMm: Float
         /// Voxels of the same grid whose centres lie inside the box.
         public let voxelisedTruthCm3: Float
@@ -96,6 +101,26 @@ public enum CarveResidualAudit {
         public var refitReference: String? = nil
     }
 
+    /// The carve as a phone without LiDAR would size it (two-view-trust
+    /// Decision 11): depth withheld from the grid sizer, so the extent is the
+    /// 120 mm constant (before) or the class cap (after). The plane is the
+    /// one production adopts on this bundle — no card-only plane replay
+    /// exists (`two-view-geometry-audit.md` §4), so the plane question is
+    /// held fixed and only the height bound varies. `lidarCarvedCm3` is the
+    /// measured-height carve at the same plane, the Decision 10 figure.
+    public struct NoDepthRow: Sendable, Encodable {
+        public let planeName: String
+        public let classes: [String]
+        public let classCapMm: Float
+        public let capSource: String
+        public let constantExtentMm: Float
+        public let constantCarvedCm3: Float
+        public let capExtentMm: Float
+        public let capCarvedCm3: Float
+        public let lidarExtentMm: Float
+        public let lidarCarvedCm3: Float
+    }
+
     public struct Report: Sendable, Encodable {
         public let fixtureID: String
         public let capturePath: String
@@ -117,6 +142,8 @@ public enum CarveResidualAudit {
         public let sweep: [SweepRow]
         public let synthetic: [SyntheticRow]
         public let planeVariants: [PlaneVariant]
+        /// Present when `Options.noDepth` is set.
+        public let noDepth: NoDepthRow?
     }
 
     public struct Options: Sendable {
@@ -125,24 +152,39 @@ public enum CarveResidualAudit {
         public let marginsMm: [Float]
         /// Synthetic control box, mm, in grid axes (length, width, height).
         public let boxMm: SIMD3<Float>
+        /// Grid extents for the synthetic box, mm. nil: the box's own height
+        /// plus each of `marginsMm`, the hull-bias control.
+        public let syntheticCapsMm: [Float]?
+        /// Oblique tilts, degrees, for a synthetic sweep with the oblique
+        /// orbited about the food point instead of the stored transform.
+        /// Empty: the stored transform only.
+        public let syntheticTiltsDeg: [Float]
         public let regularisation: MaskRegularisationConfig
         public let cardExclusion: Bool
         public let reconciliation: Bool
+        /// Also carve with depth withheld from the sizer (`NoDepthRow`).
+        public let noDepth: Bool
 
         public init(edgeMm: Float = 3,
                     percentiles: [Float] = [0.90, 0.95, 0.98, 1.0],
                     marginsMm: [Float] = [0, 2, 5],
                     boxMm: SIMD3<Float> = SIMD3(120, 70, 40),
+                    syntheticCapsMm: [Float]? = nil,
+                    syntheticTiltsDeg: [Float] = [],
                     regularisation: MaskRegularisationConfig = .standard,
                     cardExclusion: Bool = true,
-                    reconciliation: Bool = true) {
+                    reconciliation: Bool = true,
+                    noDepth: Bool = false) {
             self.edgeMm = edgeMm
             self.percentiles = percentiles
             self.marginsMm = marginsMm
             self.boxMm = boxMm
+            self.syntheticCapsMm = syntheticCapsMm
+            self.syntheticTiltsDeg = syntheticTiltsDeg
             self.regularisation = regularisation
             self.cardExclusion = cardExclusion
             self.reconciliation = reconciliation
+            self.noDepth = noDepth
         }
     }
 
@@ -267,6 +309,25 @@ public enum CarveResidualAudit {
             }
         }
 
+        func carve(grid: VoxelGrid, plane: SupportPlane) throws -> Float {
+            let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
+                grid: grid,
+                view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
+                                      intrinsics: nadirK, argmax: nadirSeg.argmax),
+                view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
+                                      intrinsics: obliqueK, argmax: obliqueSeg.argmax),
+                transform1To2: t1to2, supportPlane: plane,
+                matchedClasses: matching.matchedClasses,
+                singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
+                singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
+                beta: BetaCorrection(), palette: palette))
+            guard let est = outcome.estimate else {
+                throw Error.carveFailed(fixture.fixtureID,
+                                        outcome.refusal ?? .noFoodVolumeRecovered)
+            }
+            return est.perClassVolumesCm3.values.reduce(0, +)
+        }
+
         func carveAt(heightMm: Float, marginMm: Float,
                      plane: SupportPlane) throws -> (Float, VoxelGrid) {
             // `VoxelGridSizer` adds its own `heightMarginMm` and then clamps, so
@@ -284,22 +345,7 @@ public enum CarveResidualAudit {
             } catch {
                 throw Error.gridFailed(fixture.fixtureID, "\(error)")
             }
-            let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
-                grid: grid,
-                view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
-                                      intrinsics: nadirK, argmax: nadirSeg.argmax),
-                view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
-                                      intrinsics: obliqueK, argmax: obliqueSeg.argmax),
-                transform1To2: t1to2, supportPlane: plane,
-                matchedClasses: matching.matchedClasses,
-                singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
-                singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
-                beta: BetaCorrection(), palette: palette))
-            guard let est = outcome.estimate else {
-                throw Error.carveFailed(fixture.fixtureID,
-                                        outcome.refusal ?? .noFoodVolumeRecovered)
-            }
-            return (est.perClassVolumesCm3.values.reduce(0, +), grid)
+            return (try carve(grid: grid, plane: plane), grid)
         }
 
         var sweep: [SweepRow] = []
@@ -350,6 +396,10 @@ public enum CarveResidualAudit {
                 refitReference: refitReference)
         }
         planeVariants.append(try describe("asFitted", plane, planeReference))
+        // The plane production adopts: the grown refit when adopted, else the
+        // first plane (Decision 10).
+        var adoptedPlane = plane
+        var adoptedPlaneName = "asFitted"
         if let first = firstFit {
             let refit = FixtureRunner.refitPlaneFromGrownRegion(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirK,
@@ -358,15 +408,68 @@ public enum CarveResidualAudit {
                 planeVariants.append(try describe(
                     "grownRefit", refit.plane, refit.reference?.rawValue,
                     refitReference: refit.refitReference?.rawValue ?? "refused"))
+                adoptedPlane = refit.plane
+                adoptedPlaneName = "grownRefit"
             }
         }
 
-        // (3) the hull's own bias at this bundle's baseline.
-        let synthetic = try syntheticControls(
+        // The no-LiDAR sizing at the adopted plane (Decision 11): the constant,
+        // the class cap, and the measured reference, through the production
+        // `verticalBound` rule with the measurement withheld.
+        var noDepth: NoDepthRow?
+        if options.noDepth, let priors = ClassHeightPriors.bundled,
+           let cap = priors.cap(forNadirArgmax: nadirSeg.argmax, palette: palette) {
+            func sized(measured: Float?, classCap: ClassHeightPriors.Cap?) throws -> (Float, VoxelGrid) {
+                let grid: VoxelGrid
+                do {
+                    grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
+                        foodMask: foodMask, nadirIntrinsics: nadirK, supportPlane: adoptedPlane,
+                        gravityCamera: gravity, edgeMm: options.edgeMm,
+                        measuredFoodHeightMm: measured, classCap: classCap))
+                } catch {
+                    throw Error.gridFailed(fixture.fixtureID, "\(error)")
+                }
+                return (try carve(grid: grid, plane: adoptedPlane), grid)
+            }
+            let adoptedSamples = VoxelGridSizer.foodHeightSamplesMm(
+                foodMask: foodMask, depth: depth, intrinsics: nadirK, supportPlane: adoptedPlane)
+            let measured = VoxelGridSizer.percentile(
+                ofSorted: adoptedSamples, VoxelGridSizer.heightPercentile)
+            let (constantCm3, constantGrid) = try sized(measured: nil, classCap: nil)
+            let (capCm3, capGrid) = try sized(measured: nil, classCap: cap)
+            let (lidarCm3, lidarGrid) = try sized(measured: measured, classCap: cap)
+            var present = Set<Int>()
+            nadirSeg.argmax.pixels.withUnsafeBytes { raw in
+                for b in raw.bindMemory(to: UInt8.self) where palette.isCarvableClass(Int(b)) {
+                    present.insert(Int(b))
+                }
+            }
+            noDepth = NoDepthRow(
+                planeName: adoptedPlaneName,
+                classes: present.sorted().compactMap { palette.volumetricClassName(at: $0) },
+                classCapMm: cap.mm, capSource: cap.source.rawValue,
+                constantExtentMm: constantGrid.verticalExtentMm, constantCarvedCm3: constantCm3,
+                capExtentMm: capGrid.verticalExtentMm, capCarvedCm3: capCm3,
+                lidarExtentMm: lidarGrid.verticalExtentMm, lidarCarvedCm3: lidarCm3)
+        }
+
+        // (3) the hull's own bias at this bundle's baseline, and optionally
+        //     the same box under a tilt sweep and a cap sweep (Decision 11).
+        let caps = options.syntheticCapsMm ?? options.marginsMm.map { options.boxMm.z + $0 }
+        var synthetic = try syntheticControls(
             boxMm: options.boxMm, referenceGrid: productionGrid,
             nadirK: nadirK, obliqueK: obliqueK, t1to2: t1to2,
             plane: plane, gravity: gravity, edgeMm: options.edgeMm,
-            marginsMm: options.marginsMm, fixtureID: fixture.fixtureID)
+            capsMm: caps, fixtureID: fixture.fixtureID)
+        for tilt in options.syntheticTiltsDeg {
+            let orbit = orbitTransform(
+                degrees: tilt, about: productionGrid.originCamera1, axis: productionGrid.axisX)
+            synthetic += try syntheticControls(
+                boxMm: options.boxMm, referenceGrid: productionGrid,
+                nadirK: nadirK, obliqueK: nadirK, t1to2: orbit,
+                plane: plane, gravity: gravity, edgeMm: options.edgeMm,
+                capsMm: caps, fixtureID: fixture.fixtureID, tiltDeg: tilt)
+        }
 
         return Report(
             fixtureID: fixture.fixtureID,
@@ -386,7 +489,29 @@ public enum CarveResidualAudit {
             prismFill: prism > 0 ? productionVolume / prism : 0,
             sweep: sweep,
             synthetic: synthetic,
-            planeVariants: planeVariants)
+            planeVariants: planeVariants,
+            noDepth: noDepth)
+    }
+
+    /// The oblique camera orbited `degrees` about `axis` through `centre`, the
+    /// optical axis kept on the food as the aim guide requires:
+    /// p₂ = R·(p₁ − c) + c. The same construction the audit tests use, on the
+    /// bundle's own grid axes.
+    static func orbitTransform(degrees: Float, about centre: Vec3, axis: Vec3) -> Mat4 {
+        let a = axis.normalised()
+        let t = -degrees * .pi / 180
+        let c = cos(t), s = sin(t)
+        func rotate(_ v: Vec3) -> Vec3 {
+            v * c + a.cross(v) * s + a * (a.dot(v) * (1 - c))
+        }
+        let rx = rotate(Vec3(1, 0, 0)), ry = rotate(Vec3(0, 1, 0)), rz = rotate(Vec3(0, 0, 1))
+        let translation = centre - rotate(centre)
+        return Mat4(columns: [
+            [rx.x, rx.y, rx.z, 0],
+            [ry.x, ry.y, ry.z, 0],
+            [rz.x, rz.y, rz.z, 0],
+            [translation.x, translation.y, translation.z, 1]
+        ])
     }
 
     // MARK: - Height profile
@@ -501,8 +626,9 @@ public enum CarveResidualAudit {
         plane: SupportPlane,
         gravity: Vec3,
         edgeMm: Float,
-        marginsMm: [Float],
-        fixtureID: String
+        capsMm: [Float],
+        fixtureID: String,
+        tiltDeg: Float? = nil
     ) throws -> [SyntheticRow] {
         // One food class: bg = 1, unknown = 2, liquid = 3 → 4 channels, so the
         // synthetic tensors cost a fraction of a real 34-class one.
@@ -537,10 +663,12 @@ public enum CarveResidualAudit {
         let obliqueView = silhouetteView(obliqueMask, intrinsics: obliqueK, palette: boxPalette)
 
         var rows: [SyntheticRow] = []
-        // The box's true height with each swept margin on top, so the margin's
-        // cost is separated from the hull's own bias.
-        for margin in marginsMm {
-            let offset = boxMm.z + margin - VoxelGridSizer.heightMarginMm
+        // Each cap is the grid extent handed to the sizer (the box's true
+        // height plus a margin for the hull-bias control; a constant or a
+        // class cap for the Decision 11 sweep), so the extent's cost is
+        // separated from the hull's own bias.
+        for cap in capsMm {
+            let offset = cap - VoxelGridSizer.heightMarginMm
             let grid: VoxelGrid
             do {
                 grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
@@ -560,6 +688,8 @@ public enum CarveResidualAudit {
             }
             rows.append(SyntheticRow(
                 boxMm: [boxMm.x, boxMm.y, boxMm.z],
+                tiltDeg: tiltDeg,
+                capMm: cap,
                 extentMm: grid.verticalExtentMm,
                 voxelisedTruthCm3: voxelisedTruthCm3(
                     grid: grid, base: base, ax: ax, ay: ay, az: az, boxMm: boxMm),

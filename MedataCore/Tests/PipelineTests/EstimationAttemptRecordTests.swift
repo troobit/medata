@@ -63,7 +63,8 @@ final class EstimationAttemptRecordTests: XCTestCase {
                                          nadirSingleObject: true, obliqueSingleObject: true,
                                          chosenClass: 4, applied: true),
             voxelGrid: .init(measuredFoodHeightMm: 47.3, verticalExtentMm: 54,
-                             dimsZ: 18, edgeMm: 3)
+                             dimsZ: 18, edgeMm: 3,
+                             classCapMm: 85.9, capSource: "measured")
         )
     }
 
@@ -134,6 +135,19 @@ final class EstimationAttemptRecordTests: XCTestCase {
         XCTAssertEqual(g.verticalExtentMm, 54, accuracy: 1e-4)
         XCTAssertEqual(g.dimsZ, 18)
         XCTAssertEqual(g.edgeMm, 3, accuracy: 1e-4)
+        // two-view-trust Decision 11: the class cap and what set the extent.
+        XCTAssertEqual(g.classCapMm ?? 0, 85.9, accuracy: 1e-4)
+        XCTAssertEqual(g.capSource, "measured")
+    }
+
+    // A row written before the class cap existed decodes with the cap fields
+    // absent, not as a failure.
+    func testRowWithoutCapFieldsDecodes() throws {
+        let json = #"{"measuredFoodHeightMm":47.3,"verticalExtentMm":54,"dimsZ":18,"edgeMm":3}"#
+        let g = try JSONDecoder().decode(
+            EstimationAttemptRecord.VoxelGridMeasurements.self, from: Data(json.utf8))
+        XCTAssertNil(g.classCapMm)
+        XCTAssertNil(g.capSource)
     }
 
     // A row written without depth records no height, and that must stay

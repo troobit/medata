@@ -57,3 +57,6 @@ references:
   - [x] 21.1. Pipeline two-view branch, harness twin and carve-audit share GrownRegionPlaneRefit; offline replay measured
     - Before → after (cm³) on the §7 bundles: 1790318627741 397.1 → 397.1 (edgeBand refit held by Decision 3); 1790315814452 509.8 → 390.1; 1790310086654 351.4 → 350.3; 1790315734391 284.1 → 268.0; 1790325380366 358.8 → 358.9; hull ÷ surface ≥ 1.099 on all five; single-view controls 298.9 and 309.5 unchanged
   - [ ] 21.2. STOP: device round — capture the roll in Double mode and read event=region.grow planeOnly=true before Decision 10 leaves proposed
+
+- [x] 22. Class height cap on the non-LiDAR carve — Decision 11
+  - No-depth carve at the adopted plane, 120 mm → class cap 85.9 (cm³, LiDAR reference): 1790318627741 709.8 → 583.1 (397.1); 1790315814452 690.0 → 610.7 (390.1); 1790310086654 678.9 → 595.4 (350.3); 1790315734391 632.8 → 534.7 (268.0); 1790325380366 749.6 → 663.6 (358.9). Ratio to LiDAR improves on all five (1.77–2.36 → 1.47–2.00), none under the 1.3 pass line. LiDAR path and single-view controls byte-identical

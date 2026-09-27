@@ -667,14 +667,17 @@ public enum FixtureRunner {
             palette: palette
         )
         let foodMask = foodRegionMask(argmax: nadirSeg.argmax, palette: palette)
-        // Same measured vertical bound as the device (Pipeline, stage I): with
-        // nadir depth the grid stops at the food's own height, without it the
-        // 120 mm constant stands.
+        // Same vertical bound as the device (Pipeline, stage I): with nadir
+        // depth the grid stops at the food's own height, capped by the class
+        // prior; without it the class cap is the extent (two-view-trust
+        // Decision 11).
         let measuredFoodHeightMm = nadirDepth.flatMap {
             VoxelGridSizer.measuredFoodHeightMm(
                 foodMask: foodMask, depth: $0,
                 intrinsics: nadirIntrinsics, supportPlane: plane)
         }
+        let classCap = ClassHeightPriors.bundled?.cap(
+            forNadirArgmax: nadirSeg.argmax, palette: palette)
         let grid: VoxelGrid
         do {
             grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
@@ -683,7 +686,8 @@ public enum FixtureRunner {
                 supportPlane: plane,
                 gravityCamera: gravity,
                 edgeMm: voxelEdgeMm,
-                measuredFoodHeightMm: measuredFoodHeightMm
+                measuredFoodHeightMm: measuredFoodHeightMm,
+                classCap: classCap
             ))
         } catch {
             throw Error.volumeEstimationFailed(fixtureID, error)

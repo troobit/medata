@@ -112,7 +112,13 @@ let package = Package(
             dependencies: ["PortableContracts", "CaptureKit", "Segmentation", "SupportPlane", "MetricScale"],
             path: "MedataCore/Sources/Volume",
             resources: [
-                .copy("Kernels")
+                .copy("Kernels"),
+                // Per-class food height priors from MetaFood3D
+                // (tools/metafood3d/height_priors.py), the two-view carve's
+                // vertical cap where no height is measured (two-view-trust
+                // Decision 11). A byte-identical copy of
+                // tools/metafood3d/height_priors.json.
+                .copy("Resources/height_priors.json")
             ]
         ),
         .target(

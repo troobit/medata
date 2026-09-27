@@ -186,3 +186,12 @@ Reasoning:
   (33 classes + 3 sentinels), palette order.
 - `tools/metafood3d/height_priors_items.csv` — one row per mesh with every
   measured column, the seat diagnostics and the workbook join.
+
+## Shipped
+
+`height_priors.json` is bundled into the app as
+`MedataCore/Sources/Volume/Resources/height_priors.json` (a byte-identical
+copy; `ClassHeightPriors` in Volume loads it once) and applied by the cap
+rule above (two-view-trust Decision 11). Regenerating the file means copying
+it there again and re-reading `ClassHeightPriorsTests`, which pins the
+numbers.

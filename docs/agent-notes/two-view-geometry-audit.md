@@ -460,3 +460,55 @@ The margin sweep does not touch any production constant: `VoxelGridSizer` adds
 its own `heightMarginMm` and then clamps, so a margin m is expressed by handing
 it `h + m − heightMarginMm`, which reproduces `clamp(h + m)` exactly, clamp
 included.
+
+## 8. The class height cap on the no-depth carve (2026-09-27, two-view-trust Decision 11)
+
+§4 and Decision 8 left a phone without LiDAR with no height bound at all: the
+120 mm constant was the answer. `ClassHeightPriors` (Volume) now hands the
+sizer a per-class cap from the bundled `height_priors.json` —
+`tools/metafood3d/height_priors.py`'s output over the MetaFood3D meshes, a
+byte-identical copy under `MedataCore/Sources/Volume/Resources/`. The rule
+(`HEIGHT_PRIORS.md`): class max-height P90 + the shipped 5 mm margin, the
+global P90 (71.8) + margin for a class with no or fewer than four meshes and
+for `unknown_food`; several classes in the nadir map take the tallest cap.
+`VoxelGridSizer.verticalBound` resolves it: no measurement → the cap is the
+extent; a measurement → `min(measured + margin, cap)`, so the cap never
+raises a LiDAR grid. Both `Pipeline` and `FixtureRunner` size by it; the row's
+`voxelGrid` carries `classCapMm` and `capSource`, and `event=grid.height`
+prints `cap_mm` and `cap_source`.
+
+Measured on the five §7 bundles at the plane production adopts, depth
+withheld from the sizer only (`carve-audit --no-depth`): the constant reads
+1.77–2.36x the LiDAR figure, the class cap (85.9 → 87 mm on bread) 1.47–2.00x.
+Every bundle improves 11–18 %; none reaches the research's 1.3 pass line,
+because a roll is a third of the bread class's P90. The LiDAR path is
+byte-identical on all seven bundles. The tables are in Decision 11.
+
+Running it:
+
+```
+HarnessCLI carve-audit --no-depth [--tilts 22.2,26,40,60] [--caps 120,85.9,40] <bundle.fixture>…
+```
+
+`--no-depth` adds a `noDepth` line per bundle: the constant, the class cap
+and the measured reference, all carved at the adopted plane, with both
+ratios. It withholds depth from the SIZER only — the plane is still the
+bundle's LiDAR plane, because no card-only plane replay exists (§4); it
+measures the height bound, not the non-LiDAR plane. `--tilts` re-runs the
+synthetic box with the oblique orbited about the grid's x axis through the
+food point at each tilt (the bundle's real intrinsics and plane;
+`CarveResidualAudit.orbitTransform`), and `--caps` sets the grid extents the
+box is carved under (default: the box height plus each margin, the hull-bias
+control). The `synthetic` lines print `tilt=stored` or `tiltDeg=` and
+`capMm=`.
+
+Gotchas:
+
+- A regenerated `height_priors.json` must be copied byte-identically into
+  `Volume/Resources`; `ClassHeightPriorsTests` pins bread_white 85.9, egg
+  49.3 and the global 76.8 so a silent drift fails.
+- `chips_fries` P90 is 122.6 mm: its cap (127.6) clamps to the 120 mm
+  constant, so that class is uncapped in practice.
+- On a phone the no-depth two-view path refuses at the plane stage today
+  (§6), so `cap_source=classPrior` is seen offline and in tests, not on the
+  device, until a card-only plane exists.
