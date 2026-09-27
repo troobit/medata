@@ -639,6 +639,66 @@ If it fails, revisit the class mapping (§3b) — over-dropping shrinks the
 evaluable class set — then retrain. Don't proceed to export until the bar is
 green.
 
+### Mask quality (class-agnostic, MD-29)
+
+`specs/DECISIONS.md` MD-29 re-scoped the segmenter to "clean, coherent food
+masks with a good ranked shortlist" — the user fixes a wrong class with a tap,
+not a wrong region. `run_validation.py` therefore makes a second pass over the
+same split and records `metrics.mask_quality` in the lineage file beside the
+class metrics, and prints four `[validate] mask …` lines beside the mean. The
+metrics live in `tools/segmenter/mask_quality.py` (pure numpy; the EdgeTAM
+spike's `spike_masks/scoring.py` imports the same code). Record only: no gate
+reads the block yet — segmenter-foundation Decision 37 names the numbers a
+replacement bar would be pinned against.
+
+```json
+"mask_quality": {
+  "food_iou": 0.88, "region_iou": 0.49, "boundary_f2": 0.46,
+  "shortlist_top3_hit": 0.82, "n_images": 182, "n_regions": 900,
+  "scored_at": "2026-09-27T05:00:00+00:00"
+}
+```
+
+Everything is scored on the image content only (the letterbox padding is
+cropped off), so a 2 px tolerance means the same thing on every image. "Food"
+is every channel except the palette's special channels (background 33,
+unknown_food 34, unsupported_liquid 35 — `validation.special_channel_indices`).
+
+- `food_iou` — IoU of the binary food-versus-not-food mask, mean over images:
+  is the food where the model says it is, whatever it called it.
+- `region_iou` — each GT region (an 8-connected component of one class,
+  ≥ 64 px) matched to the predicted label-map component with the largest
+  overlap; IoU of that pair, mean over regions: does each food come out as one
+  coherent blob the user could swap the label on.
+- `boundary_f2` — DAVIS boundary F on the binary food mask with a 2 px
+  tolerance, mean over images: are the edges tight (speckle and halo pull it
+  down; area IoU barely notices them).
+- `shortlist_top3_hit` — softmax mean-pooled inside each GT region, ranked
+  over the food classes; the fraction of regions whose true class is in the
+  top 3: would the review screen's shortlist hold the right food.
+- `n_images`, `n_regions` — the denominators; `scored_at` — UTC time of the pass.
+
+Re-score an old checkpoint into its lineage file without touching the class
+metrics or the gate verdict (CPU is about 3 minutes for the 182-image anchor
+and leaves MPS to a live training run):
+
+```sh
+tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
+    --checkpoint tools/segmenter/build/checkpoint_r3_combined_noweight.pt \
+    --data data/foodseg103_remapped_v2 --split heldout_leakfree \
+    --lineage tools/segmenter/build/lineage-r3.json \
+    --device cpu --mask-quality-only
+```
+
+The spike's headline numbers (RESULTS.md) count unknown_food and
+unsupported_liquid as food and match regions against components of the binary
+mask; the lineage block excludes the sentinels and matches against the label
+map's class-aware components. The sentinel exclusion is not a small
+difference: every food the model calls `unknown_food` (or GT region labelled
+so) becomes a miss, so R3 reads 0.882 food IoU / 0.459 boundary F under the
+spike's definition and 0.736 / 0.398 under the lineage's. The two sets of
+figures are not interchangeable; compare lineage blocks with lineage blocks.
+
 ## 6. Exporting to Core ML + TFLite
 
 ### Why

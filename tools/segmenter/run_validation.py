@@ -5,6 +5,13 @@ Runs a trained checkpoint over a remapped split (default ``heldout``), computes
 per-class IoU by palette name, and records the metrics + export-eligibility
 decision into ``build/lineage.json`` via ``validation.update_lineage_file``.
 
+A second pass over the same split records the class-agnostic mask-quality
+numbers (MD-29, segmenter-foundation Decision 37; ``mask_quality.py``) under
+``metrics.mask_quality`` — food IoU, region IoU, boundary F at 2 px, top-3
+shortlist hit. Record only: no gate reads them yet. ``--mask-quality-only``
+re-scores an existing checkpoint into its lineage file without touching the
+class metrics (for re-validating old runs).
+
 Exit codes: 0 when the strict gate passes (or a below-gate release was
 explicitly allowed), 1 when it fails without an override.
 
@@ -83,6 +90,58 @@ def per_class_iou_by_name(model, loader, device, names: list[str],
     }
 
 
+def _content_shapes(dataset, target_size: int) -> list[tuple[int, int]]:
+    """(sw, sh) of each sample's content inside the letterbox, in loader order,
+    so the mask metrics score the image and not the background padding. The
+    mask file's size is the EXIF-rotated image's size (train.py docstring)."""
+    from PIL import Image
+
+    shapes = []
+    for _, mask_path in dataset.pairs:
+        with Image.open(mask_path) as m:
+            shapes.append(mask_quality_module().content_shape(*m.size, target_size))
+    return shapes
+
+
+def mask_quality_module():
+    return _load_sibling("mask_quality")
+
+
+def mask_quality_over_loader(model, loader, device, content_shapes, non_food,
+                             forward_logits=None) -> list[dict]:
+    """Per-image ``mask_quality.score_image`` over a split: softmax on the device,
+    cropped to each sample's content, scored in numpy on the CPU."""
+    import torch
+
+    mq = mask_quality_module()
+    if forward_logits is None:
+        forward_logits = _load_sibling("archs").dict_out_logits
+    per_image = []
+    i = 0
+    model.eval()
+    with torch.no_grad():
+        for images, masks in loader:
+            probs = torch.softmax(forward_logits(model, images.to(device)), dim=1).cpu().numpy()
+            gts = masks.numpy()
+            for b in range(probs.shape[0]):
+                sw, sh = content_shapes[i]
+                i += 1
+                p = probs[b, :, :sh, :sw]
+                gt = gts[b, :sh, :sw].astype("uint8")
+                per_image.append(mq.score_image(gt, p.argmax(0).astype("uint8"), p, non_food))
+    return per_image
+
+
+def _print_mask_quality(block: dict) -> None:
+    def fmt(v):
+        return "absent" if v is None else f"{v:.4f}"
+    print(f"[validate] mask food IoU = {fmt(block['food_iou'])}")
+    print(f"[validate] mask region IoU = {fmt(block['region_iou'])}")
+    print(f"[validate] mask boundary F@2px = {fmt(block['boundary_f2'])}")
+    print(f"[validate] mask top-3 shortlist hit = {fmt(block['shortlist_top3_hit'])} "
+          f"({block['n_regions']} regions, {block['n_images']} images)")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -102,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
                              "strict gate fails (requires --reason).")
     parser.add_argument("--reason", default=None,
                         help="Attributable reason for --allow-below-gate.")
+    parser.add_argument("--mask-quality-only", action="store_true",
+                        help="Re-score only metrics.mask_quality into --lineage; "
+                             "class metrics and the gate verdict are left as recorded.")
     args = parser.parse_args(argv)
 
     if args.allow_below_gate and not (args.reason and args.reason.strip()):
@@ -150,18 +212,33 @@ def main(argv: list[str] | None = None) -> int:
     loader = train._make_loader(dataset, args.batch_size, False, args.num_workers)
     print(f"[validate] {args.split} samples = {len(dataset)}")
 
-    iou = per_class_iou_by_name(model, loader, device, names,
-                                forward_logits=arch_spec.forward_logits)
-    lineage = validation.update_lineage_file(iou, args.lineage)
-    metrics = lineage["metrics"]
+    if not args.mask_quality_only:
+        iou = per_class_iou_by_name(model, loader, device, names,
+                                    forward_logits=arch_spec.forward_logits)
+        lineage = validation.update_lineage_file(iou, args.lineage)
+        metrics = lineage["metrics"]
 
-    print(f"[validate] mean food-class IoU = {metrics['mean_iou']:.4f} "
-          f"(bar {validation.MEAN_IOU_BAR})")
-    for name, value in sorted(metrics["carb_priority_iou"].items()):
-        print(f"[validate]   staple {name} = {value:.4f} (floor {validation.CARB_PRIORITY_IOU_BAR})")
-    for item in metrics["shortfall"]:
-        got = "absent" if item["iou"] is None else f"{item['iou']:.4f}"
-        print(f"[validate] SHORT: {item['class']} = {got} < {item['bar']}")
+        print(f"[validate] mean food-class IoU = {metrics['mean_iou']:.4f} "
+              f"(bar {validation.MEAN_IOU_BAR})")
+        for name, value in sorted(metrics["carb_priority_iou"].items()):
+            print(f"[validate]   staple {name} = {value:.4f} (floor {validation.CARB_PRIORITY_IOU_BAR})")
+        for item in metrics["shortfall"]:
+            got = "absent" if item["iou"] is None else f"{item['iou']:.4f}"
+            print(f"[validate] SHORT: {item['class']} = {got} < {item['bar']}")
+
+    # Class-agnostic mask quality (MD-29): a second pass, recorded beside the
+    # class metrics. Record only — the gate below does not read it.
+    per_image = mask_quality_over_loader(
+        model, loader, device, _content_shapes(dataset, args.target_size),
+        validation.special_channel_indices(), forward_logits=arch_spec.forward_logits)
+    block = mask_quality_module().lineage_block(per_image)
+    lineage = validation.update_lineage_mask_quality(block, args.lineage)
+    _print_mask_quality(block)
+
+    if args.mask_quality_only:
+        print("[validate] mask-quality only: class metrics and gate verdict untouched")
+        return 0
+    metrics = lineage["metrics"]
 
     if metrics["export_eligible"]:
         print("[validate] export-eligible: strict gate PASSED")

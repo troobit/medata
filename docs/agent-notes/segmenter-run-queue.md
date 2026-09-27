@@ -20,7 +20,9 @@ this note is the mechanics and the reading rules.
   `run_variant <name> [--epochs N] -- <recipe flags>`. `lib.sh` supplies the
   fixed envelope (merged corpus, 36 classes, 513, batch 16, lr 1e-3) and runs
   the leak-free anchor validation after training. Its exit code is the
-  validation's; 1 means below the 0.48 gate and is expected today.
+  validation's; 1 means below the 0.48 gate and is expected today. It echoes
+  the validation's `mean food-class IoU`, `staple` and `mask ` lines into
+  `runner.log`.
 - `PAUSE` in the state dir holds the runner between entries; `STOP` makes it
   exit after the current one. Both are plain files. The runner re-globs the
   queue dir before each entry, so appending a new entry while it runs is fine.
@@ -44,6 +46,30 @@ tools/segmenter/tests -q`), commit, remove `PAUSE`.
   images. `run_validation.py` writes `mean_iou` and `per_class_iou` into the
   run's lineage file; compare two runs with a few lines of Python over their
   `metrics.per_class_iou`.
+- The same run also writes `metrics.mask_quality` — the class-agnostic numbers
+  MD-29 made the product-relevant ones (`docs/ml-training.md` §5 "Mask
+  quality"): `food_iou`, `region_iou`, `boundary_f2`, `shortlist_top3_hit`,
+  with `n_images` / `n_regions` / `scored_at`. The log shows them as four
+  `[validate] mask …` lines after the staples. Record only; nothing gates on
+  them yet. Re-score an older run in place with `--mask-quality-only` (CPU,
+  about 3 minutes, does not touch the class metrics or the verdict):
+  `tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py
+  --checkpoint build/checkpoint_<name>.pt --data data/foodseg103_remapped_v2
+  --split heldout_leakfree --lineage build/lineage-<name>.json --device cpu
+  --mask-quality-only`.
+- Mask-quality noise, measured 2026-09-27 by re-scoring the same-recipe runs
+  R3, R7 (unseeded repeats), R8 and R9 (seed-1 repeats) on the anchor: food
+  IoU 0.709–0.736, region IoU 0.484–0.494, boundary F 0.376–0.398, top-3
+  shortlist hit 0.821–0.833. So the noise floor is about 0.03 on food IoU,
+  0.01 on region IoU, 0.02 on boundary F and 0.01 on the shortlist; seeding
+  narrows none of them (R8 vs R9 differ by 0.015 / 0.002 / 0.011 / 0.007).
+  Against that band, R6 (focal + photometric) is below on food IoU (0.677),
+  region IoU (0.464) and boundary F (0.351) and level on the shortlist
+  (0.838); the shipped `ab812dc3aa9d` sits inside the band on everything but
+  region IoU (0.464). No recipe change has moved boundary F or region IoU up.
+  These are the lineage-block definitions (sentinels excluded); the spike's
+  RESULTS.md numbers use a wider food definition and read about 0.15 higher
+  on food IoU.
 - Three classes have zero held-out truth pixels (bread_wholemeal, brown_rice,
   potato_mashed) and so do beer, milk and water. A run that never predicts one
   of them shows it as absent and drops it from the mean; a run that predicts it
