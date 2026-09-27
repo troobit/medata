@@ -33,6 +33,13 @@ struct Args {
     var oblique: Bool = false
     // `carve-audit`: the synthetic control box, "LxWxH" in mm (grid axes).
     var boxMm: SIMD3<Float> = SIMD3(120, 70, 40)
+    // `carve-audit --no-depth`: also size the carve as a phone without LiDAR
+    // would (two-view-trust Decision 11).
+    var noDepth: Bool = false
+    // `carve-audit --tilts 22.2,26,40,60`: synthetic box under an orbited
+    // oblique at each tilt; `--caps 120,85.9,45`: grid extents for the box.
+    var syntheticTiltsDeg: [Float] = []
+    var syntheticCapsMm: [Float]?
     var checkpointSHA256: String = ""
     var outputPath: String = ""
     var voxelEdgeMm: Float = 3.0
@@ -153,6 +160,12 @@ func parseArgs() -> Args? {
                 let parts = s.split(separator: "x").compactMap { Float($0) }
                 if parts.count == 3 { result.boxMm = SIMD3(parts[0], parts[1], parts[2]) }
             }
+        case "--no-depth":
+            result.noDepth = true
+        case "--tilts":
+            if let s = it.next() { result.syntheticTiltsDeg = s.split(separator: ",").compactMap { Float($0) } }
+        case "--caps":
+            if let s = it.next() { result.syntheticCapsMm = s.split(separator: ",").compactMap { Float($0) } }
         case "--seed-x":
             if let s = it.next(), let v = Int(s) { result.seedX = v }
         case "--seed-y":
@@ -1390,7 +1403,10 @@ func runCarveAudit(args: Args) throws {
     let options = CarveResidualAudit.Options(
         edgeMm: args.voxelEdgeMm,
         boxMm: args.boxMm,
-        regularisation: regularisationConfig(args: args))
+        syntheticCapsMm: args.syntheticCapsMm,
+        syntheticTiltsDeg: args.syntheticTiltsDeg,
+        regularisation: regularisationConfig(args: args),
+        noDepth: args.noDepth)
     for path in args.fixturePaths {
         let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         let fixture = try PbMealFixture(serializedBytes: Data(contentsOf: URL(fileURLWithPath: path)))
@@ -1443,8 +1459,19 @@ func runCarveAudit(args: Args) throws {
                 + " carvedCm3=\(fmt(v.carvedCm3)) heightFieldCm3=\(fmt(v.heightFieldCm3))"
                 + " hullOverSurface=\(fmt(v.heightFieldCm3 > 0 ? v.carvedCm3 / v.heightFieldCm3 : 0, 3))")
         }
+        if let nd = report.noDepth {
+            print("stem=\(stem) noDepth plane=\(nd.planeName) classes=\(nd.classes.joined(separator: ","))"
+                + " capMm=\(fmt(nd.classCapMm)) capSource=\(nd.capSource)"
+                + " constantExtentMm=\(fmt(nd.constantExtentMm)) constantCarvedCm3=\(fmt(nd.constantCarvedCm3))"
+                + " capExtentMm=\(fmt(nd.capExtentMm)) capCarvedCm3=\(fmt(nd.capCarvedCm3))"
+                + " lidarExtentMm=\(fmt(nd.lidarExtentMm)) lidarCarvedCm3=\(fmt(nd.lidarCarvedCm3))"
+                + " constantOverLidar=\(fmt(nd.lidarCarvedCm3 > 0 ? nd.constantCarvedCm3 / nd.lidarCarvedCm3 : 0, 3))"
+                + " capOverLidar=\(fmt(nd.lidarCarvedCm3 > 0 ? nd.capCarvedCm3 / nd.lidarCarvedCm3 : 0, 3))")
+        }
         for row in report.synthetic {
             print("stem=\(stem) synthetic box=\(row.boxMm.map { fmt($0, 0) }.joined(separator: "x"))"
+                + (row.tiltDeg.map { " tiltDeg=\(fmt($0))" } ?? " tilt=stored")
+                + " capMm=\(fmt(row.capMm))"
                 + " extentMm=\(fmt(row.extentMm)) truthCm3=\(fmt(row.voxelisedTruthCm3))"
                 + " carvedCm3=\(fmt(row.carvedCm3)) hullBias=\(fmt(row.hullBias, 3))"
                 + " silhouetteFootprintCm2=\(fmt(row.silhouetteFootprintCm2))"

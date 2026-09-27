@@ -127,7 +127,7 @@ struct CarveResidualAuditTests {
         let rows = try CarveResidualAudit.syntheticControls(
             boxMm: SIMD3(60, 45, 30), referenceGrid: referenceGrid,
             nadirK: k, obliqueK: k, t1to2: obliqueTransform(degrees: 25),
-            plane: plane, gravity: gravity, edgeMm: 3, marginsMm: [0],
+            plane: plane, gravity: gravity, edgeMm: 3, capsMm: [30],
             fixtureID: "synthetic")
         let row = try #require(rows.first)
         #expect(row.carvedCm3 > 0)
@@ -147,7 +147,7 @@ struct CarveResidualAuditTests {
         let rows = try CarveResidualAudit.syntheticControls(
             boxMm: SIMD3(60, 45, 30), referenceGrid: referenceGrid,
             nadirK: k, obliqueK: k, t1to2: obliqueTransform(degrees: 25),
-            plane: plane, gravity: gravity, edgeMm: 3, marginsMm: [0, 9],
+            plane: plane, gravity: gravity, edgeMm: 3, capsMm: [30, 39],
             fixtureID: "synthetic")
         #expect(rows.count == 2)
         #expect(rows[1].extentMm > rows[0].extentMm)
