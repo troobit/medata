@@ -1500,3 +1500,70 @@ The second finding is separable and is why R3 is adopted rather than merely expl
 `tools/segmenter/build/checkpoint_r3_combined_noweight.pt` and `lineage-r3.json` become the reference pair. `docs/ml-training.md` §4 records the adopted recipe. `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 10 closes. The remaining swap — export to Core ML, the gates, the `.mlpackage` replacement and an on-device capture pass — is unscheduled work, not an open question.
 
 ---
+
+## Decision 37: EdgeTAM mask spike — not adopted; the prompt source, not the model, is the bottleneck
+
+**Date**: 2026-09-27
+**Status**: accepted
+
+### Context
+
+MD-29 re-scoped the segmenter from "predict the right class" to "produce clean, coherent
+food masks with a good shortlist", since the user picks the food. The on-device model research
+(`docs/research/on-device-models-2026-09.md`) found one promptable model inside the budget:
+EdgeTAM (about 20 MB FP16, Apache-2.0). The one-day experiment was run on the 182-image
+leak-free anchor with class-agnostic metrics: food-versus-background IoU, per-region IoU and
+boundary F at 2 px (`tools/segmenter/spike_masks/RESULTS.md`).
+
+### Decision
+
+EdgeTAM is not adopted as a replacement or a refinement stage. The spike stays in the tree as
+the instrument for any later promptable-model question, and one path stays open: the user's
+tap on the review screen as the prompt, which is oracle-quality by construction.
+
+### Rationale
+
+| Method | Prompts | Food IoU | Boundary F |
+|---|---|---|---|
+| deeplab_mnv3 (R3) | none | 0.882 | 0.459 |
+| EdgeTAM | app: box + point per deeplab component | 0.791 | 0.457 |
+| EdgeTAM | app: label-map components, best of multimask | 0.862 | 0.573 |
+| EdgeTAM | oracle: box + point per truth region | 0.911 | 0.607 |
+| Vision foreground (iOS 18 API) | none | 0.734 | 0.405 |
+
+Deeplab's class-agnostic mask is already at 0.88, so the class mean of 0.42 was measuring the
+wrong thing for the product. EdgeTAM only wins when the prompt is right: 130 of the 275 app
+prompts are boxes covering most of the frame because deeplab merges a plate's foods into one
+component, and EdgeTAM then returns either the one food under the point or a speckled plate
+mask. Given a correct box it delineates food better than deeplab on both IoU and boundary F.
+The user's tap is a correct prompt, and that is a review-screen feature, not a segmenter swap.
+
+### Alternatives Considered
+
+- **Adopt EdgeTAM with deeplab-derived prompts**: loses 0.02 to 0.09 food IoU on the anchor, adds
+  20 MB and 300 ms per image on CPU with no ANE evidence. Rejected on the measurement.
+- **Adopt it as a boundary refiner only**: boundary F 0.46 → 0.57 with label-map prompts, but IoU
+  still drops and per-prompt IoU is 0.36, so refinement would degrade as often as it helps.
+  Rejected until a prompt source exists that does not come from the argmax.
+- **Vision's foreground request as a zero-byte baseline**: lifts the plate with the food, 0.73.
+  Rejected.
+
+### Consequences
+
+**Positive:**
+- The segmenter's product-relevant number is now measured: 0.88 class-agnostic food IoU, 0.82
+  top-3 shortlist hit on truth regions. The replacement gate proposed in the research can be
+  pinned against these.
+- A reusable scoring module and six qualitative examples exist for the next model question.
+
+**Negative:**
+- No mask-quality gain landed this week from a model swap; boundary quality (0.46) stays the
+  weakest mask number and speckle remains a training-side problem.
+- Tap-to-refine would put a second model on device for a review-time feature; its cost and
+  value are unmeasured.
+
+### Impact
+
+`tools/segmenter/spike_masks/` (committed, venv and weights ignored). No pipeline change.
+
+---
