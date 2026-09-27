@@ -52,3 +52,8 @@ references:
 - [x] 19. Developer-phase shutter arms outside the 10–40° tilt band so a near-side-on oblique can be captured (Decision 8 experiment)
 
 - [ ] 20. Device capture of a known object with the oblique near side-on decides whether a wider aim band bounds height (Decision 8)
+
+- [ ] 21. Two-view plane refit from the grown region — Decision 10; device round pending
+  - [x] 21.1. Pipeline two-view branch, harness twin and carve-audit share GrownRegionPlaneRefit; offline replay measured
+    - Before → after (cm³) on the §7 bundles: 1790318627741 397.1 → 397.1 (edgeBand refit held by Decision 3); 1790315814452 509.8 → 390.1; 1790310086654 351.4 → 350.3; 1790315734391 284.1 → 268.0; 1790325380366 358.8 → 358.9; hull ÷ surface ≥ 1.099 on all five; single-view controls 298.9 and 309.5 unchanged
+  - [ ] 21.2. STOP: device round — capture the roll in Double mode and read event=region.grow planeOnly=true before Decision 10 leaves proposed
