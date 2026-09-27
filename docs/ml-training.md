@@ -579,6 +579,25 @@ count. Omitted, sampling is the plain once-per-epoch shuffle; the value lands
 in lineage `train_config.repeat_factor_threshold` and is checked by the resume
 drift-check.
 
+### Boundary-weighted loss (2026-09-27)
+
+`--boundary-weight W` makes the per-pixel cross-entropy term of whichever
+`--loss` is selected (ce, weighted_ce, focal, the CE half of combined, the CE
+base of co_occurrence) care about edges: every pixel within
+`--boundary-band-px K` (default 2, Chebyshev distance) of a label change in
+the train mask is weighted `W`, every other pixel 1, and the term is the
+weighted mean `sum(w * ce) / sum(w)` rather than the plain mean, so the loss
+scale stays comparable to the unweighted run. Background counts as a class, so
+food/background edges are boundaries; dice and presence terms are untouched.
+The map is built per sample in the Dataset from the letterboxed, augmented
+mask (`loss_config.boundary_weight_map`) and collated as a third tensor. Why:
+re-scoring R3/R6/R7/R8/R9 and the shipped model on class-agnostic metrics
+(MD-29) put boundary F at 2 px at 0.45–0.46 and region IoU at 0.48–0.50 for
+every recipe tried, inside the 0.01–0.02 noise band, so no recipe to date has
+moved the edges. Omitted, the loss is the plain per-pixel mean as before; both
+values land in lineage `train_config.boundary_weight` /
+`train_config.boundary_band_px` and are checked by the resume drift-check.
+
 ## 5. Validating the segmenter
 
 ### Why
