@@ -676,8 +676,13 @@ public enum FixtureRunner {
                 foodMask: foodMask, depth: $0,
                 intrinsics: nadirIntrinsics, supportPlane: plane)
         }
-        let classCap = ClassHeightPriors.bundled?.cap(
-            forNadirArgmax: nadirSeg.argmax, palette: palette)
+        // The cap scales with the silhouette's footprint where no height is
+        // measured (Decision 12); a measurement keeps Decision 11's ceiling.
+        let footprintMm2 = VoxelGridSizer.silhouetteFootprintMm2(
+            foodMask: foodMask, intrinsics: nadirIntrinsics, supportPlane: plane)
+        let classCap = ClassHeightPriors.bundled?.carveCap(
+            forNadirArgmax: nadirSeg.argmax, palette: palette,
+            footprintMm2: footprintMm2, heightMeasured: measuredFoodHeightMm != nil)
         let grid: VoxelGrid
         do {
             grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
