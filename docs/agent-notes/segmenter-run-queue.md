@@ -32,6 +32,17 @@ this note is the mechanics and the reading rules.
 - Dry run: `MEDATA_QUEUE_DIR=<scratch queue> MEDATA_QUEUE_STATE=<scratch state>
   tools/segmenter/run_queue.sh` with entries that just echo and exit.
 
+## Stalls
+
+2026-09-27: R11 hung at 16:41 on its first epoch — main thread parked on the Metal
+command queue, five spawn workers idle, no log line, no sidecar — and sat there
+four hours until noticed. `lib.sh` now runs `train.py` in the background and kills
+it when the train log has not changed for `MEDATA_STALL_SECS` (default 5400 s, an
+epoch takes ~32 min at 513); the entry then returns 124 and the runner moves on.
+To re-run a stalled entry: `rm build/queue/done/<entry>`, move its train log
+aside (a fresh start appends), and relaunch or `rm PAUSE`. A `.resume.pt` sidecar
+means an epoch completed; resume with identical flags instead of starting fresh.
+
 ## Never edit train.py while a run is live
 
 DataLoader workers spawn each epoch and re-import `train.py` from disk. New
@@ -81,6 +92,12 @@ tools/segmenter/tests -q`), commit, remove `PAUSE`.
   0.45 (soup +0.45, apple -0.40) and staples by 0.05. A single-run tail-class
   reading means nothing. The seeded block R8/R9/R10 (task 13) measures how
   much of that seeding removes and sets the per-staple tolerance.
+- Mask-quality block (2026-09-27, background-only food definition, six
+  checkpoints re-scored): food IoU 0.879–0.887, region IoU 0.481–0.503,
+  boundary F 0.443–0.460, top-3 hit 0.810–0.824 across the five identical-recipe
+  runs R3/R7/R8/R9/R10 — noise bands 0.008 / 0.022 / 0.016 / 0.014. R6 (focal)
+  is below the band on boundary F (0.423). No recipe so far moved any of them
+  up; R15 (boundary weight) and R16 (641) are the first that could.
 - The in-run val split over-reports: R6 trailed R3 by 0.03 there and by 0.064
   on the anchor; R4/R5 showed the same. Never judge on the training log.
 
