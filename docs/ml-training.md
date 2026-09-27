@@ -560,6 +560,15 @@ stable to 0.001 but single classes moving by up to 0.45 and staples by 0.05, so
 recipe comparisons are seeded from here on and read against the seeded
 reference R8 (`--seed 1`).
 
+Five runs of the R3 recipe (R3, R7, R8, R9, R10; 2026-09-26/27) set the noise
+floor the gate has to respect: the mean over the 27 classes with held-out truth
+ranges 0.453–0.481, so a single run cannot resolve a class-mean effect under
+about 0.03; single classes move by up to 0.69 (banana, R8 → R10); the per-staple
+tolerance (largest pairwise gap) is bread_white 0.05, chips_fries 0.06, pasta
+0.11, potato_boiled 0.08, white_rice 0.08. The mask-quality block is the
+steadier instrument (food IoU ±0.03, region IoU ±0.01, boundary F ±0.02 across
+the same runs) and is what recipe verdicts read first.
+
 Multi-hour runs go through the serial queue rather than hand-launched
 `nohup` lines: entries in `tools/segmenter/queue/`, runner
 `tools/segmenter/run_queue.sh`, state under `tools/segmenter/build/queue/`.
@@ -709,14 +718,14 @@ tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
     --device cpu --mask-quality-only
 ```
 
-The spike's headline numbers (RESULTS.md) count unknown_food and
-unsupported_liquid as food and match regions against components of the binary
-mask; the lineage block excludes the sentinels and matches against the label
-map's class-aware components. The sentinel exclusion is not a small
-difference: every food the model calls `unknown_food` (or GT region labelled
-so) becomes a miss, so R3 reads 0.882 food IoU / 0.459 boundary F under the
-spike's definition and 0.736 / 0.398 under the lineage's. The two sets of
-figures are not interchangeable; compare lineage blocks with lineage blocks.
+The lineage block uses the spike's food definition (RESULTS.md): everything
+except background (channel 33) is food, so `unknown_food` and
+`unsupported_liquid` count — a wrong class is the user's tap, a wrong mask is
+the volume (MD-29). Regions are matched against the label map's class-aware
+components, which is what the review screen shows. Under this definition R3
+reads 0.882 food IoU / 0.489 region IoU / 0.459 boundary F / 0.824 top-3 hit;
+excluding the sentinels instead (the first re-scoring pass, 2026-09-27) gave
+0.736 / 0.484 / 0.398 / 0.829, and those two sets are not interchangeable.
 
 ## 6. Exporting to Core ML + TFLite
 
