@@ -1056,36 +1056,68 @@ struct MealReviewView: View {
 
 // MARK: - Relabel sheet (Req 3, 5)
 
-// The shortlist (at most five, recency-ordered, no scores — Req 3.2), the
-// prominent not-in-the-database action (Req 5.1; the common case on a
-// 25-class palette), and the full eligible list behind a plain text filter
-// (Req 3.4).
+// The shortlist first (at most five, no scores — Req 3.2), the full eligible
+// list under a pinned search (Req 3.4), and the not-in-the-database action
+// last (Req 5.1). Order is the swap loop's priority (review-swap-loop, MD-29):
+// the likely swap sits under the thumb, and a "Keep <predicted>" row makes
+// the reversal (Req 3.11) reachable from the same sheet.
 private struct RelabelSheet: View {
     @Bindable var model: MealReviewModel
     let classId: String
 
-    @State private var filterText = ""
+    @State private var searchText = ""
     @Environment(\.dismiss) private var dismiss
 
     private var food: ReviewFood? { model.food(classId) }
     private var canRelabel: Bool { model.canRelabel(classId) }
+    private var trimmedSearch: String { searchText.trimmingCharacters(in: .whitespaces) }
+    private var isSearching: Bool { !trimmedSearch.isEmpty }
+    private var isRelabelled: Bool { food?.flags.classCorrected ?? false }
 
     private var filteredEligible: [FoodCandidate] {
         let all = model.eligibleFoods(for: classId)
-        let trimmed = filterText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return all }
-        return all.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+        guard isSearching else { return all }
+        return all.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedSearch) }
     }
 
     var body: some View {
         NavigationStack {
             List {
-                // The absent action is prominent, not tucked under a search:
-                // nearly every real food is outside the palette (Req 5.1).
+                if !canRelabel {
+                    // Decision 14 fallback, said once rather than shown as a
+                    // list of disabled rows. Functional, not a disclaimer.
+                    Section {
+                        Text("Food can't be changed: this record has no usable volume to re-derive from.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("relabel.refused")
+                    }
+                }
+                // Hidden while searching: a search is a full-list act, and
+                // the same food matching in two sections reads as a bug.
+                if !isSearching, isRelabelled || !model.shortlist.isEmpty {
+                    Section(model.shortlistHeader) {
+                        if let food, isRelabelled {
+                            keepRow(food)
+                        }
+                        ForEach(Array(model.shortlist.enumerated()), id: \.element.id) { rank, candidate in
+                            candidateRow(candidate, shortlistRank: rank + 1)
+                        }
+                    }
+                }
+                Section("All foods") {
+                    ForEach(filteredEligible) { candidate in
+                        // Chosen from the full list: shortlist_rank 0 records
+                        // that the alternatives did not contain it (Req 9.7).
+                        candidateRow(candidate, shortlistRank: 0)
+                    }
+                }
+                // Still offered from both lists (Req 5.1); the typed search
+                // travels with it as the absent query (Req 5.2).
                 Section {
                     Button {
                         Task {
-                            await model.markAbsent(classId: classId, query: filterText)
+                            await model.markAbsent(classId: classId, query: trimmedSearch)
                             dismiss()
                         }
                     } label: {
@@ -1097,25 +1129,14 @@ private struct RelabelSheet: View {
                     }
                     .accessibilityIdentifier("relabel.absent")
                 }
-                if !model.shortlist.isEmpty {
-                    Section("Recent") {
-                        ForEach(Array(model.shortlist.enumerated()), id: \.element.id) { rank, candidate in
-                            candidateRow(candidate, shortlistRank: rank + 1)
-                        }
-                    }
-                }
-                Section("All foods") {
-                    TextField("Filter", text: $filterText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("relabel.filter")
-                    ForEach(filteredEligible) { candidate in
-                        // Chosen from the full list: shortlist_rank 0 records
-                        // that the alternatives did not contain it (Req 9.7).
-                        candidateRow(candidate, shortlistRank: 0)
-                    }
-                }
             }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search foods"
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             .navigationTitle(sheetTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1129,6 +1150,28 @@ private struct RelabelSheet: View {
     private var sheetTitle: String {
         guard let food else { return "Change food" }
         return MealReviewModel.prettify(food.predicted.classID)
+    }
+
+    // The reversal path (Req 3.11), reachable from the sheet: the predicted
+    // class is filtered out of the eligible list, so without this row a
+    // mis-swap could only be undone by rejecting and restoring.
+    private func keepRow(_ food: ReviewFood) -> some View {
+        Button {
+            Task {
+                await model.reverseRelabel(classId: classId)
+                dismiss()
+            }
+        } label: {
+            Label(
+                "Keep \(MealReviewModel.prettify(food.predicted.classID))",
+                systemImage: "arrow.uturn.backward"
+            )
+            .font(.body.weight(.semibold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("relabel.keep")
     }
 
     private func candidateRow(_ candidate: FoodCandidate, shortlistRank: Int) -> some View {
