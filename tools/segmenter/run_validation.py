@@ -230,7 +230,11 @@ def main(argv: list[str] | None = None) -> int:
     # class metrics. Record only — the gate below does not read it.
     per_image = mask_quality_over_loader(
         model, loader, device, _content_shapes(dataset, args.target_size),
-        validation.special_channel_indices(), forward_logits=arch_spec.forward_logits)
+        # Background only: unknown_food and unsupported_liquid ARE food for a
+        # class-agnostic mask (MD-29 — a wrong class costs the user a tap, a
+        # wrong mask costs the volume). This matches the spike's definition
+        # (tools/segmenter/spike_masks/RESULTS.md), so its numbers carry over.
+        (33,), forward_logits=arch_spec.forward_logits)
     block = mask_quality_module().lineage_block(per_image)
     lineage = validation.update_lineage_mask_quality(block, args.lineage)
     _print_mask_quality(block)
