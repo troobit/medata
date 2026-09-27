@@ -60,10 +60,23 @@ struct ReviewFood: Identifiable {
 
     var id: String { classId }
 
+    // A food the user added on the review surface (review-swap-loop): no mask
+    // region and an empty predicted side; the corrected side carries the
+    // chosen food and a user-set mass. The prefix keys its corpus row and is
+    // what tools filter on.
+    static let addedPrefix = "added_"
+    var isAdded: Bool { classId.hasPrefix(Self.addedPrefix) }
+
     // The class the row currently stands for: corrected when relabelled,
     // predicted otherwise. Absent foods keep the predicted class for display.
     var currentClassId: String {
         flags.classCorrected ? (corrected?.classID ?? predicted.classID) : predicted.classID
+    }
+
+    // The class a row is titled by where the prediction is not the point: an
+    // added row has no real prediction, so its chosen food names it.
+    var titleClassId: String {
+        isAdded ? (corrected?.classID ?? classId) : predicted.classID
     }
 
     // Food the segmenter could not name (unknown-food-nameable Req 6): the
@@ -104,10 +117,25 @@ final class MealReviewModel {
     private(set) var foods: [ReviewFood]        // order fixed at init (Req 6.10)
     private(set) var selected: String?
     private(set) var scale: PlateFraction = .all
-    // The food whose relabel alternatives are open, and its recency shortlist
-    // (Req 3.1, Decision 18). Loaded by openAlternatives.
+    // The food whose relabel alternatives are open, and its shortlist
+    // (Req 3.1, Decision 18). Set by openAlternatives from the prepared cache.
     private(set) var alternativesFor: String?
     private(set) var shortlist: [FoodCandidate] = []
+    // The section header the sheet shows over `shortlist`: "Recent" only when
+    // the pure recency ordering produced at least one entry, "Suggested"
+    // otherwise (review-swap-loop). The blind top-up and candidate-evidence
+    // fills are not things the user chose, so they are never called recent.
+    private(set) var shortlistHeader = ""
+    // One shortlist per row, built during start() so the sheet opens populated
+    // instead of reflowing when the recency read lands (review-swap-loop).
+    private var preparedShortlists: [String: PreparedShortlist] = [:]
+
+    private struct PreparedShortlist {
+        let candidates: [FoodCandidate]
+        let fromRecency: Bool
+
+        var header: String { fromRecency ? "Recent" : "Suggested" }
+    }
     // The accepted ID-1 card's nadir quadrilateral, TL TR BR BL in nadir image
     // pixels (two-view-trust Req 4.2, task 12). Read off this meal's outcome
     // row; nil whenever no card was picked, so the review draws nothing extra.
@@ -242,6 +270,9 @@ final class MealReviewModel {
     // side (Req 9.2). Existing corrected state is adopted so a back-gesture
     // re-push does not clear a correction already made.
     func start() async {
+        // First, before the outcome lookup's possible 500 ms retry: the
+        // shortlists need only the database and one recency read per row.
+        await prepareShortlists()
         await resolveOutcomeID()
         let initial = foods.map { food -> PbCorrectionRecord in
             var seeded = food
@@ -283,11 +314,21 @@ final class MealReviewModel {
         selected = (selected == classId) ? nil : classId
     }
 
-    // Opens the relabel picker and arms the abandonment signal (Req 9.5).
+    // Opens the relabel picker and arms the abandonment signal (Req 9.5). The
+    // prepared shortlist is set before the sheet is presented; the lazy build
+    // remains for a row start() has not reached.
     func openAlternatives(for classId: String) async {
+        let prepared: PreparedShortlist
+        if let cached = preparedShortlists[classId] {
+            prepared = cached
+        } else {
+            prepared = await buildShortlist(for: classId)
+            preparedShortlists[classId] = prepared
+        }
+        shortlist = prepared.candidates
+        shortlistHeader = prepared.header
         alternativesFor = classId
         pickerFoodChanged = false
-        shortlist = await buildShortlist(for: classId)
     }
 
     // Writes picker_opened_unchanged when the picker closes with nothing
@@ -297,6 +338,7 @@ final class MealReviewModel {
         defer {
             alternativesFor = nil
             shortlist = []
+            shortlistHeader = ""
         }
         guard let classId = alternativesFor, !pickerFoodChanged,
               let index = index(of: classId) else { return }
@@ -317,10 +359,22 @@ final class MealReviewModel {
     // unreachable at relabel time. No solid-to-liquid relabel in either
     // direction (Req 3.9).
     func eligibleFoods(for classId: String) -> [FoodCandidate] {
-        guard let food = food(classId), let database else { return [] }
-        let names = food.isLiquid ? palette.liquidClasses : palette.foodClasses
+        guard let food = food(classId) else { return [] }
+        return eligibleCandidates(isLiquid: food.isLiquid, excluding: food.predicted.classID)
+    }
+
+    // What "Add a food" offers (review-swap-loop): every solid the database
+    // can derive, the Req 3.8 eligibility. Solids only — a typed gram amount
+    // is a solid's unit.
+    var addableFoods: [FoodCandidate] {
+        eligibleCandidates(isLiquid: false, excluding: nil)
+    }
+
+    private func eligibleCandidates(isLiquid: Bool, excluding excluded: String?) -> [FoodCandidate] {
+        guard let database else { return [] }
+        let names = isLiquid ? palette.liquidClasses : palette.foodClasses
         return names
-            .filter { $0 != food.predicted.classID }
+            .filter { $0 != excluded }
             .compactMap { candidateId in
                 guard
                     let entry = database.entry(for: candidateId, edition: record.databaseEdition),
@@ -328,6 +382,32 @@ final class MealReviewModel {
                 else { return nil }
                 return FoodCandidate(classId: candidateId, displayName: Self.prettify(candidateId))
             }
+    }
+
+    // The inline chip line (review-swap-loop attempt 2): the predicted food,
+    // then the top three of the prepared shortlist. Fixed for the session so a
+    // tap never reshuffles the chips under the thumb; the view draws the chip
+    // matching the current class as selected. Empty until start() has
+    // prepared the row, where a relabel is refused, and on added rows (their
+    // "prediction" is a placeholder).
+    static let chipLimit = 3
+
+    func chipCandidates(for classId: String) -> [FoodCandidate] {
+        guard let food = food(classId), !food.isAdded, canRelabel(classId),
+              let prepared = preparedShortlists[classId] else { return [] }
+        let predicted = FoodCandidate(
+            classId: food.predicted.classID,
+            displayName: Self.prettify(food.predicted.classID)
+        )
+        return [predicted] + prepared.candidates.prefix(Self.chipLimit)
+    }
+
+    // A chip tap: the predicted chip reverses (relabel's own reversal route),
+    // any other relabels with its shortlist position — the same rank the sheet
+    // records (Req 9.7).
+    func chooseChip(classId: String, candidate: FoodCandidate) async {
+        let position = preparedShortlists[classId]?.candidates.firstIndex(of: candidate)
+        await relabel(classId: classId, to: candidate, shortlistRank: position.map { $0 + 1 } ?? 0)
     }
 
     // MARK: - Mutators
@@ -411,7 +491,8 @@ final class MealReviewModel {
     func reverseRelabel(classId: String) async {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
-        guard food.flags.classCorrected else { return }
+        // An added row has nothing to revert to; reject is its removal.
+        guard food.flags.classCorrected, !food.isAdded else { return }
         clearRelabel(&food)
         rebuildCorrectedSide(&food)
         commit(food, at: index)
@@ -465,6 +546,9 @@ final class MealReviewModel {
     func markAbsent(classId: String, query: String?) async {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
+        // An added row exists to carry a class; the sheet hides this action
+        // for it, and the model refuses it too.
+        guard !food.isAdded else { return }
         let trimmed = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if food.flags.absent, food.absentQueryText == trimmed { return }
         // A standing relabel is reversed first — the reverseRelabel path —
@@ -479,6 +563,43 @@ final class MealReviewModel {
         rebuildCorrectedSide(&food)
         commit(food, at: index)
         await persist(foods[index])
+    }
+
+    // "Add a food" (review-swap-loop attempt 2): a row the segmenter never
+    // produced. The predicted side is empty — no region, zero figures, unity
+    // β, classIndex = unknown_food — so the corpus row says exactly that. The
+    // corrected side is the chosen food at one serving or 100 g, user-set, so
+    // a later relabel keeps the mass and re-derives carbohydrate from the new
+    // coefficient (Req 3.6). Persisted through the ordinary upsert; returns the
+    // new row's id so the view can open its gram editor.
+    func addFood(_ candidate: FoodCandidate) async -> String? {
+        guard let database,
+              let entry = database.entry(for: candidate.classId, edition: record.databaseEdition)
+        else { return nil }
+        let taken = foods.filter(\.isAdded)
+            .compactMap { Int($0.classId.dropFirst(ReviewFood.addedPrefix.count)) }
+        let classId = ReviewFood.addedPrefix + String((taken.max() ?? 0) + 1)
+
+        var food = ReviewFood(
+            classId: classId,
+            predicted: Self.emptyDerivation(classId: classId, palette: palette),
+            isLiquid: false
+        )
+        food.createdAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        food.corrected = Self.derivation(
+            classId: candidate.classId, entry: entry, palette: palette,
+            volumeCm3: 0, volumePreBetaCm3: 0
+        )
+        food.flags.classCorrected = true
+        food.flags.amountCorrected = true
+        food.scaleBaseMassG = database.solidServing(for: candidate.classId)?.gramsPerUnit ?? 100
+        food.baseIsUserSet = true
+        food.massSource = .perFood
+        rebuildCorrectedSide(&food)  // applies a standing meal scale (Req 6.4)
+        foods.append(food)
+        commit(food, at: foods.count - 1)
+        await persist(foods[foods.count - 1])
+        return classId
     }
 
     // Per-food amount (Req 6.1, 6.8): state updates immediately; the store
@@ -753,49 +874,71 @@ final class MealReviewModel {
                 foods[index].createdAtMs = row.createdAtMs
                 continue
             }
-            var food = foods[index]
-            food.createdAtMs = row.createdAtMs
-            food.flags.classCorrected = row.classCorrected
-            food.flags.rejected = row.rejected
-            food.flags.absent = row.absent
-            food.flags.amountCorrected = row.amountCorrected
-            food.flags.pickerOpenedUnchanged = row.pickerOpenedUnchanged
-            food.flags.captureAbandoned = row.captureAbandoned
-            food.flags.wasReverted = row.wasReverted
-            food.massSource = row.massSource
-            food.shortlistRank = row.shortlistRank
-            food.absentQueryText = row.absentQueryText
-            food.corrected = row.hasCorrected ? row.corrected : nil
-            if row.hasCorrected, !row.rejected {
-                // The stored mass becomes the new scale base; the meal-scale
-                // factor itself is session-local, so it re-derives from here.
-                food.scaleBaseMassG = row.corrected.massG
-                food.baseIsUserSet = row.massSource == .perFood
-            }
-            foods[index] = food
+            adopt(row, into: &foods[index])
+        }
+        // Added rows live only in the store (review-swap-loop): the record's
+        // perClass never carried them, so a re-push rebuilds them from their
+        // corpus rows — otherwise the display would drop a food whose carbs
+        // the reconciling total still counts.
+        for row in stored
+        where row.predicted.classID.hasPrefix(ReviewFood.addedPrefix)
+            && index(of: row.predicted.classID) == nil {
+            var food = ReviewFood(classId: row.predicted.classID, predicted: row.predicted, isLiquid: false)
+            adopt(row, into: &food)
+            foods.append(food)
+        }
+    }
+
+    private func adopt(_ row: PbCorrectionRecord, into food: inout ReviewFood) {
+        food.createdAtMs = row.createdAtMs
+        food.flags.classCorrected = row.classCorrected
+        food.flags.rejected = row.rejected
+        food.flags.absent = row.absent
+        food.flags.amountCorrected = row.amountCorrected
+        food.flags.pickerOpenedUnchanged = row.pickerOpenedUnchanged
+        food.flags.captureAbandoned = row.captureAbandoned
+        food.flags.wasReverted = row.wasReverted
+        food.massSource = row.massSource
+        food.shortlistRank = row.shortlistRank
+        food.absentQueryText = row.absentQueryText
+        food.corrected = row.hasCorrected ? row.corrected : nil
+        if row.hasCorrected, !row.rejected {
+            // The stored mass becomes the new scale base; the meal-scale
+            // factor itself is session-local, so it re-derives from here.
+            food.scaleBaseMassG = row.corrected.massG
+            food.baseIsUserSet = row.massSource == .perFood
         }
     }
 
     // MARK: - Shortlist (Req 3.1, 3.2 — Decision 18 recency ordering,
     // alternative-class-candidates Req 7 combined ordering)
 
-    private func buildShortlist(for classId: String) async -> [FoodCandidate] {
+    private func prepareShortlists() async {
+        for food in foods {
+            preparedShortlists[food.classId] = await buildShortlist(for: food.classId)
+        }
+    }
+
+    private func buildShortlist(for classId: String) async -> PreparedShortlist {
         let eligible = eligibleFoods(for: classId)
         let eligibleIds = Dictionary(uniqueKeysWithValues: eligible.map { ($0.classId, $0) })
-        let recents = (try? await store.recentCorrectedClassIds(
+        let recents = ((try? await store.recentCorrectedClassIds(
             forPredictedClass: classId, limit: Self.shortlistLimit
-        )) ?? []
+        )) ?? []).filter { eligibleIds[$0] != nil }
         // ShortlistOrdering takes already-eligible ids: eligibility and the
         // solid/liquid boundary stay here, exactly as shipped (Req 7.8, 7.9).
         // With no evidence the fills layer is empty and the result is the
         // recency + top-up list `ui/meal-review` shipped (Req 7.4).
         let ordered = ShortlistOrdering.combined(
-            recency: recents.filter { eligibleIds[$0] != nil },
+            recency: recents,
             candidates: candidateFills(for: classId).filter { eligibleIds[$0] != nil },
             topUp: eligible.map(\.classId),
             limit: Self.shortlistLimit
         )
-        return ordered.compactMap { eligibleIds[$0] }
+        return PreparedShortlist(
+            candidates: ordered.compactMap { eligibleIds[$0] },
+            fromRecency: shortlistSource == ShortlistOrdering.recencySource && !recents.isEmpty
+        )
     }
 
     // Evidence-ranked alternatives for a detected food, read only where the
@@ -848,6 +991,18 @@ final class MealReviewModel {
         out.coefficientSource = macro.coefficientSource
         out.massG = Double(macro.massG)
         out.carbsG = Double(macro.carbsG)
+        return out
+    }
+
+    // Predicted side of an added row: nothing was predicted, and the row says
+    // so — zero figures, unity β, and the palette's unknown_food index in
+    // place of a region.
+    private static func emptyDerivation(classId: String, palette: ClassPalette) -> PbFoodDerivation {
+        var out = PbFoodDerivation()
+        out.classID = classId
+        out.classIndex = UInt32(palette.unknownFood)
+        out.betaUsed = 1
+        out.betaStatus = .uncalibratedUnity
         return out
     }
 
