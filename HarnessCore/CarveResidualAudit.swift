@@ -90,6 +90,10 @@ public enum CarveResidualAudit {
         /// own surface, so `carvedCm3 / heightFieldCm3` is what the visual hull
         /// adds over the surface, with no capture-to-capture variation in it.
         public let heightFieldCm3: Float
+        /// `grownRefit` only: the reference the refit itself returned
+        /// ("refused" when the fitter refused). Differs from `reference` when
+        /// Decision 3 held the first plane against a table refit.
+        public var refitReference: String? = nil
     }
 
     public struct Report: Sendable, Encodable {
@@ -205,7 +209,7 @@ public enum CarveResidualAudit {
         let plane: SupportPlane
         var planeReference: String?
         var planeResidualMm: Float?
-        var supportOffsetMm: Float = 0
+        var firstFit: FixtureRunner.SingleViewPlaneFit?
         if let fit = try? FixtureRunner.fitSupportPlane(
             depth: depth, intrinsics: nadirK, gravity: gravity,
             foodMask: FixtureRunner.preShutterMask(
@@ -215,7 +219,7 @@ public enum CarveResidualAudit {
             plane = fit.plane
             planeReference = fit.reference?.rawValue
             planeResidualMm = fit.plane.residualMm
-            supportOffsetMm = fit.supportOffsetMm
+            firstFit = fit
         } else {
             plane = FixtureRunner.nominalPlane(gravity: gravity)
         }
@@ -319,15 +323,16 @@ public enum CarveResidualAudit {
         let productionExtent = productionGrid.verticalExtentMm
         let prism = nadirFootprint * productionExtent / 10   // cm² · mm → cm³
 
-        // Plane variants. The two-view branch fits its plane once, from the
-        // pre-shutter (or argmax) food mask. The single-view branch — the path
-        // that produces the reference number — grows the food region from that
-        // first plane and REFITS from the grown mask, keeping the refit only
-        // when it lands on `foodSupport` (Decision 3). Run that same sequence
-        // here and carve under both, so a plane difference is separated from
-        // everything else.
+        // Plane variants. `asFitted` is the first plane, from the pre-shutter
+        // (or argmax) food mask. `grownRefit` is the plane the production
+        // grow → refit → prune → adopt sequence lands on (`GrownRegionPlaneRefit`,
+        // the same call both `Pipeline` branches make since two-view-trust
+        // Decision 10): the refit when it is `foodSupport` and the pruned
+        // region stands, else the first plane held (Decision 3). Carve under
+        // both, so a plane difference is separated from everything else.
         var planeVariants: [PlaneVariant] = []
-        func describe(_ name: String, _ p: SupportPlane, _ reference: String?) throws -> PlaneVariant {
+        func describe(_ name: String, _ p: SupportPlane, _ reference: String?,
+                      refitReference: String? = nil) throws -> PlaneVariant {
             let s = VoxelGridSizer.foodHeightSamplesMm(
                 foodMask: foodMask, depth: depth, intrinsics: nadirK, supportPlane: p)
             let median = VoxelGridSizer.percentile(ofSorted: s, 0.5) ?? 0
@@ -341,20 +346,19 @@ public enum CarveResidualAudit {
                 medianHeightMm: median, p98HeightMm: p98,
                 extentMm: grid.verticalExtentMm, carvedCm3: volume,
                 heightFieldCm3: heightFieldIntegralCm3(
-                    mask: foodMask, depth: depth, intrinsics: nadirK, plane: p))
+                    mask: foodMask, depth: depth, intrinsics: nadirK, plane: p),
+                refitReference: refitReference)
         }
         planeVariants.append(try describe("asFitted", plane, planeReference))
-        let candidate = FoodRegionGrowth.grow(
-            argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirK,
-            supportPlane: plane, supportOffsetMm: supportOffsetMm,
-            palette: palette, config: .standard, seedPoints: [])
-        if candidate.applied,
-           let refitted = try? FixtureRunner.fitSupportPlane(
-               depth: depth, intrinsics: nadirK, gravity: gravity,
-               foodMask: FixtureRunner.foodRegionMask(argmax: candidate.argmax, palette: palette),
-               fixtureID: fixture.fixtureID) {
-            planeVariants.append(try describe(
-                "grownRefit", refitted.plane, refitted.reference?.rawValue))
+        if let first = firstFit {
+            let refit = FixtureRunner.refitPlaneFromGrownRegion(
+                argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirK,
+                gravity: gravity, first: first, palette: palette, growth: .standard)
+            if refit.refitAttempted {
+                planeVariants.append(try describe(
+                    "grownRefit", refit.plane, refit.reference?.rawValue,
+                    refitReference: refit.refitReference?.rawValue ?? "refused"))
+            }
         }
 
         // (3) the hull's own bias at this bundle's baseline.
