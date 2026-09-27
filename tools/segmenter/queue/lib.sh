@@ -46,7 +46,13 @@ run_variant() {
     while kill -0 "$train_pid" 2>/dev/null; do
         sleep 300
         if [ -f "$tlog" ]; then
-            local age=$(( $(date +%s) - $(stat -f %m "$tlog") ))
+            # Time asleep is not a stall: measure from the later of the last log
+            # line and the Mac's last wake (kern.waketime), or a lid-close /
+            # battery sleep kills a healthy run minutes after the machine wakes.
+            local last_wake; last_wake=$(sysctl -n kern.waketime 2>/dev/null | sed -E 's/.*sec = ([0-9]+).*/\1/')
+            local since=$(stat -f %m "$tlog")
+            if [ -n "$last_wake" ] && [ "$last_wake" -gt "$since" ] 2>/dev/null; then since=$last_wake; fi
+            local age=$(( $(date +%s) - since ))
             if [ "$age" -gt "$stall_secs" ]; then
                 echo "[queue] $name: STALLED — no log line for ${age}s, killing pid $train_pid $(date '+%Y-%m-%d %H:%M:%S')"
                 pkill -P "$train_pid" 2>/dev/null; kill "$train_pid" 2>/dev/null
