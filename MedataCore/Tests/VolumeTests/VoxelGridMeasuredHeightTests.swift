@@ -105,6 +105,30 @@ final class VoxelGridMeasuredHeightTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(grid.verticalExtentMm, VoxelGridSizer.minVerticalExtentMm)
     }
 
+    // two-view-trust Decision 10: the plane is the origin the height is
+    // measured from as well as the grid's floor, so a plane refit 7 mm nearer
+    // the food lowers the measured height by 7 mm and the grid's extent by at
+    // least one voxel. This is the whole mechanism by which a grown-region
+    // refit changes a two-view carve without touching the silhouette.
+    func testAPlaneRaised7mmLowersTheHeightAndTheExtent() throws {
+        let raised = SupportPlane(normal: Vec3(0, 0, 1), distanceMm: -393,
+                                  residualMm: 0.5, convergedIterations: nil)
+        let d = depth(objectMm: 40)
+        let h0 = try XCTUnwrap(VoxelGridSizer.measuredFoodHeightMm(
+            foodMask: foodMask(), depth: d, intrinsics: k, supportPlane: plane))
+        let h1 = try XCTUnwrap(VoxelGridSizer.measuredFoodHeightMm(
+            foodMask: foodMask(), depth: d, intrinsics: k, supportPlane: raised))
+        XCTAssertEqual(h0 - h1, 7, accuracy: 0.5)
+        let g0 = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
+            foodMask: foodMask(), nadirIntrinsics: k, supportPlane: plane,
+            gravityCamera: gravity, measuredFoodHeightMm: h0))
+        let g1 = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
+            foodMask: foodMask(), nadirIntrinsics: k, supportPlane: raised,
+            gravityCamera: gravity, measuredFoodHeightMm: h1))
+        XCTAssertGreaterThanOrEqual(g0.verticalExtentMm - g1.verticalExtentMm,
+                                    VoxelGridSizer.defaultEdgeMm)
+    }
+
     func testAnImplausiblyTallMeasurementIsCappedAt120mm() throws {
         let grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
             foodMask: foodMask(), nadirIntrinsics: k, supportPlane: plane,

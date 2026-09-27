@@ -494,3 +494,151 @@ copy), `HarnessCore/CarveResidualAudit.swift`, `HarnessCLI` (`carve-audit`),
 `Pipeline/` or `SupportPlane/` changed, and no device behaviour changed.
 
 ---
+
+## Decision 10: The two-view branch refits its support plane from the grown region, plane only
+
+**Date**: 2026-09-27
+
+**Status**: proposed (until a device round; the offline replay is in, the
+phone has not run it)
+
+### Context
+
+Decision 9 closed the carve-residual accounting with one lever left on the
+table: the single-view branch grows the nadir food region from its first
+plane and refits the plane from the grown mask (depth-grown-food-region
+Decisions 1, 3, 4), while the two-view branch fitted its plane once from the
+pre-shutter mask and never refitted. `docs/agent-notes/two-view-geometry-audit.md`
+§7 (c) measured that asymmetry on five two-view bundles as worth −23 % and
+−5.7 % on the two bundles where the refit changes the plane, and under 1 %
+on the other three. Decision 9 deferred it deliberately: it changes what every
+future two-view row means and deserves its own decision.
+
+Since then `specs/DECISIONS.md` MD-29 made volume correctness on the two-view
+and LiDAR paths the top priority of estimation work, above class accuracy.
+The plane is the one measured, structural, offline-verifiable difference
+between the two paths, and it is a `Pipeline` change, not a `Volume` one.
+
+### Decision
+
+The two-view branch runs the same grow → refit → prune → adopt sequence as
+the single-view branch, after reconciliation and before the carve, and takes
+the **plane only**: `plane`, `planeReference` and the LiDAR metric scale
+follow an adopted `foodSupport` refit exactly as on the single-view branch,
+and the carve silhouette, the review outline and the persisted mask stay the
+segmenter's own reconciled map. The sequence moves into one shared function,
+`Volume/GrownRegionPlaneRefit.refit`, called by both `Pipeline` branches, by
+`FixtureRunner`'s replay of both, and by `CarveResidualAudit`'s `grownRefit`
+variant, with the plane fitter injected. Decision 3's guard (a table refit is
+never adopted) and the prune apply on the two-view branch unchanged. The
+outcome row's `regionGrowth` gains `planeOnly` (`true` two-view, `false`
+single-view, absent on older rows).
+
+Fallback rule: if growth is later gated or retired, the two-view refit falls
+back to a refit from the reconciled argmax, never silently to the first
+plane. The branch must not quietly return to fitting once.
+
+### Rationale
+
+The plane is both the carve's floor and the origin the grid's vertical extent
+is measured from (`VoxelGridSizer.measuredFoodHeightMm`), so a first plane on
+the table under a plate hands the carve a slab of hull the height of the
+plate rim across the whole footprint — about 90 cm³ at these footprints. The
+single-view branch already corrects this; the two-view branch measured the
+same food 6–23 % higher for want of it. Sharing one function is what makes
+the two branches adopt a plane by one rule, so a future change to the rule
+(a floor, a band, a guard) cannot land on one path and not the other.
+
+Plane only, because the growth pass's plate leak (backlog 30, Decision 4's
+open defect) would otherwise widen the two-view silhouette, and nothing has
+measured a grown two-view outline. The plane is the lever the audit measured;
+the silhouette is not.
+
+Measured offline, `HarnessCLI carve-audit` and `volumes` on the five §7
+bundles, before (untouched `research` at f6046b3) and after this change. The
+first two columns are the audit's as-fitted plane, which the change does not
+touch; `grownRefit` is now the plane production adopts; the last column is
+the `volumes` replay of the shipped two-view path:
+
+| bundle | as fitted | carved before | grownRefit after (refit) | dist mm | residual mm | extent mm | carved | height field | hull ÷ surface | production after |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `1790318627741` | edgeBand | 397.1 | edgeBand (edgeBand, held) | −401.3 | 2.59 | 54.0 | 397.1 | 358.0 | 1.109 | **397.1** |
+| `1790315814452` | edgeBand | 509.8 | **foodSupport** | −386.5 | 2.27 | 45.0 | 390.1 | 317.2 | 1.230 | **390.1** |
+| `1790310086654` | foodSupport | 351.4 | foodSupport | −395.6 | 2.18 | 42.0 | 350.3 | 283.3 | 1.237 | **350.3** |
+| `1790315734391` | foodSupport | 284.1 | **foodSupport** | −358.1 | 2.30 | 36.0 | 268.0 | 244.0 | 1.099 | **268.0** |
+| `1790325380366` | foodSupport | 358.8 | foodSupport | −383.4 | 2.02 | 36.0 | 358.9 | 261.8 | 1.371 | **358.9** |
+
+Every production figure equals the `grownRefit` figure §7 predicted, and
+`1790318627741` is held at 397.1 by the Decision 3 guard where the earlier
+raw-refit reading was 396.5 (the audit's `grownRefit` used to skip the guard
+and the prune; it no longer does, and prints the refit's own reference as
+`refit=` beside the plane it adopted). The hull-over-surface ratio stays
+above 1 on every bundle, the acceptance check that the plane did not rise
+into the food. The single-view control rows in the same directories replay
+byte-identically: `1790315900185` 298.9 cm³, `1790315865030` 309.5 cm³,
+`1790310107431` 219.4, `1790318604792` 272.0, `1790318616477` 266.9.
+
+### Alternatives Considered
+
+- **Full parity — grow the two-view silhouette too**: The simplest statement
+  ("the two branches are the same up to the estimator"). Rejected for now: it
+  changes the outline the owner reviews and imports backlog 30's plate leak
+  into a branch whose silhouette is intersected from two views, and no
+  measurement exists of a grown two-view outline. Plane only is the measured
+  part; the silhouette can follow its own decision.
+- **Refit from the reconciled argmax without growth**: Cheaper and free of the
+  growth pass's failure modes. Rejected as the default because it is
+  unmeasured and leaves the branches adopting planes by different rules; it
+  is the fallback if growth is gated or retired.
+- **Defer until weighed two-view truth exists (Decision 9's position)**:
+  Rejected because MD-29 makes volume the priority, the change is offline
+  measurable to the tenth of a cm³ on the bundles already in the corpus, and
+  weighed truth would decide the hull bias, not the plane.
+- **Change the two-view first fit instead (a plate-aware pre-shutter mask)**:
+  Would move the same bundles without a second fit. Rejected: the pre-shutter
+  mask is the segmenter's live output before the shutter and has no depth
+  grown region to fit from; the refit exists precisely because the first fit
+  is made before the food is known.
+
+### Consequences
+
+**Positive:**
+- The two bundles §7 flagged drop 23 % and 5.7 %; the other three move by
+  under 0.4 %, so the change is targeted where the plane was wrong.
+- Both branches, the harness replay and the audit adopt a plane through one
+  function, so the Decision 3 guard and the prune cannot drift apart between
+  paths.
+- The `carve-audit` `grownRefit` variant is now production-faithful.
+- The single-view path is byte-identical (regression bar met on eight
+  corpus bundles and the existing replay tests).
+
+**Negative:**
+- Two-view rows written before and after this change are not comparable
+  where the refit lands `foodSupport`; `regionGrowth.planeOnly` marks the
+  new rows, absent marks the old.
+- A wrongly grown region can now move a two-view plane. The Decision 3 guard
+  and the prune bound it (a table refit is held, a region pruned to nothing
+  holds the first plane), but a `foodSupport` refit from a leaked region is
+  adopted on both branches alike.
+- One more plane fit per two-view estimate on device; unmeasured, expected
+  to be the same cost the single-view branch already pays.
+- Status stays proposed until a device round reads `event=region.grow
+  planeOnly=true` on a Double-mode capture of the roll (task 21.2).
+
+### Impact
+
+`MedataCore/Sources/Volume/GrownRegionPlaneRefit.swift` (new),
+`MedataCore/Sources/Pipeline/Pipeline.swift` (both volume branches call
+`refitPlaneFromGrownRegion`), `MedataCore/Sources/Pipeline/PipelineDiagnostics.swift`
+(`RegionGrowthMeasurements.planeOnly`), `HarnessCore/FixtureRunner.swift`
+(both replay branches; reconciliation hoisted out of `runVoxelCarve` so the
+refit sees the reconciled map, as on device), `HarnessCore/CarveResidualAudit.swift`
+(`grownRefit` through the shared helper, `PlaneVariant.refitReference`),
+`HarnessCLI` (`refit=` on the variant line),
+`MedataCore/Tests/VolumeTests/GrownRegionPlaneRefitTests.swift`,
+`MedataCore/Tests/VolumeTests/VoxelGridMeasuredHeightTests.swift`,
+`MedataCore/Tests/HarnessCLITests/FoodRegionGrowthReplayTests.swift`,
+`docs/agent-notes/depth-grown-food-region.md`,
+`docs/agent-notes/two-view-geometry-audit.md` §7 (c).
+
+---
