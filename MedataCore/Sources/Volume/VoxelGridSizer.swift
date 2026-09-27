@@ -84,6 +84,9 @@ public enum VoxelGridSizer {
     public enum VerticalBoundSource: String, Sendable, Codable {
         /// The measured food height plus `heightMarginMm`, below the class cap.
         case measured
+        /// The class's footprint-scaled height prior, no height measured
+        /// (`ClassHeightPriors.CapSource.classRatio`, Decision 12).
+        case classRatio
         /// The class's own height prior (`ClassHeightPriors.CapSource.classPrior`).
         case classPrior
         /// The global height prior (`ClassHeightPriors.CapSource.global`).
@@ -297,6 +300,33 @@ public enum VoxelGridSizer {
         return sorted[min(sorted.count - 1, max(0, idx))]
     }
 
+    /// The food silhouette's area on the support plane, mm²: each food pixel's
+    /// ray is intersected with the plane and its footprint there summed, the
+    /// same back-projection `size` uses for the grid's horizontal extent. The
+    /// footprint the class height cap scales with (two-view-trust Decision
+    /// 12, `ClassHeightPriors.cap(forPaletteIndex:footprintMm2:)`); it needs
+    /// no depth, so a phone without LiDAR measures it from its card plane.
+    public static func silhouetteFootprintMm2(
+        foodMask: BinaryMask,
+        intrinsics k: CameraIntrinsics,
+        supportPlane plane: SupportPlane
+    ) -> Float {
+        let fMean = (k.fx + k.fy) / 2
+        var totalMm2: Double = 0
+        for y in 0..<foodMask.height {
+            for x in 0..<foodMask.width where foodMask.isFood(x: x, y: y) {
+                guard let p = backprojectPixelToPlane(
+                    u: Float(x), v: Float(y), k: k, plane: plane) else { continue }
+                let zT = abs(p.z)
+                let du = Float(x) - k.cx, dv = Float(y) - k.cy
+                let cosTheta = fMean / (fMean * fMean + du * du + dv * dv).squareRoot()
+                let cos3 = cosTheta * cosTheta * cosTheta
+                totalMm2 += Double(zT * zT / (k.fx * k.fy * cos3))
+            }
+        }
+        return Float(totalMm2)
+    }
+
     // MARK: - helpers
 
     static func backprojectPixelToPlane(
@@ -381,6 +411,7 @@ public enum VoxelGridSizer {
 extension ClassHeightPriors.CapSource {
     var boundSource: VoxelGridSizer.VerticalBoundSource {
         switch self {
+        case .classRatio: return .classRatio
         case .classPrior: return .classPrior
         case .global: return .global
         }

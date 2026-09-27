@@ -2,10 +2,16 @@
 
 `height_priors.py` measures every MetaFood3D mesh, seats it on its support
 plane and reports per-palette-class height percentiles in `height_priors.json`
-(schema `height_priors.v1`, mm) plus a per-item audit CSV
+(schema `height_priors.v2`, mm) plus a per-item audit CSV
 (`height_priors_items.csv`). Purpose: a class-conditioned vertical cap for the
 two-view voxel carve, which has no height bound on non-LiDAR phones
-(two-view-trust Decision 8) and today stops only at the shipped 120 mm grid.
+(two-view-trust Decision 8) and before Decision 11 stopped only at the shipped
+120 mm grid. v2 (2026-09-27) adds the height-to-footprint ratio and a
+`cap_mode` per class (Decision 12); every v1 field is kept.
+`--from-items-csv height_priors_items.csv` rebuilds the JSON from the item
+CSV without the mesh scan (the CSV rounds to 0.01, so three v1 fields the
+app does not read moved by 0.1: `potato_mashed` min 38.7 → 38.8, `egg` min
+41.2 → 41.1, `pork` volume P50 187.0 → 187.1).
 
 Generated 2026-09-27 from the local snapshot (637 meshes, 108 categories;
 `data/metafood3d/SOURCE.md`). Runtime: 18 min single-core CPU for the full
@@ -93,6 +99,39 @@ meshes eyeballed by extents: `Apple/apple_4` 79 × 80 footprint, 78.4 mm tall
 
 Global over all 637 meshes: max-height P50 41.0, P90 71.8, P98 117.5 mm.
 
+### Height-to-footprint ratio (v2, Decision 12)
+
+Per item `r = max_height_mm / sqrt(footprint_cm2 × 100)`, the height as a
+fraction of the silhouette's linear size. Spread is P90 ÷ P50 of the
+per-item statistic; `cap_mode` is `ratio` when the ratio's spread is smaller
+than the height's on at least four meshes, else `height`.
+
+| class | n | height P50 | height P90 | height spread | r P50 | r P90 | r spread | cap_mode |
+|---|---|---|---|---|---|---|---|---|
+| white_rice, brown_rice | 8 | 52.9 | 77.7 | 1.47 | 0.529 | 0.877 | 1.66 | height |
+| bread_white, bread_wholemeal | 9 | 31.6 | 80.9 | 2.56 | 0.427 | 0.511 | 1.20 | ratio |
+| potato_mashed | 4 | 42.6 | 48.6 | 1.14 | 0.471 | 0.617 | 1.31 | height |
+| chips_fries | 6 | 68.6 | 122.6 | 1.79 | 0.455 | 1.044 | 2.30 | height |
+| chicken | 10 | 53.5 | 70.4 | 1.31 | 0.599 | 0.796 | 1.33 | height |
+| beef | 4 | 29.3 | 33.6 | 1.15 | 0.349 | 0.452 | 1.29 | height |
+| pork | 5 | 27.6 | 31.9 | 1.16 | 0.271 | 0.309 | 1.14 | ratio |
+| egg | 5 | 43.2 | 44.3 | 1.03 | 0.946 | 0.982 | 1.04 | height |
+| broccoli | 9 | 51.4 | 112.5 | 2.19 | 1.003 | 1.113 | 1.11 | ratio |
+| carrot | 12 | 32.8 | 54.2 | 1.65 | 0.458 | 0.623 | 1.36 | ratio |
+| apple | 7 | 78.1 | 81.0 | 1.04 | 1.122 | 1.186 | 1.06 | height |
+| banana | 7 | 41.0 | 45.9 | 1.12 | 0.444 | 0.527 | 1.19 | height |
+| tomato | 11 | 41.6 | 61.5 | 1.48 | 0.695 | 0.865 | 1.25 | ratio |
+
+What the ratio says about bread: the nine `Yeast_bread` meshes are rolls at
+r 0.39–0.49, loaves at 0.44–0.61 and slices at 0.16–0.19. A roll and a loaf
+are one shape at two sizes, so the ratio collapses them (spread 1.20 against
+2.56 for the height); the slices stay a separate form, a third of the roll
+ratio, and a ratio cap set at P90 treats a slice as a roll of its footprint.
+Broccoli is the same story (florets and heads, r ≈ 1.0–1.1). Chips and rice
+are the opposite: a handful and a basket, a spread and a domed bowl, differ
+in height at the same footprint, so the ratio is looser than the height and
+those classes stay in height mode.
+
 No meshes: pasta, potato_boiled, fish_white,
 cheese, salad_leaves, peas, beans_baked, lentils, mixed_vegetables, cereal,
 and all eight liquid classes (`null` with a note in the JSON). MetaFood3D has
@@ -150,10 +189,24 @@ rolls at 30–51 mm.
 
 ## Recommended cap rule
 
-`cap_mm = class max_height_p90_mm + margin`, with `margin` the shipped 5 mm,
-and `cap_mm = global max_height_p90_mm (71.8) + margin` for any class with
-`n_items` null or below 4. Never below one voxel layer above the shipped
-minimum grid.
+Height mode (Decision 11): `cap_mm = class max_height_p90_mm + margin`, with
+`margin` the shipped 5 mm, and `cap_mm = global max_height_p90_mm (71.8) +
+margin` for any class with `n_items` null or below 4. Never below one voxel
+layer above the shipped minimum grid.
+
+Ratio mode (Decision 12), for a class whose `cap_mode` is `ratio`, where no
+height is measured: `cap_mm = ratio_p90 × sqrt(silhouette footprint mm²) +
+margin`, clamped to `[10 mm, the height-mode cap]`. The footprint is the
+nadir food silhouette's area on the support plane, which a phone without
+LiDAR measures from its card plane. With a LiDAR height the height-mode cap
+stays the ceiling and the ratio is not used: it is a prior about form, and a
+measurement of the food's own height beats it. On the five audit rolls
+(silhouette footprints 103–124 cm², LiDAR max heights 30–51 mm) the bread
+ratio cap lands at 56.8–61.9 mm against the 86 mm height-mode cap, and the
+no-depth carve reads 1.05–1.54x the LiDAR figure against 1.47–2.00x under
+the height-mode cap; the numbers are in Decision 12. The two rolls the cap
+fits best are as tall as the MetaFood3D rolls (r ≈ 0.47); the three it
+still over-reads are flatter (r 0.27–0.33) at the same footprint.
 
 Reasoning:
 
@@ -192,6 +245,8 @@ Reasoning:
 `height_priors.json` is bundled into the app as
 `MedataCore/Sources/Volume/Resources/height_priors.json` (a byte-identical
 copy; `ClassHeightPriors` in Volume loads it once) and applied by the cap
-rule above (two-view-trust Decision 11). Regenerating the file means copying
-it there again and re-reading `ClassHeightPriorsTests`, which pins the
-numbers.
+rules above (two-view-trust Decisions 11 and 12; `cap(forPaletteIndex:)` is
+height mode, `cap(forPaletteIndex:footprintMm2:)` ratio mode where the class
+allows). Regenerating the file means copying it there again and re-reading
+`ClassHeightPriorsTests`, which pins the numbers (bread 80.9 and r 0.511,
+egg 44.3, global 71.8).

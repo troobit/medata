@@ -6,7 +6,21 @@ on its support plane (z = 0, food in +z), measures its height distribution,
 footprint and closed volume, joins the nutrition workbook's weight/volume
 columns, and aggregates per PALETTE class through
 ``mapping_metafood3d_to_palette.json``. Output: ``height_priors.json``
-(schema ``height_priors.v1``) plus a per-item CSV for auditing.
+(schema ``height_priors.v2``) plus a per-item CSV for auditing.
+
+Two statistics per class feed the carve's vertical cap (two-view-trust
+Decisions 11 and 12): the absolute max-height P90, and the P90 of the
+HEIGHT-TO-FOOTPRINT ratio ``r = max_height_mm / sqrt(footprint_mm2)``. On a
+class whose forms scale with their footprint (a roll and a loaf are the same
+shape at two sizes) the ratio is far tighter than the height, so a cap of
+``r_p90 * sqrt(silhouette footprint)`` follows the object on the plate where
+the absolute cap can only name the tallest form. ``cap_mode`` records which
+the class takes: ``ratio`` when the ratio's P90/P50 spread is smaller than
+the height's and the class has at least ``MIN_ITEMS`` meshes, else
+``height``.
+
+``--from-items-csv`` rebuilds the JSON from a previous run's item CSV (every
+column the aggregation reads is in it) without the 18-minute mesh scan.
 
 Base-plane rule (``seat_on_base``): the scanner frame is gravity-aligned
 (its z axis is vertical, sign not consistent between scans), so the base is
@@ -56,7 +70,7 @@ DEFAULT_MAPPING = _HERE / "mapping_metafood3d_to_palette.json"
 DEFAULT_OUT_JSON = _HERE / "height_priors.json"
 DEFAULT_OUT_CSV = _HERE / "height_priors_items.csv"
 
-SCHEMA = "height_priors.v1"
+SCHEMA = "height_priors.v2"
 SOURCE = "MetaFood3D 3D_Mesh"
 
 # The meshes are authored in metres (median max-extent ~0.1). Anything
@@ -89,6 +103,11 @@ SEAT_CONE_DEG = 30.0
 # Top-surface height field raster cell (mm). Matches the order of the
 # 3 mm carve voxel without quantising the percentiles to it.
 CELL_MM = 2.0
+
+# Fewest meshes a class statistic may rest on; below it the app falls back
+# to the global P90 (`ClassHeightPriors.minItems`), so a ratio mode is never
+# chosen on fewer.
+MIN_ITEMS = 4
 
 # Palette sentinels (background, unknown food, unsupported liquid) carry
 # no height; listed so the file covers every palette index.
@@ -261,6 +280,8 @@ def aggregate(palette: list[str], items: list[dict]) -> dict:
             entry["note"] = "no MetaFood3D category maps to this class"
         if mine:
             mx = [it["max_height_mm"] for it in mine]
+            ratio = [it["max_height_mm"] / (it["footprint_cm2"] * 100.0) ** 0.5
+                     for it in mine]
             entry.update({
                 "n_items_strict_mapping": sum(it["strict"] for it in mine),
                 "categories": sorted({it["category"] for it in mine}),
@@ -272,9 +293,45 @@ def aggregate(palette: list[str], items: list[dict]) -> dict:
                 "surface_p50_p50_mm": _r(_pct([it["surface_p50_mm"] for it in mine], 50)),
                 "footprint_cm2_p50": _r(_pct([it["footprint_cm2"] for it in mine], 50)),
                 "volume_cm3_p50": _r(_pct([it["volume_cm3"] for it in mine], 50)),
+                "ratio_p50": _r(_pct(ratio, 50), 3),
+                "ratio_p90": _r(_pct(ratio, 90), 3),
+                "cap_mode": cap_mode(mx, ratio),
             })
         classes[name] = entry
     return classes
+
+
+def cap_mode(heights: list[float], ratios: list[float]) -> str:
+    """``ratio`` when the height-to-footprint ratio is the tighter statistic
+    (P90/P50 spread smaller than the height's) on at least ``MIN_ITEMS``
+    meshes, else ``height``."""
+    if len(heights) < MIN_ITEMS:
+        return "height"
+    height_spread = _pct(heights, 90) / _pct(heights, 50)
+    ratio_spread = _pct(ratios, 90) / _pct(ratios, 50)
+    return "ratio" if ratio_spread < height_spread else "height"
+
+
+def items_from_csv(path: Path) -> list[dict]:
+    """The item list a previous run wrote, typed back for ``aggregate``."""
+    items = []
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh):
+            it: dict = dict(row)
+            for key, value in row.items():
+                if key in ("category", "object", "classes"):
+                    continue
+                if value in ("True", "False"):
+                    it[key] = value == "True"
+                elif value == "":
+                    it[key] = None
+                elif key == "vertices":
+                    it[key] = int(value)
+                else:
+                    it[key] = float(value)
+            it["classes"] = [c for c in row["classes"].split("|") if c]
+            items.append(it)
+    return items
 
 
 # --------------------------------------------------------------------------- #
@@ -290,12 +347,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, default=None,
                     help="smoke run: first N meshes in sorted order")
     ap.add_argument("--cell-mm", type=float, default=CELL_MM)
+    ap.add_argument("--from-items-csv", type=Path, default=None,
+                    help="rebuild the JSON from this item CSV; no mesh scan, "
+                         "the CSV is not rewritten")
     args = ap.parse_args(argv)
 
     logging.getLogger("trimesh").setLevel(logging.ERROR)
     t0 = time.time()
 
     palette = mapping.parse_palette().class_list
+    if args.from_items_csv:
+        items = items_from_csv(args.from_items_csv)
+        write_json(args.out, palette, items)
+        print(f"[height_priors] {len(items)} items from {args.from_items_csv} "
+              f"-> {args.out}", file=sys.stderr)
+        return 0
     mp = mapping.load_mapping(args.mapping, expected_palette_class_list=palette)
     workbook = read_workbook(args.workbook)
     meshes = find_meshes(args.mesh_root)
@@ -332,27 +398,7 @@ def main(argv: list[str] | None = None) -> int:
                          f"outside the metre band {METRES_MAX_EXTENT_BAND}; "
                          f"the snapshot is not in the units this tool assumes")
 
-    classes = aggregate(palette, items)
-    all_max = [it["max_height_mm"] for it in items]
-    out = {
-        "schema": SCHEMA,
-        "source": SOURCE,
-        "units": "mm",
-        "generated": dt.date.today().isoformat(),
-        "base_plane_rule": (f"largest convex-hull facet within {SEAT_CONE_DEG:.0f} deg "
-                            f"of the scanner vertical (raw +/-z) on z=0, body in +z"),
-        "seat_cone_deg": SEAT_CONE_DEG,
-        "n_meshes": len(items),
-        "n_meshes_mapped": sum(bool(it["classes"]) for it in items),
-        "height_only_categories": sorted(HEIGHT_ONLY_EXTENSIONS),
-        "global": {
-            "max_height_p50_mm": _r(_pct(all_max, 50)),
-            "max_height_p90_mm": _r(_pct(all_max, 90)),
-            "max_height_p98_mm": _r(_pct(all_max, 98)),
-        },
-        "classes": classes,
-    }
-    args.out.write_text(json.dumps(out, indent=2) + "\n")
+    out = write_json(args.out, palette, items)
 
     fields = [k for k in items[0] if k != "classes"] + ["classes"]
     with open(args.items_csv, "w", newline="") as fh:
@@ -368,6 +414,34 @@ def main(argv: list[str] | None = None) -> int:
           f"median max extent {med * MM_PER_M:.0f} mm, {time.time() - t0:.0f}s "
           f"-> {args.out}", file=sys.stderr)
     return 0
+
+
+def write_json(out_path: Path, palette: list[str], items: list[dict]) -> dict:
+    classes = aggregate(palette, items)
+    all_max = [it["max_height_mm"] for it in items]
+    out = {
+        "schema": SCHEMA,
+        "source": SOURCE,
+        "units": "mm",
+        "generated": dt.date.today().isoformat(),
+        "base_plane_rule": (f"largest convex-hull facet within {SEAT_CONE_DEG:.0f} deg "
+                            f"of the scanner vertical (raw +/-z) on z=0, body in +z"),
+        "seat_cone_deg": SEAT_CONE_DEG,
+        "n_meshes": len(items),
+        "n_meshes_mapped": sum(bool(it["classes"]) for it in items),
+        "height_only_categories": sorted(HEIGHT_ONLY_EXTENSIONS),
+        "ratio_definition": "max_height_mm / sqrt(footprint_cm2 * 100), per item",
+        "cap_mode_rule": (f"ratio when ratio P90/P50 < max-height P90/P50 and "
+                          f"n_items >= {MIN_ITEMS}, else height"),
+        "global": {
+            "max_height_p50_mm": _r(_pct(all_max, 50)),
+            "max_height_p90_mm": _r(_pct(all_max, 90)),
+            "max_height_p98_mm": _r(_pct(all_max, 98)),
+        },
+        "classes": classes,
+    }
+    out_path.write_text(json.dumps(out, indent=2) + "\n")
+    return out
 
 
 if __name__ == "__main__":
