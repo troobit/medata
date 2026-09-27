@@ -37,7 +37,27 @@ run_variant() {
         --data "$DATA_TRAIN" \
         --num-classes 36 --target-size 513 \
         --epochs "$epochs" --batch-size 16 --lr 1e-3 \
-        --out "$ckpt" "$@" >> "$tlog" 2>&1
+        --out "$ckpt" "$@" >> "$tlog" 2>&1 &
+    local train_pid=$!
+    # Stall watchdog (2026-09-27: R11 sat four hours on the Metal command queue
+    # with no epoch, no sidecar and idle workers). An epoch takes ~32 min at
+    # 513; if the train log has not changed for STALL_SECS the run is dead.
+    local stall_secs="${MEDATA_STALL_SECS:-5400}"
+    while kill -0 "$train_pid" 2>/dev/null; do
+        sleep 300
+        if [ -f "$tlog" ]; then
+            local age=$(( $(date +%s) - $(stat -f %m "$tlog") ))
+            if [ "$age" -gt "$stall_secs" ]; then
+                echo "[queue] $name: STALLED — no log line for ${age}s, killing pid $train_pid $(date '+%Y-%m-%d %H:%M:%S')"
+                pkill -P "$train_pid" 2>/dev/null; kill "$train_pid" 2>/dev/null
+                sleep 5; kill -9 "$train_pid" 2>/dev/null
+                wait "$train_pid" 2>/dev/null
+                echo "[queue] $name: TRAIN STALLED exit=124 — a fresh start is safe if no $ckpt.resume.pt exists; otherwise resume with identical flags"
+                return 124
+            fi
+        fi
+    done
+    wait "$train_pid"
     local rc=$?
     if [ $rc -ne 0 ]; then
         echo "[queue] $name: TRAIN FAILED exit=$rc $(date '+%Y-%m-%d %H:%M:%S') — see $tlog"
