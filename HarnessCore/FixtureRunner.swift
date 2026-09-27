@@ -124,35 +124,20 @@ public enum FixtureRunner {
             // refit from the grown mask, keep the first plane on a refusal.
             // two-view-trust Req 3.14: the replay applies the identical seed
             // rule the device will; `nadirSeed: nil` replays without it.
-            let candidate = FoodRegionGrowth.grow(
+            let refit = refitPlaneFromGrownRegion(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
-                supportPlane: fit.plane, supportOffsetMm: fit.supportOffsetMm,
-                palette: palette, config: growth,
+                gravity: gravity, first: fit, palette: palette, growth: growth,
                 seedPoints: nadirSeed.map { [$0] } ?? [])
-            var grown = candidate
-            var refitReference: SupportPlaneReference?
-            var refitRefused = false
+            let grown = refit.growth
             var measuredSeg = nadirSeg
-            if candidate.applied {
-                let refitted = try? fitSupportPlane(
-                    depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
-                    foodMask: foodRegionMask(argmax: candidate.argmax, palette: palette),
-                    fixtureID: fixture.fixtureID)
-                refitRefused = refitted == nil
-                refitReference = refitted?.reference
-                // Only a foodSupport refit is usable (Decision 3), as in Pipeline.
-                let refit = refitted.flatMap { $0.reference == .foodSupport ? $0 : nil }
-                let pruneFit = refit ?? fit
-                grown = FoodRegionGrowth.prune(
-                    candidate, depth: depth, intrinsics: nadirIntrinsics,
-                    supportPlane: pruneFit.plane, supportOffsetMm: pruneFit.supportOffsetMm,
-                    palette: palette, config: growth)
-                if grown.applied {
-                    measuredSeg = SegmentationResult(
-                        probabilities: nadirSeg.probabilities, argmax: grown.argmax,
-                        perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
-                    if let refit { fit = refit }
-                }
+            if grown.applied {
+                measuredSeg = SegmentationResult(
+                    probabilities: nadirSeg.probabilities, argmax: grown.argmax,
+                    perClassMeanProb: nadirSeg.perClassMeanProb, sigmaSeg: nadirSeg.sigmaSeg)
+            }
+            if let stats = refit.adoptedStats {
+                fit = SingleViewPlaneFit(plane: refit.plane, reference: refit.reference,
+                                         ringMedianMm: stats.ring?.medianMm)
             }
             // A seed clears the components it did not name whether or not the
             // fill added anything, so the silhouette that is integrated is the
@@ -165,7 +150,7 @@ public enum FixtureRunner {
             regionGrowth = .init(
                 applied: grown.applied, capTripped: grown.capTripped,
                 foodPixelsBefore: grown.foodPixelsBefore, foodPixelsAfter: grown.foodPixelsAfter,
-                refitReference: refitReference, refitRefused: refitRefused)
+                refitReference: refit.refitReference, refitRefused: refit.refitRefused)
             supportPlaneResidualMm = fit.plane.residualMm
             supportPlaneReference = fit.reference
             let est = try runHeightField(
@@ -198,7 +183,8 @@ public enum FixtureRunner {
             // replay's volume is the device's, not a nominal-plane approximation.
             // Fixtures without depth (non-LiDAR captures, synthetic) keep the
             // gravity-aligned nominal plane at -300 mm.
-            let plane: SupportPlane
+            var plane: SupportPlane
+            var firstFit: SingleViewPlaneFit?
             if fixture.hasNadirDepth,
                let fit = try? fitSupportPlane(
                     depth: DepthMap(pb: fixture.nadirDepth), intrinsics: nadirIntrinsics,
@@ -207,6 +193,7 @@ public enum FixtureRunner {
                         ?? foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
                     fixtureID: fixture.fixtureID) {
                 plane = fit.plane
+                firstFit = fit
                 supportPlaneResidualMm = fit.plane.residualMm
                 supportPlaneReference = fit.reference
             } else {
@@ -223,14 +210,42 @@ public enum FixtureRunner {
                 obliqueSeg = obliqueSeg.excluding(quad: PipelineBridges.projectToOblique(
                     card.pose.cornersCameraMm, transform1To2: t1to2, intrinsics: obliqueIntrinsics)).result
             }
+            // Same pass, same place as Pipeline (two-view-trust Req 2.1), so a
+            // replay carves what the device carved. `reconciliation: false`
+            // replays the raw labels for comparison.
+            if reconciliation {
+                let r = ObjectReconciler.reconcile(
+                    nadir: nadirSeg, oblique: obliqueSeg, palette: palette, userClass: nil)
+                nadirSeg = r.nadir
+                obliqueSeg = r.oblique
+            }
+            // Plane refit from the grown region, plane only (two-view-trust
+            // Decision 10), exactly as Pipeline's two-view branch runs it: the
+            // adopted plane floors the carve and measures its height; the
+            // silhouette stays the reconciled map.
+            if let first = firstFit {
+                let depth = DepthMap(pb: fixture.nadirDepth)
+                let refit = refitPlaneFromGrownRegion(
+                    argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
+                    gravity: gravity, first: first, palette: palette, growth: growth)
+                if refit.adopted {
+                    plane = refit.plane
+                    supportPlaneResidualMm = refit.plane.residualMm
+                    supportPlaneReference = refit.reference
+                }
+                regionGrowth = .init(
+                    applied: refit.growth.applied, capTripped: refit.growth.capTripped,
+                    foodPixelsBefore: refit.growth.foodPixelsBefore,
+                    foodPixelsAfter: refit.growth.foodPixelsAfter,
+                    refitReference: refit.refitReference, refitRefused: refit.refitRefused)
+            }
             let est = try runVoxelCarve(
                 nadirSeg: nadirSeg, obliqueSeg: obliqueSeg,
                 nadirIntrinsics: nadirIntrinsics, obliqueIntrinsics: obliqueIntrinsics,
                 t1to2: t1to2, plane: plane, gravity: gravity,
                 nadirDepth: fixture.hasNadirDepth ? DepthMap(pb: fixture.nadirDepth) : nil,
                 beta: unityBeta, palette: palette,
-                voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID,
-                reconcile: reconciliation
+                voxelEdgeMm: voxelEdgeMm, fixtureID: fixture.fixtureID
             )
             perClassVolumesCm3 = est.perClassVolumesCm3
         }
@@ -311,6 +326,30 @@ public enum FixtureRunner {
         }
         return SingleViewPlaneFit(plane: plane, reference: outcome.stats.reference,
                                   ringMedianMm: outcome.stats.ring?.medianMm)
+    }
+
+    // Grow → refit → prune → adopt with the replay's fitter, which is the same
+    // `LiDARSupportPlaneFitter.fitFromDepth` the device's fitter wraps, so the
+    // plane a replay adopts is the plane the device adopts (Req 5.1).
+    static func refitPlaneFromGrownRegion(
+        argmax: ArgmaxMap,
+        depth: DepthMap,
+        intrinsics: CameraIntrinsics,
+        gravity: Vec3,
+        first: SingleViewPlaneFit,
+        palette: ClassPalette,
+        growth: FoodRegionGrowthConfig,
+        seedPoints: [SIMD2<Int>] = []
+    ) -> GrownRegionPlaneRefit.Outcome {
+        GrownRegionPlaneRefit.refit(
+            argmax: argmax, depth: depth, intrinsics: intrinsics,
+            supportPlane: first.plane, supportReference: first.reference,
+            supportOffsetMm: first.supportOffsetMm,
+            palette: palette, config: growth, seedPoints: seedPoints
+        ) { mask in
+            LiDARSupportPlaneFitter.fitFromDepth(
+                depth: depth, intrinsics: intrinsics, mask: mask, gravity: gravity)
+        }
     }
 
     // The food-region mask on the argmax grid. `fitFoodSupportPlane` needs one and
@@ -620,19 +659,8 @@ public enum FixtureRunner {
         beta: BetaCorrection,
         palette: ClassPalette,
         voxelEdgeMm: Float,
-        fixtureID: String,
-        reconcile: Bool
+        fixtureID: String
     ) throws -> VoxelCarveEstimate {
-        // Same pass, same place as Pipeline (two-view-trust Req 2.1), so a
-        // replay carves what the device carved. `reconcile: false` replays the
-        // raw labels for comparison.
-        var nadirSeg = nadirSeg, obliqueSeg = obliqueSeg
-        if reconcile {
-            let r = ObjectReconciler.reconcile(
-                nadir: nadirSeg, oblique: obliqueSeg, palette: palette, userClass: nil)
-            nadirSeg = r.nadir
-            obliqueSeg = r.oblique
-        }
         let matching = MaskMatcher.match(
             view1: nadirSeg.argmax,
             view2: obliqueSeg.argmax,

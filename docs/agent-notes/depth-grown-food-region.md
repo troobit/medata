@@ -9,10 +9,22 @@ Code: `MedataCore/Sources/Volume/FoodRegionGrowth.swift`; wiring in
 Grows every food-like region of the regularised nadir label map into the
 raised depth slab around it before volume, so a food the segmenter only
 partly recognises (the 2026-09-24 sesame roll: 0.5 % of the frame labelled,
-7 % raised) is measured whole. Single-view LiDAR only; the two-view carve is
-untouched.
+7 % raised) is measured whole. The single-view LiDAR branch integrates over
+the grown map. Since two-view-trust Decision 10 the two-view branch runs the
+same sequence but takes the PLANE only: the carve silhouette, the review
+outline and the persisted mask stay the segmenter's own (see "Two-view: plane
+only" below).
 
 Order matters and is the whole design: **grow → refit → prune.**
+
+The sequence lives in one place, `Volume/GrownRegionPlaneRefit.refit`, with
+the fitter injected as a closure (`SupportPlaneFitter.fitOutcome` on device,
+`LiDARSupportPlaneFitter.fitFromDepth` in the harness — the same code under
+the wrapper). `Pipeline.refitPlaneFromGrownRegion` adds the pipeline's own
+consequences of an adopted plane (diagnostics row, LiDAR rescale, the
+`event=region.grow` line); `FixtureRunner.refitPlaneFromGrownRegion` is the
+replay twin and `CarveResidualAudit`'s `grownRefit` variant calls it too, so
+the audit reports the plane production adopts, not a raw refit.
 
 1. `FoodRegionGrowth.grow` — multi-source BFS on the 256×192 depth grid from
    the cells under food-like colour pixels. A neighbour is admitted when
@@ -97,10 +109,34 @@ yielded zero meals) now replays at 636 cm³. Build the harness from a scratch
 copy of committed `HEAD` when other agents are editing the tree, or a
 mid-sweep rebuild will mix two binaries into one table.
 
+## Two-view: plane only (two-view-trust Decision 10)
+
+The two-view branch fitted its plane once and never refitted; the carve
+residual audit (`two-view-geometry-audit.md` §7 (c)) measured that as the one
+structural difference between the branches, worth 6–23 % on two of five
+bundles. The plane is both the carve's floor and the origin the grid height is
+measured from, so a first plane sitting on the table hands the carve a slab of
+hull under the food. `Pipeline`'s two-view branch now calls the same
+`refitPlaneFromGrownRegion` after reconciliation, with `planeOnly: true`:
+`plane`, `planeReference` and the LiDAR scale follow an adopted refit exactly
+as on the single-view branch; `measuredArgmax` and the carve silhouette do
+not. Growth here is a plane-fitting instrument, nothing else — do not pass
+`growth.grownRegion` or `growth.argmax` anywhere on that branch. If growth is
+ever gated or retired, the two-view refit falls back to a refit from the
+reconciled argmax, never silently to the first plane.
+
+Offline replay (`HarnessCLI carve-audit`, `volumes`) is the regression bar:
+the single-view rows are byte-identical to before the refactor, and the
+two-view rows moved only where the refit lands `foodSupport` and the pruned
+region stands.
+
 ## Gotchas
 
 - The bundle keeps the segmenter's (ungrown) argmax; replay re-grows. The
-  mask artefact the review outline reads is the grown map.
+  mask artefact the review outline reads is the grown map on the single-view
+  branch and the segmenter's map on the two-view branch.
+- Outcome rows carry `regionGrowth.planeOnly` (`true` on the two-view
+  branch, `false` single-view, absent on rows written before it existed).
 - The colour-grid edge follows the bilinear depth contour, not the 7.5 × 7.5
   px cell blocks: a pixel is added when its own bilinear depth clears the
   floor and its cell or a 4-neighbour cell was filled (evening 2026-09-24,

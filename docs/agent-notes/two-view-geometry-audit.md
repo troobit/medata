@@ -425,6 +425,14 @@ where the refit changes the reference the carve drops 6–23 %; on the other thr
 it moves by less than 1 %. That is the only measured, structural difference
 between the two paths, and it is a change in `Pipeline`, not in `Volume`.
 
+Taken up by two-view-trust Decision 10 (2026-09-27): the two-view branch now
+runs the same grow → refit → prune → adopt sequence, plane only, through the
+shared `GrownRegionPlaneRefit`; the before/after replay on these five bundles
+is in that entry. The `grownRefit` variant `carve-audit` prints is since then
+the plane production adopts (Decision 3 guard and prune included), with the
+refit's own reference beside it as `refit=`, so the first row of the table
+above reads `reference=edgeBand refit=edgeBand` at the as-fitted plane.
+
 ### What would settle the rest
 
 Nothing offline. The remaining 0–24 % is the difference between a food's volume

@@ -1436,6 +1436,7 @@ func runCarveAudit(args: Args) throws {
         }
         for v in report.planeVariants {
             print("stem=\(stem) plane variant=\(v.name) reference=\(v.reference ?? "none")"
+                + (v.refitReference.map { " refit=\($0)" } ?? "")
                 + " distMm=\(fmt(v.distanceMm)) residualMm=\(fmt(v.residualMm, 2))"
                 + " footprintCm2=\(fmt(v.footprintCm2)) p50Mm=\(fmt(v.medianHeightMm))"
                 + " p98Mm=\(fmt(v.p98HeightMm)) extentMm=\(fmt(v.extentMm))"
