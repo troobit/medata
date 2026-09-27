@@ -7229,11 +7229,13 @@ struct SupportPlaneCorpusMeasurementTests {
         }
         let spans = spanByName.mapValues { $0.hi - $0.lo }
         let fallbackSpans = fallbackSpanByName.mapValues { $0.hi - $0.lo }
-        print("plane movement at the food over the CONE sweep:"
-              + " \(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
-              + "; fallback leg"
-              + " \(fallbackSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
-              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+        // Built in parts: the one-expression form exceeds the type-checker's time budget
+        // (backlog 32).
+        let spanList = spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", ")
+        let fallbackList = fallbackSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", ")
+        let toleranceText = fmt(Self.gridTransferToleranceMm)
+        print("plane movement at the food over the CONE sweep: \(spanList); fallback leg \(fallbackList)"
+              + " — against Req 5.1's \(toleranceText) mm transfer tolerance")
 
         // MARK: what it leaves standing
 
@@ -14335,8 +14337,8 @@ struct SupportPlaneCorpusMeasurementTests {
         // mean over draws, carrying the geometric SD as its spread and s^(1/sqrt k) as the
         // precision of the centre. Everything below is quoted in it.
 
-        print("=== the search against the sort, as a distribution over"
-              + " \(Self.deepSeeds.count) draws ===")
+        let drawCount = Self.deepSeeds.count
+        print("=== the search against the sort, as a distribution over \(drawCount) draws ===")
         var spreads: [String: (g: Double, s: Double, se: Double, k: Int)] = [:]
         var strideSigmas: [(cell: String, sigma: Double)] = []
         var strideEscapes = 0
