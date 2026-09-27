@@ -502,13 +502,56 @@ box is carved under (default: the box height plus each margin, the hull-bias
 control). The `synthetic` lines print `tilt=stored` or `tiltDeg=` and
 `capMm=`.
 
+### The footprint-scaled cap (Decision 12)
+
+The class cap named the tallest form; the footprint tells a roll from a
+loaf. `height_priors.json` is now `height_priors.v2`: per class `ratio_p90`
+(P90 of max height ÷ sqrt(footprint) over the meshes) and a `cap_mode`,
+`ratio` where that statistic is tighter than the height (bread, broccoli,
+carrot, tomato, pork), `height` otherwise. `ClassHeightPriors.cap(forPaletteIndex:footprintMm2:)`
+gives `r_P90 × sqrt(footprint) + 5`, clamped to [10 mm, the Decision 11
+cap], source `classRatio`; the footprint is `VoxelGridSizer.silhouetteFootprintMm2`,
+the nadir carvable silhouette back-projected onto the plane (the audit's
+`footprintCm2` now calls it, so the two agree). `carveCap` applies the ratio
+**only when no height is measured**: with depth the cap is Decision 11's and
+the LiDAR grid is untouched — the seven-bundle `volumes` replay is
+byte-identical (diffed).
+
+Measured on the five §7 bundles at the adopted plane (footprints
+10.3–12.4 k mm², LiDAR maxima 30.5–50.7 mm): the ratio cap lands at
+56.8–61.9 mm and the no-depth carve reads 1.05 / 1.29 / 1.39 / 1.54 / 1.53x
+the LiDAR figure against Decision 11's 1.47–2.00x. Two of five under the 1.3
+pass line, so Decision 12 is proposed. The two that pass are rolls as tall
+as the prior expects (r ≈ 0.47); the three that fail are flatter rolls of
+the same footprint (r 0.27–0.33), which no P90 cap can reach without
+clipping the tall ones. Tables in Decision 12.
+
+```
+HarnessCLI carve-audit --no-depth --tilts 22.2,26,40,60 --caps 120,85.9,59.5,51.8,42 <bundle.fixture>…
+```
+
+adds a `noDepthRatio` line per bundle: `footprintMm2`, `ratioCapMm`,
+`ratioCapSource`, `ratioExtentMm`, `ratioCarvedCm3`, `ratioOverLidar`. The
+synthetic box's ratio cap has to be given through `--caps`: 51.8 for its true
+8 400 mm² footprint, ~59.5 for the footprint the silhouette rule measures on
+it (10 720 mm²).
+
 Gotchas:
 
 - A regenerated `height_priors.json` must be copied byte-identically into
-  `Volume/Resources`; `ClassHeightPriorsTests` pins bread_white 85.9, egg
-  49.3 and the global 76.8 so a silent drift fails.
+  `Volume/Resources`; `ClassHeightPriorsTests` pins bread_white 85.9 and
+  r 0.511, egg 49.3 and the global 76.8 so a silent drift fails.
+  `height_priors.py --from-items-csv height_priors_items.csv` rebuilds the
+  JSON without the mesh scan (three v1 fields the app does not read round by
+  0.1; `HEIGHT_PRIORS.md`).
 - `chips_fries` P90 is 122.6 mm: its cap (127.6) clamps to the 120 mm
   constant, so that class is uncapped in practice.
 - On a phone the no-depth two-view path refuses at the plane stage today
-  (§6), so `cap_source=classPrior` is seen offline and in tests, not on the
-  device, until a card-only plane exists.
+  (§6), so `cap_source=classPrior` / `classRatio` is seen offline and in
+  tests, not on the device, until a card-only plane exists.
+- The silhouette footprint is inflated by the food's own height (the top
+  face is nearer the camera than the plane): the 120 × 70 box reads
+  10 720 mm² against 8 400 true, 24 % in area and ~12 % on the cap's sqrt
+  term. Safe (looser), and the same on every no-depth row.
+- The ratio cap does not know a slice from a roll (r 0.16–0.19 against
+  0.39–0.49): a slice without LiDAR is capped as a roll of its footprint.

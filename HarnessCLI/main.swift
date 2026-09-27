@@ -1467,6 +1467,12 @@ func runCarveAudit(args: Args) throws {
                 + " lidarExtentMm=\(fmt(nd.lidarExtentMm)) lidarCarvedCm3=\(fmt(nd.lidarCarvedCm3))"
                 + " constantOverLidar=\(fmt(nd.lidarCarvedCm3 > 0 ? nd.constantCarvedCm3 / nd.lidarCarvedCm3 : 0, 3))"
                 + " capOverLidar=\(fmt(nd.lidarCarvedCm3 > 0 ? nd.capCarvedCm3 / nd.lidarCarvedCm3 : 0, 3))")
+            // Decision 12: the footprint the ratio cap scaled with and its carve.
+            print("stem=\(stem) noDepthRatio plane=\(nd.planeName)"
+                + " footprintMm2=\(fmt(nd.footprintMm2, 0))"
+                + " ratioCapMm=\(fmt(nd.ratioCapMm)) ratioCapSource=\(nd.ratioCapSource)"
+                + " ratioExtentMm=\(fmt(nd.ratioExtentMm)) ratioCarvedCm3=\(fmt(nd.ratioCarvedCm3))"
+                + " ratioOverLidar=\(fmt(nd.lidarCarvedCm3 > 0 ? nd.ratioCarvedCm3 / nd.lidarCarvedCm3 : 0, 3))")
         }
         for row in report.synthetic {
             print("stem=\(stem) synthetic box=\(row.boxMm.map { fmt($0, 0) }.joined(separator: "x"))"
