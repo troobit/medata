@@ -26,6 +26,10 @@ torch-free pattern of ``lineage.py`` / ``validation.py``). Everything here is:
     sampling weights for ``--repeat-factor-threshold`` (research note §4.4),
     from per-image present-class sets; ``train.py`` feeds them to a
     ``WeightedRandomSampler``.
+  - ``boundary_weight_map(labels, band_px, weight)`` — the per-pixel weight
+    map for ``--boundary-weight`` (MD-29 mask-quality re-scope): ``weight``
+    within ``band_px`` of a label change, 1.0 elsewhere. Pure numpy, built in
+    the Dataset so it rides through the DataLoader with the sample.
 
 CLASS-WEIGHTING SCHEMES (snaq-parity Req 6.3, Decision 13): inverse-frequency
 weighting was attributed as the staple-regression cause (segmenter-foundation
@@ -83,6 +87,12 @@ DEFAULT_DICE_WEIGHT = 0.5
 
 # Smoothing constant for the soft-Dice denominator (avoids /0 on absent classes).
 DICE_SMOOTH = 1.0
+
+# Default half-width, in pixels, of the band around a label change that
+# --boundary-weight up-weights (Chebyshev distance). 2 px at 513 covers the
+# seam the 2 px boundary-F metric scores without reaching into region
+# interiors.
+DEFAULT_BOUNDARY_BAND_PX = 2
 
 # Cap on any single normalised class weight. A very rare class would otherwise
 # get an enormous inverse-frequency weight and destabilise the gradient; 10x the
@@ -359,6 +369,72 @@ def repeat_factors(
                 r = max(r, math.sqrt(threshold / freq[c]))
         factors.append(r)
     return factors
+
+
+# ── Boundary-weighted per-pixel loss (MD-29) — pure numpy, torch-free ──────────
+
+def boundary_weight_map(
+    labels,
+    band_px: int,
+    weight: float,
+    ignore: Sequence[int] = (),
+):
+    """Per-pixel loss weights that emphasise label boundaries.
+
+    ``labels`` is an integer ``[H, W]`` array of class ids (the letterboxed,
+    augmented train mask). The result is a float32 ``[H, W]`` array that is
+    ``weight`` on every pixel within Chebyshev distance ``band_px`` of a label
+    change and 1.0 everywhere else, so ``train.py`` can take the weighted mean
+    of the per-pixel cross-entropy under it. A change is any pair of
+    8-neighbours with different, non-ignored labels; background is an ordinary
+    class here, so food/background edges are boundaries. Labels in ``ignore``
+    (sentinels the loss masks out) neither produce a boundary nor receive the
+    weight — their pixels stay 1.0. ``band_px`` 1 marks the pixel row either
+    side of the change; each further pixel dilates that seam by one 3x3 step,
+    so the band is ``2 * band_px`` wide. ``weight`` 1.0 yields all ones (the
+    plain mean).
+    """
+    import numpy as np
+
+    lab = np.asarray(labels)
+    if lab.ndim != 2:
+        raise ValueError(f"labels must be [H, W], got shape {lab.shape}")
+    if band_px < 1:
+        raise ValueError("band_px must be at least 1")
+    if weight <= 0.0:
+        raise ValueError("weight must be positive")
+
+    valid = np.ones(lab.shape, dtype=bool)
+    for c in ignore:
+        valid &= lab != c
+
+    def _shifted(arr, dy, dx):
+        # arr moved by (dy, dx) with the vacated edge filled by its own border
+        # row/column, so an image edge never reads as a label change.
+        out = np.roll(arr, (dy, dx), axis=(0, 1))
+        if dy > 0:
+            out[:dy, :] = arr[:1, :]
+        elif dy < 0:
+            out[dy:, :] = arr[-1:, :]
+        if dx > 0:
+            out[:, :dx] = arr[:, :1]
+        elif dx < 0:
+            out[:, dx:] = arr[:, -1:]
+        return out
+
+    shifts = [(dy, dx) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if (dy, dx) != (0, 0)]
+    band = np.zeros(lab.shape, dtype=bool)
+    for dy, dx in shifts:
+        band |= (lab != _shifted(lab, dy, dx)) & valid & _shifted(valid, dy, dx)
+    for _ in range(band_px - 1):
+        grown = band.copy()
+        for dy, dx in shifts:
+            grown |= _shifted(band, dy, dx)
+        band = grown & valid
+
+    out = np.ones(lab.shape, dtype=np.float32)
+    out[band] = float(weight)
+    return out
 
 
 # ── Co-occurrence loss helpers (design §4.3) — pure, torch-free ─────────────────
