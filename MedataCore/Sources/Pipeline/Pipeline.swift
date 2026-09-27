@@ -586,6 +586,14 @@ public struct Pipeline: Sendable {
                     foodMask: foodMask, depth: $0,
                     intrinsics: nadir.intrinsics, supportPlane: plane)
             }
+            // Without depth the class height cap is the extent; with depth it
+            // is a ceiling the measured extent cannot exceed and never a
+            // floor (two-view-trust Decision 11). The class is the reconciled
+            // nadir map's; several classes take the tallest cap.
+            let classCap = ClassHeightPriors.bundled?.cap(
+                forNadirArgmax: nadirSeg.argmax, palette: palette)
+            let bound = VoxelGridSizer.verticalBound(
+                measuredFoodHeightMm: measuredFoodHeightMm, classCap: classCap)
             let grid: VoxelGrid
             do {
                 grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
@@ -593,7 +601,8 @@ public struct Pipeline: Sendable {
                     nadirIntrinsics: nadir.intrinsics,
                     supportPlane: plane,
                     gravityCamera: nadir.gravity,
-                    measuredFoodHeightMm: measuredFoodHeightMm
+                    measuredFoodHeightMm: measuredFoodHeightMm,
+                    classCap: classCap
                 ))
             } catch {
                 #if DEBUG
@@ -605,13 +614,16 @@ public struct Pipeline: Sendable {
             diagnostics.recordVoxelGrid(.init(
                 measuredFoodHeightMm: measuredFoodHeightMm,
                 verticalExtentMm: grid.verticalExtentMm,
-                dimsZ: grid.dimsZ, edgeMm: grid.edgeMm))
+                dimsZ: grid.dimsZ, edgeMm: grid.edgeMm,
+                classCapMm: classCap?.mm, capSource: bound.source.rawValue))
             // Release-emitted channel: what bounded the carve on this attempt.
             supportPlaneLog.info(
                 """
                 event=grid.height measured_mm=\(measuredFoodHeightMm ?? -1, privacy: .public) \
                 extent_mm=\(grid.verticalExtentMm, privacy: .public) \
-                dimsZ=\(grid.dimsZ, privacy: .public) edge_mm=\(grid.edgeMm, privacy: .public)
+                dimsZ=\(grid.dimsZ, privacy: .public) edge_mm=\(grid.edgeMm, privacy: .public) \
+                cap_mm=\(classCap?.mm ?? -1, privacy: .public) \
+                cap_source=\(bound.source.rawValue, privacy: .public)
                 """
             )
             let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
