@@ -364,19 +364,25 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         /// existed, or when the priors did not load.
         public let classCapMm: Float?
         /// What set the extent, a `VoxelGridSizer.VerticalBoundSource` raw
-        /// value: `measured`, `classPrior`, `global` or `constant`. nil on
-        /// rows written before the cap existed.
+        /// value: `measured`, `classRatio`, `classPrior`, `global` or
+        /// `constant`. nil on rows written before the cap existed.
         public let capSource: String?
+        /// The nadir food silhouette's area on the support plane, mm², the
+        /// footprint a `classRatio` cap scaled with (two-view-trust Decision
+        /// 12). nil on rows written before it was recorded.
+        public let footprintMm2: Float?
 
         public init(measuredFoodHeightMm: Float?, verticalExtentMm: Float,
                     dimsZ: Int, edgeMm: Float,
-                    classCapMm: Float? = nil, capSource: String? = nil) {
+                    classCapMm: Float? = nil, capSource: String? = nil,
+                    footprintMm2: Float? = nil) {
             self.measuredFoodHeightMm = measuredFoodHeightMm
             self.verticalExtentMm = verticalExtentMm
             self.dimsZ = dimsZ
             self.edgeMm = edgeMm
             self.classCapMm = classCapMm
             self.capSource = capSource
+            self.footprintMm2 = footprintMm2
         }
     }
 

@@ -60,3 +60,6 @@ references:
 
 - [x] 22. Class height cap on the non-LiDAR carve — Decision 11
   - No-depth carve at the adopted plane, 120 mm → class cap 85.9 (cm³, LiDAR reference): 1790318627741 709.8 → 583.1 (397.1); 1790315814452 690.0 → 610.7 (390.1); 1790310086654 678.9 → 595.4 (350.3); 1790315734391 632.8 → 534.7 (268.0); 1790325380366 749.6 → 663.6 (358.9). Ratio to LiDAR improves on all five (1.77–2.36 → 1.47–2.00), none under the 1.3 pass line. LiDAR path and single-view controls byte-identical
+
+- [x] 23. Footprint-scaled class height cap — Decision 12
+  - height_priors.v2 with ratio_p90 and cap_mode (bread, broccoli, carrot, tomato, pork in ratio mode); no-depth carve at the adopted plane, class cap 87 → ratio cap (footprint mm², cap mm; cm³, LiDAR reference): 1790318627741 10267, 56.8: 583.1 → 416.5 (397.1, 1.05); 1790315814452 12051, 61.1: 610.7 → 502.3 (390.1, 1.29); 1790310086654 12234, 61.5: 595.4 → 485.2 (350.3, 1.39); 1790315734391 10635, 57.7: 534.7 → 412.7 (268.0, 1.54); 1790325380366 12417, 61.9: 663.6 → 550.2 (358.9, 1.53). Two of five under the 1.3 pass line, so the decision stays proposed; the ratio cap is not applied where a height is measured and the LiDAR replay is byte-identical on all seven bundles

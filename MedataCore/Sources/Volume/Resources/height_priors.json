@@ -1,5 +1,5 @@
 {
-  "schema": "height_priors.v1",
+  "schema": "height_priors.v2",
   "source": "MetaFood3D 3D_Mesh",
   "units": "mm",
   "generated": "2026-09-27",
@@ -11,6 +11,8 @@
     "rice",
     "yeast_bread"
   ],
+  "ratio_definition": "max_height_mm / sqrt(footprint_cm2 * 100), per item",
+  "cap_mode_rule": "ratio when ratio P90/P50 < max-height P90/P50 and n_items >= 4, else height",
   "global": {
     "max_height_p50_mm": 41.0,
     "max_height_p90_mm": 71.8,
@@ -31,7 +33,10 @@
       "p98_height_p50_mm": 51.4,
       "surface_p50_p50_mm": 45.0,
       "footprint_cm2_p50": 103.7,
-      "volume_cm3_p50": 207.7
+      "volume_cm3_p50": 207.7,
+      "ratio_p50": 0.529,
+      "ratio_p90": 0.877,
+      "cap_mode": "height"
     },
     "brown_rice": {
       "index": 1,
@@ -47,7 +52,10 @@
       "p98_height_p50_mm": 51.4,
       "surface_p50_p50_mm": 45.0,
       "footprint_cm2_p50": 103.7,
-      "volume_cm3_p50": 207.7
+      "volume_cm3_p50": 207.7,
+      "ratio_p50": 0.529,
+      "ratio_p90": 0.877,
+      "cap_mode": "height"
     },
     "pasta": {
       "index": 2,
@@ -68,7 +76,10 @@
       "p98_height_p50_mm": 29.8,
       "surface_p50_p50_mm": 25.1,
       "footprint_cm2_p50": 104.6,
-      "volume_cm3_p50": 123.4
+      "volume_cm3_p50": 123.4,
+      "ratio_p50": 0.427,
+      "ratio_p90": 0.511,
+      "cap_mode": "ratio"
     },
     "bread_wholemeal": {
       "index": 4,
@@ -84,7 +95,10 @@
       "p98_height_p50_mm": 29.8,
       "surface_p50_p50_mm": 25.1,
       "footprint_cm2_p50": 104.6,
-      "volume_cm3_p50": 123.4
+      "volume_cm3_p50": 123.4,
+      "ratio_p50": 0.427,
+      "ratio_p90": 0.511,
+      "cap_mode": "ratio"
     },
     "potato_boiled": {
       "index": 5,
@@ -100,12 +114,15 @@
       ],
       "max_height_p50_mm": 42.6,
       "max_height_p90_mm": 48.6,
-      "max_height_min_mm": 38.7,
+      "max_height_min_mm": 38.8,
       "max_height_max_mm": 50.4,
       "p98_height_p50_mm": 38.0,
       "surface_p50_p50_mm": 26.9,
       "footprint_cm2_p50": 81.9,
-      "volume_cm3_p50": 145.9
+      "volume_cm3_p50": 145.9,
+      "ratio_p50": 0.471,
+      "ratio_p90": 0.617,
+      "cap_mode": "height"
     },
     "chips_fries": {
       "index": 7,
@@ -121,7 +138,10 @@
       "p98_height_p50_mm": 59.6,
       "surface_p50_p50_mm": 47.4,
       "footprint_cm2_p50": 112.8,
-      "volume_cm3_p50": 279.8
+      "volume_cm3_p50": 279.8,
+      "ratio_p50": 0.455,
+      "ratio_p90": 1.044,
+      "cap_mode": "height"
     },
     "chicken": {
       "index": 8,
@@ -138,7 +158,10 @@
       "p98_height_p50_mm": 50.4,
       "surface_p50_p50_mm": 41.3,
       "footprint_cm2_p50": 77.8,
-      "volume_cm3_p50": 193.6
+      "volume_cm3_p50": 193.6,
+      "ratio_p50": 0.599,
+      "ratio_p90": 0.796,
+      "cap_mode": "height"
     },
     "beef": {
       "index": 9,
@@ -154,7 +177,10 @@
       "p98_height_p50_mm": 27.7,
       "surface_p50_p50_mm": 23.9,
       "footprint_cm2_p50": 73.3,
-      "volume_cm3_p50": 130.9
+      "volume_cm3_p50": 130.9,
+      "ratio_p50": 0.349,
+      "ratio_p90": 0.452,
+      "cap_mode": "height"
     },
     "pork": {
       "index": 10,
@@ -170,7 +196,10 @@
       "p98_height_p50_mm": 26.3,
       "surface_p50_p50_mm": 23.1,
       "footprint_cm2_p50": 108.3,
-      "volume_cm3_p50": 187.0
+      "volume_cm3_p50": 187.1,
+      "ratio_p50": 0.271,
+      "ratio_p90": 0.309,
+      "cap_mode": "ratio"
     },
     "fish_white": {
       "index": 11,
@@ -186,12 +215,15 @@
       ],
       "max_height_p50_mm": 43.2,
       "max_height_p90_mm": 44.3,
-      "max_height_min_mm": 41.2,
+      "max_height_min_mm": 41.1,
       "max_height_max_mm": 44.5,
       "p98_height_p50_mm": 41.9,
       "surface_p50_p50_mm": 36.9,
       "footprint_cm2_p50": 21.1,
-      "volume_cm3_p50": 53.2
+      "volume_cm3_p50": 53.2,
+      "ratio_p50": 0.946,
+      "ratio_p90": 0.982,
+      "cap_mode": "height"
     },
     "cheese": {
       "index": 13,
@@ -217,7 +249,10 @@
       "p98_height_p50_mm": 47.5,
       "surface_p50_p50_mm": 39.8,
       "footprint_cm2_p50": 22.0,
-      "volume_cm3_p50": 32.7
+      "volume_cm3_p50": 32.7,
+      "ratio_p50": 1.003,
+      "ratio_p90": 1.113,
+      "cap_mode": "ratio"
     },
     "carrot": {
       "index": 16,
@@ -233,7 +268,10 @@
       "p98_height_p50_mm": 31.3,
       "surface_p50_p50_mm": 21.6,
       "footprint_cm2_p50": 51.7,
-      "volume_cm3_p50": 91.3
+      "volume_cm3_p50": 91.3,
+      "ratio_p50": 0.458,
+      "ratio_p90": 0.623,
+      "cap_mode": "ratio"
     },
     "peas": {
       "index": 17,
@@ -264,7 +302,10 @@
       "p98_height_p50_mm": 73.8,
       "surface_p50_p50_mm": 66.4,
       "footprint_cm2_p50": 49.9,
-      "volume_cm3_p50": 240.9
+      "volume_cm3_p50": 240.9,
+      "ratio_p50": 1.122,
+      "ratio_p90": 1.186,
+      "cap_mode": "height"
     },
     "banana": {
       "index": 21,
@@ -280,7 +321,10 @@
       "p98_height_p50_mm": 39.7,
       "surface_p50_p50_mm": 32.4,
       "footprint_cm2_p50": 83.2,
-      "volume_cm3_p50": 197.8
+      "volume_cm3_p50": 197.8,
+      "ratio_p50": 0.444,
+      "ratio_p90": 0.527,
+      "cap_mode": "height"
     },
     "tomato": {
       "index": 22,
@@ -297,7 +341,10 @@
       "p98_height_p50_mm": 40.7,
       "surface_p50_p50_mm": 33.6,
       "footprint_cm2_p50": 27.8,
-      "volume_cm3_p50": 74.2
+      "volume_cm3_p50": 74.2,
+      "ratio_p50": 0.695,
+      "ratio_p90": 0.865,
+      "cap_mode": "ratio"
     },
     "mixed_vegetables": {
       "index": 23,

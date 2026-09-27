@@ -119,6 +119,14 @@ public enum CarveResidualAudit {
         public let capCarvedCm3: Float
         public let lidarExtentMm: Float
         public let lidarCarvedCm3: Float
+        /// The silhouette footprint on the adopted plane, mm², and the
+        /// footprint-scaled cap it gives (Decision 12), carved with depth
+        /// withheld exactly as the class cap is.
+        public let footprintMm2: Float
+        public let ratioCapMm: Float
+        public let ratioCapSource: String
+        public let ratioExtentMm: Float
+        public let ratioCarvedCm3: Float
     }
 
     public struct Report: Sendable, Encodable {
@@ -437,7 +445,16 @@ public enum CarveResidualAudit {
                 ofSorted: adoptedSamples, VoxelGridSizer.heightPercentile)
             let (constantCm3, constantGrid) = try sized(measured: nil, classCap: nil)
             let (capCm3, capGrid) = try sized(measured: nil, classCap: cap)
+            // The LiDAR reference takes the cap production takes with a
+            // measurement: the height-mode ceiling (`carveCap`).
             let (lidarCm3, lidarGrid) = try sized(measured: measured, classCap: cap)
+            // Decision 12: the footprint-scaled cap, from the silhouette on
+            // the adopted plane — what a phone without LiDAR would size by.
+            let footprintMm2 = VoxelGridSizer.silhouetteFootprintMm2(
+                foodMask: foodMask, intrinsics: nadirK, supportPlane: adoptedPlane)
+            let ratioCap = priors.cap(
+                forNadirArgmax: nadirSeg.argmax, palette: palette, footprintMm2: footprintMm2) ?? cap
+            let (ratioCm3, ratioGrid) = try sized(measured: nil, classCap: ratioCap)
             var present = Set<Int>()
             nadirSeg.argmax.pixels.withUnsafeBytes { raw in
                 for b in raw.bindMemory(to: UInt8.self) where palette.isCarvableClass(Int(b)) {
@@ -450,7 +467,10 @@ public enum CarveResidualAudit {
                 classCapMm: cap.mm, capSource: cap.source.rawValue,
                 constantExtentMm: constantGrid.verticalExtentMm, constantCarvedCm3: constantCm3,
                 capExtentMm: capGrid.verticalExtentMm, capCarvedCm3: capCm3,
-                lidarExtentMm: lidarGrid.verticalExtentMm, lidarCarvedCm3: lidarCm3)
+                lidarExtentMm: lidarGrid.verticalExtentMm, lidarCarvedCm3: lidarCm3,
+                footprintMm2: footprintMm2,
+                ratioCapMm: ratioCap.mm, ratioCapSource: ratioCap.source.rawValue,
+                ratioExtentMm: ratioGrid.verticalExtentMm, ratioCarvedCm3: ratioCm3)
         }
 
         // (3) the hull's own bias at this bundle's baseline, and optionally
@@ -788,26 +808,13 @@ public enum CarveResidualAudit {
     /// pixel contributes the same `z_T² / (f_x f_y cos³θ)` patch the
     /// single-view extrusion integrates, so the figure is the footprint the
     /// carve itself works over.
+    /// The production footprint rule (`VoxelGridSizer.silhouetteFootprintMm2`,
+    /// the number the Decision 12 cap scales with), in cm².
     static func footprintCm2(
         mask: BinaryMask, intrinsics k: CameraIntrinsics, plane: SupportPlane
     ) -> Float {
-        let fMean = (k.fx + k.fy) / 2
-        var totalMm2: Double = 0
-        for y in 0..<mask.height {
-            for x in 0..<mask.width where mask.isFood(x: x, y: y) {
-                let dir = Vec3((Float(x) - k.cx) / k.fx, (Float(y) - k.cy) / k.fy, -1).normalised()
-                let denom = plane.normal.dot(dir)
-                if abs(denom) < 1e-9 { continue }
-                let alpha = plane.distanceMm / denom
-                if alpha <= 0 { continue }
-                let zT = abs((dir * alpha).z)
-                let du = Float(x) - k.cx, dv = Float(y) - k.cy
-                let cosTheta = fMean / (fMean * fMean + du * du + dv * dv).squareRoot()
-                let cos3 = cosTheta * cosTheta * cosTheta
-                totalMm2 += Double(zT * zT / (k.fx * k.fy * cos3))
-            }
-        }
-        return Float(totalMm2 / 100)
+        VoxelGridSizer.silhouetteFootprintMm2(
+            foodMask: mask, intrinsics: k, supportPlane: plane) / 100
     }
 
     /// Monotone-chain convex hull, counter-clockwise in image coordinates.

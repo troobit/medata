@@ -812,3 +812,214 @@ tilt and cap sweeps, `orbitTransform`), `HarnessCLI` (`--no-depth`,
 `docs/agent-notes/two-view-geometry-audit.md` §8.
 
 ---
+
+## Decision 12: A footprint-scaled class height cap where the class's form scales with its size
+
+**Date**: 2026-09-27
+
+**Status**: proposed (the LiDAR path is unchanged; the pass line — non-LiDAR
+÷ LiDAR under 1.3 on at least four of five bundles — is met on two of five)
+
+### Context
+
+Decision 11 bounded the no-depth two-view carve with a per-class absolute
+cap, class max-height P90 plus the margin, and measured it: 11–18 % off every
+audit bundle, none under the 1.3 pass line, because the bread class's P90 is
+a loaf (80.9 mm) and the five audited rolls are 30–51 mm tall. The cap could
+not know which form was on the plate.
+
+`tools/metafood3d/height_priors_items.csv` carries each mesh's seated
+footprint beside its height, and for several classes the ratio
+`r = max_height / sqrt(footprint)` is far tighter than the height. On the
+nine `Yeast_bread` meshes the height's P90/P50 spread is 2.56 and the ratio's
+1.20: rolls sit at r 0.39–0.49, loaves at 0.44–0.61, and only the slices fall
+out at 0.16–0.19. A roll and a loaf are one shape at two sizes. Broccoli
+(2.19 against 1.11), carrot (1.65 against 1.36), tomato (1.48 against 1.25)
+and pork (1.16 against 1.14) tell the same story; chips (1.79 against 2.30)
+and rice (1.47 against 1.66) the opposite — a handful and a basket, a spread
+and a domed bowl, differ in height at one footprint. The non-LiDAR path
+measures a footprint for free: the nadir silhouette back-projected onto the
+support plane, the same geometry the grid sizer already uses for its
+horizontal extent.
+
+### Decision
+
+`height_priors.json` moves to schema `height_priors.v2`, every v1 field
+kept, with `ratio_p50`, `ratio_p90` and a `cap_mode` per class: `ratio`
+when the ratio's P90/P50 spread is smaller than the height's on at least
+four meshes, else `height`. Six classes take ratio mode — bread_white,
+bread_wholemeal, broccoli, carrot, tomato, pork — the rest stay in height
+mode.
+
+`ClassHeightPriors.cap(forPaletteIndex:footprintMm2:)`: in ratio mode
+`cap = r_P90 × sqrt(footprint mm²) + margin`, clamped to
+`[10 mm, the Decision 11 cap]`, source `classRatio`; in height mode the
+Decision 11 cap, unchanged; the global fallback as before. The footprint is
+`VoxelGridSizer.silhouetteFootprintMm2`, the nadir carvable silhouette's area
+on the support plane (per-pixel back-projection; on a single-object view
+after `ObjectReconciler` that is the object). The carve takes the ratio cap
+**only where no height is measured** (`carveCap`): with nadir depth the
+extent is `min(measured + margin, Decision 11 cap)` exactly as before, so a
+LiDAR grid is never sized by a prior about form. `Pipeline`, `FixtureRunner`
+and `carve-audit` size by the one function; the row's `voxelGrid` gains
+`footprintMm2`, `capSource` gains `classRatio`, and `event=grid.height`
+prints `footprint_mm2`.
+
+The Decision 8 flag stands: a no-depth two-view row is still
+`unbounded_carve_height` and not offered for dosing.
+
+### Rationale
+
+Measured offline with `HarnessCLI carve-audit --no-depth --tilts
+22.2,26,40,60 --caps 120,85.9,59.5,51.8,42` and `volumes`, on the five §7
+bundles and the two single-view controls, before and after.
+
+**The LiDAR path is unchanged.** The `volumes` replay of all seven bundles is
+byte-identical before and after: 397.1, 390.1, 350.3, 268.0, 358.9 cm³ on the
+two-view bundles and 298.9, 309.5 on the single-view controls. By
+construction — the ratio cap is not consulted when a height is measured —
+and by measurement.
+
+**The no-depth carve, at the plane production adopts** (depth withheld from
+the sizer only, as Decision 11 measured it). The footprint is the
+silhouette's on that plane; the extent is the cap rounded up to whole 3 mm
+voxels; the LiDAR maximum is the food's measured top:
+
+| bundle | class | footprint mm² | LiDAR max mm | ratio cap mm (extent) | 120 mm | class cap (87) | ratio cap | LiDAR ref | 120 ÷ | class ÷ | ratio ÷ |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `1790318627741` | bread_wholemeal | 10 267 | 47.6 | 56.8 (57) | 709.8 | 583.1 | **416.5** | 397.1 | 1.79 | 1.47 | **1.05** |
+| `1790315814452` | bread_wholemeal | 12 051 | 50.7 | 61.1 (63) | 690.0 | 610.7 | **502.3** | 390.1 | 1.77 | 1.57 | **1.29** |
+| `1790310086654` | bread_wholemeal | 12 234 | 37.1 | 61.5 (63) | 678.9 | 595.4 | **485.2** | 350.3 | 1.94 | 1.70 | 1.39 |
+| `1790315734391` | bread_white | 10 635 | 33.8 | 57.7 (60) | 632.8 | 534.7 | **412.7** | 268.0 | 2.36 | 2.00 | 1.54 |
+| `1790325380366` | bread_wholemeal | 12 417 | 30.5 | 61.9 (63) | 749.6 | 663.6 | **550.2** | 358.9 | 2.09 | 1.85 | 1.53 |
+
+The ratio cap takes a further 18–29 % off Decision 11's figure on every
+bundle and never clips: it sits 6–31 mm above each roll's measured top. Two
+bundles pass the 1.3 line, three do not. The reason is in the two columns
+side by side: the two rolls that pass are as tall as the prior expects
+(r = 0.47, 0.46 — the MetaFood3D rolls' band), the three that fail are
+flatter rolls of the same footprint (r = 0.33, 0.33, 0.27), and a P90 cap
+must leave room for the tall ones. The cap follows the object's size; it
+cannot see whether this roll is a flat one.
+
+**The Decision 8 synthetic control** on `1790310086654` (120 x 70 x 40 mm
+box, exact silhouettes, voxelised truth 337.0 cm³). The box's true footprint
+is 8 400 mm², cap 0.511 x 91.7 + 5 = 51.8 mm; the footprint the silhouette
+rule measures is 10 720 mm² (a 40 mm top face 390 mm from the camera
+projects 24 % larger than its base), cap ≈ 58 mm, the 59.5 column:
+
+| oblique tilt | 120 mm cap | class cap (87) | ratio cap, silhouette footprint (59.5) | ratio cap, true footprint (51.8) | truth cap (42) |
+|---|---|---|---|---|---|
+| stored (23.9°) | 806.9 | 675.8 | 516.6 | 474.1 | 379.1 |
+| 22.2° | 735.0 | 643.4 | 504.4 | 464.2 | 372.6 |
+| 26° | 705.2 | 632.0 | 502.3 | 463.3 | 373.3 |
+| 40° | 596.3 | 584.6 | 495.5 | 461.2 | 374.5 |
+| 60° | 481.4 | 481.4 | 466.2 | 445.9 | 375.4 |
+
+The 120, 87 and 42 columns reproduce Decision 11's. The ratio cap is worth
+20–24 % over the class cap at the aim-guide tilts and, unlike the class cap,
+still bites at 60° (466 against 481), because it sits below where the hull
+closes on its own. The 24 % footprint inflation is a real, bounded bias in
+the rule: a food of height h at distance d reads (d ÷ (d − h))² too large in
+area, ~12 % on the cap's sqrt term at these ranges. It is on the safe side
+(a looser cap) and it is the same on every no-depth row.
+
+**The LiDAR regression table** (`volumes`, all seven bundles):
+
+| bundle | path | before | after |
+|---|---|---|---|
+| `1790318627741` | two-view | 397.1 | 397.1 |
+| `1790315814452` | two-view | 390.1 | 390.1 |
+| `1790310086654` | two-view | 350.3 | 350.3 |
+| `1790315734391` | two-view | 268.0 | 268.0 |
+| `1790325380366` | two-view | 358.9 | 358.9 |
+| `1790315900185` | single-view | 298.9 | 298.9 |
+| `1790315865030` | single-view | 309.5 | 309.5 |
+
+Why the ratio yields to a measurement rather than capping it too: on
+`1790315814452` the ratio cap (61.1) sits above the measured extent (45.0)
+and would not bite, but on a taller roll of the same footprint it would, and
+a cap that replaces a LiDAR reading of the food's own top with a table
+lookup is the failure Decision 8 named. The ratio is a statement about form
+for a phone that cannot measure; the phone that can measure keeps
+Decision 11's ceiling.
+
+### Alternatives Considered
+
+- **The absolute class cap only (Decision 11)**: The shipped state. Rejected
+  as the end point because it measured 1.47–2.00x on rolls and cannot
+  improve: the class P90 is a loaf whatever sits on the plate, and the
+  footprint that distinguishes a roll from a loaf was already in the
+  capture, unused.
+- **Per-form priors through the swap list (slice / roll / loaf)**: Still the
+  lever for the case the ratio cannot reach. The ratio collapses roll and
+  loaf because they are one shape; it does NOT cover slices, whose ratio is a
+  third of a roll's, so a slice on the non-LiDAR path is capped as a roll of
+  its footprint. Only a form label from the review loop can seed a slice-
+  level cap, and the palette does not carry form. Deferred, not rejected; it
+  composes with this decision (a form label would pick the ratio band).
+- **A footprint-to-volume regression, skipping the carve**: Fit V against
+  footprint per class from the meshes and report that. Rejected: it is a
+  model of the prior, not a measurement — the oblique silhouette and the
+  plane would contribute nothing, and the row would claim a carve it did not
+  do. The cap keeps the carve as the measurement and the prior as its bound.
+- **Cap at the ratio P50 (0.427)**: Would land 48–52 mm on these bundles and
+  bring more of them under 1.3. Rejected for the reason Decision 11 rejected
+  the height P50: it clips the two rolls that are as tall as the prior
+  (r = 0.46–0.47), and a cap that removes measured food is the wrong
+  direction for a dosing number.
+
+### Consequences
+
+**Positive:**
+- The no-depth bread carve drops from 1.47–2.00x to 1.05–1.54x the LiDAR
+  figure, 18–29 % under Decision 11 on every bundle, with no bundle clipped.
+- The bound now depends on the object photographed, not only its class; a
+  small roll and a loaf get different caps from the same label.
+- The LiDAR path is byte-identical on all seven corpus bundles, by
+  construction and by replay.
+- Every no-depth row records the footprint and `classRatio`, so the bound
+  can be re-derived from the row.
+
+**Negative:**
+- The pass line is not met: three of five rolls still read 1.39–1.54x,
+  because they are flatter than the class's P90 ratio. The status stays
+  proposed; the residual on these needs a form label (swap list) or a
+  measurement, not a tighter statistic.
+- A slice on the non-LiDAR path is capped as a roll of its footprint, about
+  2.5x too tall (r 0.51 against 0.16–0.19); the ratio rule does not know a
+  slice from a roll and nothing in the capture tells it.
+- Classes in height mode (rice, chips, chicken, egg, apple, banana, beef,
+  mashed potato, and every unmapped class on the global cap) gain nothing:
+  their forms do not scale with their footprint, and they keep Decision 11's
+  over-read.
+- The silhouette footprint is inflated by the food's own height (≈ 24 % in
+  area at 40 mm and 390 mm), which loosens the cap by ~12 % of its scaled
+  term; safe, but a bias a future rule could remove by iterating once.
+- A multi-food plate (reconciliation not applied) uses the whole carvable
+  silhouette's footprint for every class present, a looser cap than the
+  dominant object's own; safe, unmeasured.
+- The card-only plane a non-LiDAR phone would fit is still unmeasured (§4)
+  and that path refuses before the carve today (§6): the rule is exercised
+  offline and by tests, not on a phone.
+- Regenerating `height_priors.json` from the item CSV rounds three v1 fields
+  the app does not read by 0.1 (`HEIGHT_PRIORS.md`); a full mesh scan
+  restores them.
+
+### Impact
+
+`tools/metafood3d/height_priors.py` (`ratio_p50`, `ratio_p90`, `cap_mode`,
+`--from-items-csv`, schema v2), `tools/metafood3d/height_priors.json` and its
+byte-identical copy `MedataCore/Sources/Volume/Resources/height_priors.json`,
+`tools/metafood3d/HEIGHT_PRIORS.md`, `MedataCore/Sources/Volume/ClassHeightPriors.swift`
+(`cap(forPaletteIndex:footprintMm2:)`, `carveCap`, `CapSource.classRatio`),
+`MedataCore/Sources/Volume/VoxelGridSizer.swift` (`silhouetteFootprintMm2`,
+`VerticalBoundSource.classRatio`), `MedataCore/Sources/Pipeline/Pipeline.swift`
+(two-view branch), `MedataCore/Sources/Pipeline/PipelineDiagnostics.swift`
+(`VoxelGridMeasurements.footprintMm2`), `HarnessCore/FixtureRunner.swift`,
+`HarnessCore/CarveResidualAudit.swift` (`NoDepthRow` ratio columns, footprint
+through the production rule), `HarnessCLI` (`noDepthRatio` line),
+`MedataCore/Tests/VolumeTests/ClassHeightPriorsTests.swift`,
+`docs/agent-notes/two-view-geometry-audit.md` §8.
+
+---
