@@ -1,0 +1,4 @@
+.venv/
+EdgeTAM/
+out/
+__pycache__/
