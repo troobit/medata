@@ -173,3 +173,94 @@ def test_train_cli_rejects_out_of_range_repeat_factor_threshold(capsys):
         train.main(["--repeat-factor-threshold", "2"])
     assert excinfo.value.code == 2
     assert "--repeat-factor-threshold" in capsys.readouterr().err
+
+
+# ── Boundary-weighted per-pixel loss (MD-29 mask-quality re-scope) ──────────────
+
+np = pytest.importorskip("numpy")  # a torch dependency, but not torch itself
+
+# 6x8 image, class 0 on the left four columns and class 1 on the right four:
+# the only label change runs between columns 3 and 4.
+TWO_REGIONS = np.concatenate(
+    [np.zeros((6, 4), dtype=np.int64), np.ones((6, 4), dtype=np.int64)], axis=1,
+)
+
+
+def test_boundary_band_one_marks_the_pixel_row_either_side_of_the_change():
+    out = loss_config.boundary_weight_map(TWO_REGIONS, band_px=1, weight=3.0)
+    assert out.dtype == np.float32 and out.shape == TWO_REGIONS.shape
+    expected = np.ones((6, 8), dtype=np.float32)
+    expected[:, 3:5] = 3.0
+    assert np.array_equal(out, expected)
+
+
+def test_boundary_band_two_widens_the_seam_by_one_on_each_side():
+    out = loss_config.boundary_weight_map(TWO_REGIONS, band_px=2, weight=3.0)
+    expected = np.ones((6, 8), dtype=np.float32)
+    expected[:, 2:6] = 3.0
+    assert np.array_equal(out, expected)
+
+
+def test_boundary_uses_chebyshev_distance():
+    # A single class-1 pixel in a class-0 field: band 1 marks its full 3x3
+    # neighbourhood (diagonals included), band 2 the 5x5.
+    lab = np.zeros((7, 7), dtype=np.int64)
+    lab[3, 3] = 1
+    out = loss_config.boundary_weight_map(lab, band_px=1, weight=2.0)
+    assert (out == 2.0).sum() == 9 and out[2:5, 2:5].min() == 2.0
+    out = loss_config.boundary_weight_map(lab, band_px=2, weight=2.0)
+    assert (out == 2.0).sum() == 25 and out[1:6, 1:6].min() == 2.0
+
+
+def test_ignored_labels_produce_no_boundary_and_stay_at_one():
+    # The change is between class 0 and an ignored sentinel: no boundary at all.
+    out = loss_config.boundary_weight_map(TWO_REGIONS, band_px=2, weight=3.0, ignore=(1,))
+    assert np.array_equal(out, np.ones((6, 8), dtype=np.float32))
+    # Three columns: class 0 | sentinel | class 2. Each real class touches only
+    # the sentinel, so neither edge is a boundary.
+    lab = np.array([[0, 0, 9, 2, 2]] * 3, dtype=np.int64)
+    out = loss_config.boundary_weight_map(lab, band_px=1, weight=3.0, ignore=(9,))
+    assert np.array_equal(out, np.ones((3, 5), dtype=np.float32))
+    # A real change next to a sentinel: the band dilates around the change but
+    # never onto the sentinel pixels.
+    lab = np.array([[0, 0, 2, 2, 9]] * 3, dtype=np.int64)
+    out = loss_config.boundary_weight_map(lab, band_px=2, weight=3.0, ignore=(9,))
+    assert out[:, 4].tolist() == [1.0] * 3 and (out[:, :4] == 3.0).all()
+
+
+def test_weight_one_yields_all_ones_and_no_change_yields_all_ones():
+    out = loss_config.boundary_weight_map(TWO_REGIONS, band_px=2, weight=1.0)
+    assert np.array_equal(out, np.ones((6, 8), dtype=np.float32))
+    flat = np.full((4, 4), 5, dtype=np.int64)
+    assert np.array_equal(loss_config.boundary_weight_map(flat, 1, 3.0), np.ones((4, 4), np.float32))
+
+
+def test_image_edges_are_not_boundaries():
+    # Background everywhere but one interior class: the canvas border must not
+    # light up (the letterbox padding meets the content edge everywhere).
+    lab = np.zeros((8, 8), dtype=np.int64)
+    lab[3:5, 3:5] = 1
+    out = loss_config.boundary_weight_map(lab, band_px=1, weight=3.0)
+    assert out[0, :].max() == 1.0 and out[:, 0].max() == 1.0
+    assert out[-1, :].max() == 1.0 and out[:, -1].max() == 1.0
+
+
+def test_boundary_map_rejects_bad_arguments():
+    with pytest.raises(ValueError, match="band_px"):
+        loss_config.boundary_weight_map(TWO_REGIONS, band_px=0, weight=2.0)
+    with pytest.raises(ValueError, match="weight"):
+        loss_config.boundary_weight_map(TWO_REGIONS, band_px=1, weight=0.0)
+    with pytest.raises(ValueError, match="labels"):
+        loss_config.boundary_weight_map(np.zeros((2, 2, 3), dtype=np.int64), 1, 2.0)
+
+
+@pytest.mark.parametrize("argv,needle", [
+    (["--boundary-weight", "0"], "--boundary-weight must be positive"),
+    (["--boundary-band-px", "2"], "--boundary-band-px only applies"),
+    (["--boundary-weight", "3", "--boundary-band-px", "0"], "at least 1"),
+])
+def test_train_cli_rejects_bad_boundary_flags(capsys, argv, needle):
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(argv)
+    assert excinfo.value.code == 2
+    assert needle in capsys.readouterr().err
