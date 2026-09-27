@@ -154,6 +154,35 @@ composition only; all behaviour is in the model and is unit-tested.
   height budget is identical in both, so the total, the action, the scale control and the
   scrolling rows below are untouched by the choice.
 
+- **Review swap loop (specs/ui/review-swap-loop, MD-29) — two attempts in one
+  build.** Attempt 1 is the `RelabelSheet` alone: shortlist section first
+  (header `model.shortlistHeader` — "Recent" only when the pure recency
+  ordering returned an entry, "Suggested" otherwise), then "All foods" under a
+  pinned `.searchable`, "Not in the database" last. A "Keep <predicted>" row
+  heads the shortlist when the row is relabelled and calls `reverseRelabel`,
+  because `eligibleFoods` filters the predicted class out and the reversal
+  was otherwise unreachable. Every row's shortlist is built by
+  `prepareShortlists()` as the FIRST thing `start()` does (before the outcome
+  lookup's 500 ms retry), so `openAlternatives` sets `shortlist` from the
+  cache before it sets `alternativesFor` — the sheet never reflows. Attempt 2
+  is Settings › Developer › **Inline food chips**
+  (`DeveloperFlags.inlineFoodChipsKey`, `#if FIELD_LOOP`, default off):
+  `chipLine` draws the predicted food plus the top three prepared entries
+  (`chipCandidates`, fixed for the session so a tap never reshuffles them);
+  the current class is the filled chip, the predicted chip is the one-tap
+  undo, and `chooseChip` records the shortlist position as the rank the sheet
+  would have. **Add a food** (not behind the switch) appends a row keyed
+  `added_<n>` (`ReviewFood.addedPrefix`): predicted side empty — zero
+  figures, unity β, `classIndex` = `unknown_food` — corrected side the chosen
+  solid at one serving or 100 g, user-set, persisted by the ordinary upsert.
+  Two things follow from that key. `adoptStoredRows` appends stored `added_`
+  rows on a re-push, or the display would drop a food the reconciling total
+  still counts; and history (`ResultView`) never lists it per row because its
+  rows come from `record.macros.perClass` — the corrected total and the dose
+  do include it. `reverseRelabel` and `markAbsent` refuse added rows; reject
+  is their removal. `tools/shortlist_hit_rate.py` will read an added row as a
+  rank-0 relabel until it filters the prefix.
+
 - **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
   `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
   ahead of SwiftUI-drawn siblings, and `allowsHitTesting(false)`/`zIndex` on the

@@ -17,14 +17,14 @@ references:
 - [x] 4. Attempt 1 verify: build, spell, commit, tag review-swap-attempt-1 <!-- id:ki67gkh -->
   - Stream: 1
 
-- [ ] 5. Attempt 2 switch: Inline food chips in DeveloperFlags and Settings <!-- id:ki67gki -->
+- [x] 5. Attempt 2 switch: Inline food chips in DeveloperFlags and Settings <!-- id:ki67gki -->
   - Stream: 1
 
-- [ ] 6. Attempt 2 chips: predicted plus top three on each active row <!-- id:ki67gkj -->
+- [x] 6. Attempt 2 chips: predicted plus top three on each active row <!-- id:ki67gkj -->
   - Stream: 1
 
-- [ ] 7. Attempt 2 add a food: model insert, sheet, row, re-push restore <!-- id:ki67gkk -->
+- [x] 7. Attempt 2 add a food: model insert, sheet, row, re-push restore <!-- id:ki67gkk -->
   - Stream: 1
 
-- [ ] 8. Attempt 2 verify: build, spell, notes, commit, tag review-swap-attempt-2 <!-- id:ki67gkl -->
+- [x] 8. Attempt 2 verify: build, spell, notes, commit, tag review-swap-attempt-2 <!-- id:ki67gkl -->
   - Stream: 1

@@ -60,10 +60,23 @@ struct ReviewFood: Identifiable {
 
     var id: String { classId }
 
+    // A food the user added on the review surface (review-swap-loop): no mask
+    // region and an empty predicted side; the corrected side carries the
+    // chosen food and a user-set mass. The prefix keys its corpus row and is
+    // what tools filter on.
+    static let addedPrefix = "added_"
+    var isAdded: Bool { classId.hasPrefix(Self.addedPrefix) }
+
     // The class the row currently stands for: corrected when relabelled,
     // predicted otherwise. Absent foods keep the predicted class for display.
     var currentClassId: String {
         flags.classCorrected ? (corrected?.classID ?? predicted.classID) : predicted.classID
+    }
+
+    // The class a row is titled by where the prediction is not the point: an
+    // added row has no real prediction, so its chosen food names it.
+    var titleClassId: String {
+        isAdded ? (corrected?.classID ?? classId) : predicted.classID
     }
 
     // Food the segmenter could not name (unknown-food-nameable Req 6): the
@@ -346,10 +359,22 @@ final class MealReviewModel {
     // unreachable at relabel time. No solid-to-liquid relabel in either
     // direction (Req 3.9).
     func eligibleFoods(for classId: String) -> [FoodCandidate] {
-        guard let food = food(classId), let database else { return [] }
-        let names = food.isLiquid ? palette.liquidClasses : palette.foodClasses
+        guard let food = food(classId) else { return [] }
+        return eligibleCandidates(isLiquid: food.isLiquid, excluding: food.predicted.classID)
+    }
+
+    // What "Add a food" offers (review-swap-loop): every solid the database
+    // can derive, the Req 3.8 eligibility. Solids only — a typed gram amount
+    // is a solid's unit.
+    var addableFoods: [FoodCandidate] {
+        eligibleCandidates(isLiquid: false, excluding: nil)
+    }
+
+    private func eligibleCandidates(isLiquid: Bool, excluding excluded: String?) -> [FoodCandidate] {
+        guard let database else { return [] }
+        let names = isLiquid ? palette.liquidClasses : palette.foodClasses
         return names
-            .filter { $0 != food.predicted.classID }
+            .filter { $0 != excluded }
             .compactMap { candidateId in
                 guard
                     let entry = database.entry(for: candidateId, edition: record.databaseEdition),
@@ -357,6 +382,32 @@ final class MealReviewModel {
                 else { return nil }
                 return FoodCandidate(classId: candidateId, displayName: Self.prettify(candidateId))
             }
+    }
+
+    // The inline chip line (review-swap-loop attempt 2): the predicted food,
+    // then the top three of the prepared shortlist. Fixed for the session so a
+    // tap never reshuffles the chips under the thumb; the view draws the chip
+    // matching the current class as selected. Empty until start() has
+    // prepared the row, where a relabel is refused, and on added rows (their
+    // "prediction" is a placeholder).
+    static let chipLimit = 3
+
+    func chipCandidates(for classId: String) -> [FoodCandidate] {
+        guard let food = food(classId), !food.isAdded, canRelabel(classId),
+              let prepared = preparedShortlists[classId] else { return [] }
+        let predicted = FoodCandidate(
+            classId: food.predicted.classID,
+            displayName: Self.prettify(food.predicted.classID)
+        )
+        return [predicted] + prepared.candidates.prefix(Self.chipLimit)
+    }
+
+    // A chip tap: the predicted chip reverses (relabel's own reversal route),
+    // any other relabels with its shortlist position — the same rank the sheet
+    // records (Req 9.7).
+    func chooseChip(classId: String, candidate: FoodCandidate) async {
+        let position = preparedShortlists[classId]?.candidates.firstIndex(of: candidate)
+        await relabel(classId: classId, to: candidate, shortlistRank: position.map { $0 + 1 } ?? 0)
     }
 
     // MARK: - Mutators
@@ -440,7 +491,8 @@ final class MealReviewModel {
     func reverseRelabel(classId: String) async {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
-        guard food.flags.classCorrected else { return }
+        // An added row has nothing to revert to; reject is its removal.
+        guard food.flags.classCorrected, !food.isAdded else { return }
         clearRelabel(&food)
         rebuildCorrectedSide(&food)
         commit(food, at: index)
@@ -494,6 +546,9 @@ final class MealReviewModel {
     func markAbsent(classId: String, query: String?) async {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
+        // An added row exists to carry a class; the sheet hides this action
+        // for it, and the model refuses it too.
+        guard !food.isAdded else { return }
         let trimmed = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if food.flags.absent, food.absentQueryText == trimmed { return }
         // A standing relabel is reversed first — the reverseRelabel path —
@@ -508,6 +563,43 @@ final class MealReviewModel {
         rebuildCorrectedSide(&food)
         commit(food, at: index)
         await persist(foods[index])
+    }
+
+    // "Add a food" (review-swap-loop attempt 2): a row the segmenter never
+    // produced. The predicted side is empty — no region, zero figures, unity
+    // β, classIndex = unknown_food — so the corpus row says exactly that. The
+    // corrected side is the chosen food at one serving or 100 g, user-set, so
+    // a later relabel keeps the mass and re-derives carbohydrate from the new
+    // coefficient (Req 3.6). Persisted through the ordinary upsert; returns the
+    // new row's id so the view can open its gram editor.
+    func addFood(_ candidate: FoodCandidate) async -> String? {
+        guard let database,
+              let entry = database.entry(for: candidate.classId, edition: record.databaseEdition)
+        else { return nil }
+        let taken = foods.filter(\.isAdded)
+            .compactMap { Int($0.classId.dropFirst(ReviewFood.addedPrefix.count)) }
+        let classId = ReviewFood.addedPrefix + String((taken.max() ?? 0) + 1)
+
+        var food = ReviewFood(
+            classId: classId,
+            predicted: Self.emptyDerivation(classId: classId, palette: palette),
+            isLiquid: false
+        )
+        food.createdAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        food.corrected = Self.derivation(
+            classId: candidate.classId, entry: entry, palette: palette,
+            volumeCm3: 0, volumePreBetaCm3: 0
+        )
+        food.flags.classCorrected = true
+        food.flags.amountCorrected = true
+        food.scaleBaseMassG = database.solidServing(for: candidate.classId)?.gramsPerUnit ?? 100
+        food.baseIsUserSet = true
+        food.massSource = .perFood
+        rebuildCorrectedSide(&food)  // applies a standing meal scale (Req 6.4)
+        foods.append(food)
+        commit(food, at: foods.count - 1)
+        await persist(foods[foods.count - 1])
+        return classId
     }
 
     // Per-food amount (Req 6.1, 6.8): state updates immediately; the store
@@ -782,26 +874,39 @@ final class MealReviewModel {
                 foods[index].createdAtMs = row.createdAtMs
                 continue
             }
-            var food = foods[index]
-            food.createdAtMs = row.createdAtMs
-            food.flags.classCorrected = row.classCorrected
-            food.flags.rejected = row.rejected
-            food.flags.absent = row.absent
-            food.flags.amountCorrected = row.amountCorrected
-            food.flags.pickerOpenedUnchanged = row.pickerOpenedUnchanged
-            food.flags.captureAbandoned = row.captureAbandoned
-            food.flags.wasReverted = row.wasReverted
-            food.massSource = row.massSource
-            food.shortlistRank = row.shortlistRank
-            food.absentQueryText = row.absentQueryText
-            food.corrected = row.hasCorrected ? row.corrected : nil
-            if row.hasCorrected, !row.rejected {
-                // The stored mass becomes the new scale base; the meal-scale
-                // factor itself is session-local, so it re-derives from here.
-                food.scaleBaseMassG = row.corrected.massG
-                food.baseIsUserSet = row.massSource == .perFood
-            }
-            foods[index] = food
+            adopt(row, into: &foods[index])
+        }
+        // Added rows live only in the store (review-swap-loop): the record's
+        // perClass never carried them, so a re-push rebuilds them from their
+        // corpus rows — otherwise the display would drop a food whose carbs
+        // the reconciling total still counts.
+        for row in stored
+        where row.predicted.classID.hasPrefix(ReviewFood.addedPrefix)
+            && index(of: row.predicted.classID) == nil {
+            var food = ReviewFood(classId: row.predicted.classID, predicted: row.predicted, isLiquid: false)
+            adopt(row, into: &food)
+            foods.append(food)
+        }
+    }
+
+    private func adopt(_ row: PbCorrectionRecord, into food: inout ReviewFood) {
+        food.createdAtMs = row.createdAtMs
+        food.flags.classCorrected = row.classCorrected
+        food.flags.rejected = row.rejected
+        food.flags.absent = row.absent
+        food.flags.amountCorrected = row.amountCorrected
+        food.flags.pickerOpenedUnchanged = row.pickerOpenedUnchanged
+        food.flags.captureAbandoned = row.captureAbandoned
+        food.flags.wasReverted = row.wasReverted
+        food.massSource = row.massSource
+        food.shortlistRank = row.shortlistRank
+        food.absentQueryText = row.absentQueryText
+        food.corrected = row.hasCorrected ? row.corrected : nil
+        if row.hasCorrected, !row.rejected {
+            // The stored mass becomes the new scale base; the meal-scale
+            // factor itself is session-local, so it re-derives from here.
+            food.scaleBaseMassG = row.corrected.massG
+            food.baseIsUserSet = row.massSource == .perFood
         }
     }
 
@@ -886,6 +991,18 @@ final class MealReviewModel {
         out.coefficientSource = macro.coefficientSource
         out.massG = Double(macro.massG)
         out.carbsG = Double(macro.carbsG)
+        return out
+    }
+
+    // Predicted side of an added row: nothing was predicted, and the row says
+    // so — zero figures, unity β, and the palette's unknown_food index in
+    // place of a region.
+    private static func emptyDerivation(classId: String, palette: ClassPalette) -> PbFoodDerivation {
+        var out = PbFoodDerivation()
+        out.classID = classId
+        out.classIndex = UInt32(palette.unknownFood)
+        out.betaUsed = 1
+        out.betaStatus = .uncalibratedUnity
         return out
     }
 
