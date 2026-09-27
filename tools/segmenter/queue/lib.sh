@@ -52,6 +52,6 @@ run_variant() {
         --lineage "$B/lineage-${name}.json" > "$vlog" 2>&1
     rc=$?
     echo "[queue] $name: validation exit=$rc (1 = below the 0.48 gate, expected) $(date '+%Y-%m-%d %H:%M:%S')"
-    grep -E "mean food-class IoU|staple " "$vlog"
+    grep -E "mean food-class IoU|staple |mask " "$vlog"
     return $rc
 }

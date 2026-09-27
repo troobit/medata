@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Class-agnostic mask metrics shared by the three methods in this spike.
+"""I/O and scoring-space helpers for the three methods in this spike.
+
+The metrics themselves live in ``tools/segmenter/mask_quality.py`` (shared with
+``run_validation.py``, which records them into lineage); this module re-exports
+them and adds the anchor's file layout.
 
 Everything is scored in one "scoring space": the anchor image resized so its
 longer side is SCORE_SIZE (513, the segmenter's working resolution), aspect
@@ -9,7 +13,8 @@ no resampling); EdgeTAM and Vision masks are nearest-resized into it. The
 
 GT food = every palette label except background (33), so unknown_food (34)
 and unsupported_liquid (35) count as food: they are regions the segmenter is
-asked to delineate, whatever the label.
+asked to delineate, whatever the label. (The validation run excludes the
+sentinels too — ``mask_quality`` takes the set as ``non_food``.)
 
 Metrics:
   food_iou     union food vs background, per image.
@@ -24,20 +29,22 @@ Metrics:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
-from scipy import ndimage
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from mask_quality import (  # noqa: E402  (re-exported for the run_*.py scripts)
+    BACKGROUND, BOUNDARY_TOL, MIN_REGION_PX, SCORE_SIZE,
+    boundary, boundary_f, components, content_shape, gt_regions, iou,
+    label_components, region_ious,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 ANCHOR = REPO / "data/foodseg103_remapped_v2/heldout_leakfree"
 OUT = Path(__file__).resolve().parent / "out"
-BACKGROUND = 33
-SCORE_SIZE = 513
-BOUNDARY_TOL = 2
-MIN_REGION_PX = 64  # GT components smaller than this (in scoring space) are ignored
-EIGHT = np.ones((3, 3), dtype=bool)
 
 
 def stems() -> list[str]:
@@ -59,8 +66,7 @@ def load_image(stem: str) -> Image.Image:
 
 def score_shape(w: int, h: int) -> tuple[int, int]:
     """(sw, sh) of the scoring canvas for a native (w, h) image."""
-    s = SCORE_SIZE / max(w, h)
-    return max(1, min(SCORE_SIZE, round(w * s))), max(1, min(SCORE_SIZE, round(h * s)))
+    return content_shape(w, h, SCORE_SIZE)
 
 
 def load_gt_labels(stem: str) -> np.ndarray:
@@ -86,72 +92,14 @@ def load_mask(path: Path) -> np.ndarray:
     return np.asarray(Image.open(path).convert("L")) > 127
 
 
-def gt_regions(labels: np.ndarray) -> list[tuple[int, np.ndarray]]:
-    """[(class_id, bool mask)] for every GT food component of >= MIN_REGION_PX."""
-    regions = []
-    for cls in np.unique(labels):
-        if cls == BACKGROUND:
-            continue
-        comp, n = ndimage.label(labels == cls, structure=EIGHT)
-        for i in range(1, n + 1):
-            r = comp == i
-            if r.sum() >= MIN_REGION_PX:
-                regions.append((int(cls), r))
-    return regions
-
-
-def components(mask: np.ndarray, min_px: int = 0) -> list[np.ndarray]:
-    comp, n = ndimage.label(mask, structure=EIGHT)
-    out = [comp == i for i in range(1, n + 1)]
-    return [c for c in out if c.sum() >= min_px]
-
-
-def iou(a: np.ndarray, b: np.ndarray) -> float:
-    union = (a | b).sum()
-    return float((a & b).sum() / union) if union else 1.0
-
-
-def boundary(mask: np.ndarray) -> np.ndarray:
-    return mask & ~ndimage.binary_erosion(mask, structure=EIGHT, border_value=0)
-
-
-def boundary_f(pred: np.ndarray, gt: np.ndarray, tol: int = BOUNDARY_TOL) -> float:
-    pb, gb = boundary(pred), boundary(gt)
-    if pb.sum() == 0 and gb.sum() == 0:
-        return 1.0
-    if pb.sum() == 0 or gb.sum() == 0:
-        return 0.0
-    gd = ndimage.binary_dilation(gb, structure=EIGHT, iterations=tol)
-    pd = ndimage.binary_dilation(pb, structure=EIGHT, iterations=tol)
-    precision = (pb & gd).sum() / pb.sum()
-    recall = (gb & pd).sum() / gb.sum()
-    return float(2 * precision * recall / (precision + recall)) if precision + recall else 0.0
-
-
-def region_ious(pred: np.ndarray, regions: list[tuple[int, np.ndarray]],
-                comps: list[np.ndarray] | None = None) -> list[float]:
-    """Best-overlap component IoU for each GT region. ``comps`` overrides the
-    predicted components (default: 8-connected components of ``pred``)."""
-    if comps is None:
-        comps = components(pred)
-    out = []
-    for _, r in regions:
-        best, best_inter = 0.0, 0
-        for c in comps:
-            inter = (r & c).sum()
-            if inter > best_inter:
-                best_inter, best = inter, iou(r, c)
-        out.append(best)
-    return out
-
-
 def score_image(pred: np.ndarray, labels: np.ndarray) -> dict:
+    """Binary food mask ``pred`` against the GT label map; regions are matched to
+    components of the binary mask (the spike's union-mask reading)."""
     gt = labels != BACKGROUND
-    regions = gt_regions(labels)
     return {
         "food_iou": iou(pred, gt),
         "boundary_f": boundary_f(pred, gt),
-        "region_ious": region_ious(pred, regions),
+        "region_ious": region_ious(pred, gt_regions(labels)),
     }
 
 
