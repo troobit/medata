@@ -65,3 +65,18 @@ worker's augmentation stream, and is recorded in lineage `train_config.seed`
 (absent = unseeded, every run before 2026-09-26). MPS kernels are not all
 deterministic; whether two same-seed runs agree on the anchor is R9's question.
 Every queued variant uses seed 1 and is read against R8 (seed 1).
+
+## Boundary weight
+
+`--boundary-weight W [--boundary-band-px K]` (2026-09-27) makes the train
+Dataset return `(image, mask, weights)` instead of `(image, mask)`; the val
+Dataset never does. The train loop indexes the batch by position for that
+reason — any new consumer of the train loader must not unpack two values.
+The map is built in the worker from the augmented mask (pure numpy,
+`loss_config.boundary_weight_map`), so workers must re-import `loss_config`
+by name, which is why train.py imports it via `sys.path`, not
+`spec_from_file_location`. The reduction is `sum(w * ce) / sum(w)`; under
+`--class-weighting sqrt_inverse` the denominator also carries the target-class
+weight, so an all-ones map reproduces `nn.CrossEntropyLoss(weight=...)`
+exactly (test_train_boundary.py checks this for every loss). Both flags are
+recorded in lineage and drift-checked on resume; absent = off.

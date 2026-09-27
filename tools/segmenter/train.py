@@ -52,6 +52,15 @@ with class c, so images holding a class rarer than ``T`` are seen more often per
 epoch; omitted, every image is drawn once per epoch as every run before
 2026-09-26 was. The per-image class presence comes from one scan of the train
 masks, cached as JSON under ``tools/segmenter/build/class_presence/``.
+``--boundary-weight W`` (MD-29 re-scope to mask quality) multiplies the
+per-pixel cross-entropy term of whichever loss is selected by W on every pixel
+within ``--boundary-band-px`` (default 2, Chebyshev) of a label change in the
+train mask, 1 elsewhere, and takes the weighted mean so the loss scale stays
+comparable; the dice and presence terms are untouched. The map is built in the
+Dataset from the letterboxed, augmented mask and rides through the DataLoader
+as a third tensor. Omitted, the loss is the plain per-pixel mean as every run
+before 2026-09-27 was; boundary F at 2 px sat at 0.45–0.46 for every recipe
+tried, so the loss has to be told about edges.
 
 NEVER edit this file while a run is live: DataLoader workers are respawned each
 epoch and re-import the script from disk, so they execute NEW code against the
@@ -281,10 +290,18 @@ class FoodSegDataset:
     (``SegmenterPreProcessor`` — module docstring) are untouched, so train/serve
     colour handling stays matched. Do NOT change the normalisation itself
     without a lockstep serve-side decision.
+
+    ``boundary_weight`` (train split only, opt-in via ``--boundary-weight``)
+    makes ``__getitem__`` return a THIRD tensor: the
+    ``loss_config.boundary_weight_map`` of the letterboxed, augmented mask, so
+    the per-pixel weights are built once per sample in the worker and collated
+    with it. Left ``None``, the sample is the historical ``(image, mask)`` pair.
     """
 
     def __init__(self, split_dir: Path, target_size: int, limit: int | None = None,
-                 augment: bool = False, photometric: bool = False):
+                 augment: bool = False, photometric: bool = False,
+                 boundary_weight: float | None = None,
+                 boundary_band_px: int = loss_config.DEFAULT_BOUNDARY_BAND_PX):
         # Availability check only — do NOT store the modules on the instance.
         # macOS DataLoader workers start via spawn, which pickles the dataset,
         # and module objects are unpicklable.
@@ -293,6 +310,8 @@ class FoodSegDataset:
         self.target_size = target_size
         self.augment = augment
         self.photometric = photometric
+        self.boundary_weight = boundary_weight
+        self.boundary_band_px = boundary_band_px
 
         images_dir = split_dir / "images"
         masks_dir = split_dir / "masks"
@@ -357,7 +376,12 @@ class FoodSegDataset:
             mask_arr = mask_arr[..., 0]
         mask = torch.from_numpy(np.ascontiguousarray(mask_arr))
 
-        return image, mask
+        if self.boundary_weight is None:
+            return image, mask
+        weights = loss_config.boundary_weight_map(
+            mask_arr, self.boundary_band_px, self.boundary_weight,
+        )
+        return image, mask, torch.from_numpy(weights)
 
     def _letterbox_pair(self, img, mask_img, Image, augment: bool):
         """Aspect-preserving letterbox into a target×target canvas, matching the
@@ -558,7 +582,7 @@ def _train_class_presence(dataset: FoodSegDataset) -> list[list[int]]:
 
 
 def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
-                     co_stats: dict | None = None):
+                     co_stats: dict | None = None, boundary: bool = False):
     """Build the torch loss for a loss_config spec (torch side of the recipe).
 
     ``loss_spec`` comes from ``loss_config.resolve_loss_spec`` (already
@@ -568,12 +592,19 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
     combination at launch). ``co_stats`` (the validated co_stats.json dict) is
     required exactly for ``co_occurrence``. The default ``ce`` returns a plain
     ``nn.CrossEntropyLoss()`` — the historical recipe, untouched.
+
+    ``boundary`` (``--boundary-weight``) makes every returned callable accept a
+    third argument, the per-pixel weight map from the Dataset: the per-pixel
+    CE term of the selected loss becomes ``sum(w * ce) / sum(w)`` instead of
+    ``mean(ce)``. Only the CE term changes; dice and the presence BCE do not
+    see the map. Under the default (no map) the callables compute exactly what
+    they did before.
     """
     torch = _import_torch()
     import torch.nn as nn
 
     name = loss_spec["loss"]
-    if name == "ce":
+    if name == "ce" and not boundary:
         return nn.CrossEntropyLoss()
 
     def _weights_tensor():
@@ -583,20 +614,54 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
             return None
         return torch.tensor(class_weights, dtype=torch.float32, device=device)
 
+    def _pixel_mean(per_pixel, targets, pixel_weights, class_weight=None):
+        # Reduce a per-pixel loss to a scalar. Without a map this is the
+        # nn.CrossEntropyLoss 'mean': the plain mean, or under class weights
+        # the sum divided by the summed target-class weights. With the
+        # boundary map (--boundary-weight) each pixel is further scaled by its
+        # map value and the denominator carries the same scaling, so a map of
+        # all ones reproduces the unweighted reduction exactly and a boundary
+        # weight above 1 moves the average toward the seams without inflating
+        # the loss scale.
+        if pixel_weights is None:
+            if class_weight is None:
+                return per_pixel.mean()
+            return per_pixel.sum() / class_weight[targets].sum()
+        norm = pixel_weights if class_weight is None else pixel_weights * class_weight[targets]
+        return (per_pixel * pixel_weights).sum() / norm.sum()
+
+    def ce_term(logits, targets, pixel_weights=None, class_weight=None):
+        # The CE base shared by every loss but dice; equals
+        # nn.CrossEntropyLoss(weight=class_weight)(logits, targets) when no
+        # map is passed.
+        ce = nn.functional.cross_entropy(logits, targets, weight=class_weight,
+                                         reduction="none")
+        return _pixel_mean(ce, targets, pixel_weights, class_weight)
+
+    if name == "ce":
+        return ce_term
+
     if name == "weighted_ce":
         # weighted_ce + scheme none is rejected at spec resolution; a None here
         # would be plain ce in disguise.
         assert class_weights is not None, "weighted_ce requires class weights"
-        return nn.CrossEntropyLoss(weight=_weights_tensor())
+        if not boundary:
+            return nn.CrossEntropyLoss(weight=_weights_tensor())
+        class_weight = _weights_tensor()
+
+        def weighted_ce(logits, targets, pixel_weights=None):
+            return ce_term(logits, targets, pixel_weights, class_weight)
+
+        return weighted_ce
 
     if name == "focal":
         gamma = float(loss_spec["focal_gamma"])
 
-        def focal(logits, targets):
+        def focal(logits, targets, pixel_weights=None):
             # Standard focal loss (Lin et al. 2017) over the per-pixel CE.
             ce = nn.functional.cross_entropy(logits, targets, reduction="none")
             pt = torch.exp(-ce)
-            return ((1.0 - pt) ** gamma * ce).mean()
+            return _pixel_mean((1.0 - pt) ** gamma * ce, targets, pixel_weights)
 
         return focal
 
@@ -617,10 +682,12 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
 
     if name == "combined":
         dice_weight = float(loss_spec["dice_weight"])
-        weighted_ce = nn.CrossEntropyLoss(weight=_weights_tensor())
+        class_weight = _weights_tensor()
 
-        def combined(logits, targets):
-            return dice_weight * dice(logits, targets) + (1.0 - dice_weight) * weighted_ce(logits, targets)
+        def combined(logits, targets, pixel_weights=None):
+            return (dice_weight * dice(logits, targets)
+                    + (1.0 - dice_weight)
+                    * ce_term(logits, targets, pixel_weights, class_weight))
 
         return combined
 
@@ -635,7 +702,7 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
         # collapse half) are carried by the BCE term itself and the
         # weighted_ce base.
         assert co_stats is not None, "co_occurrence requires validated co_stats"
-        weighted_ce = nn.CrossEntropyLoss(weight=_weights_tensor())
+        class_weight = _weights_tensor()
         lam = float(loss_spec["co_lambda"])
         # Decision 20: the presence term operates on the FOOD channels only —
         # "background present" is trivially true of every plate, and the
@@ -653,8 +720,8 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
             dtype=torch.float32, device=device,
         )[food][:, food]  # [F, F]: priors[c, k] = P(c present | k present)
 
-        def co_occurrence(logits, targets):
-            base = weighted_ce(logits, targets)
+        def co_occurrence(logits, targets, pixel_weights=None):
+            base = ce_term(logits, targets, pixel_weights, class_weight)
             probs = torch.softmax(logits, dim=1)                    # [B, C, H, W]
             pred_presence = probs.amax(dim=(2, 3))[:, food]         # max-pool -> [B, F]
             gt_all = torch.zeros(                                   # [B, C] presence
@@ -777,6 +844,8 @@ def _load_resume_state(args) -> dict:
         "seed": args.seed,
         "dice_weight": args.dice_weight,
         "repeat_factor_threshold": args.repeat_factor_threshold,
+        "boundary_weight": args.boundary_weight,
+        "boundary_band_px": args.boundary_band_px,
     }
     # Sidecars written before the opt-in loss/photometric/init/arch/weighting
     # flags existed lack these keys; absence means the historical defaults, not
@@ -797,7 +866,8 @@ def _load_resume_state(args) -> dict:
                        "class_weighting": loss_config.DEFAULT_WEIGHTING,
                        "seed": None,
                        "dice_weight": loss_config.DEFAULT_DICE_WEIGHT,
-                       "repeat_factor_threshold": None}
+                       "repeat_factor_threshold": None,
+                       "boundary_weight": None, "boundary_band_px": None}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -835,6 +905,8 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "seed": args.seed,
         "dice_weight": args.dice_weight,
         "repeat_factor_threshold": args.repeat_factor_threshold,
+        "boundary_weight": args.boundary_weight,
+        "boundary_band_px": args.boundary_band_px,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -895,8 +967,13 @@ def train(args) -> int:
         co_stats_sha256 = lineage.file_sha256(co_stats_path)
     augment = not args.no_augment
     train_ds = FoodSegDataset(data_root / "train", args.target_size, limit=args.limit,
-                              augment=augment, photometric=args.photometric_augment)
+                              augment=augment, photometric=args.photometric_augment,
+                              boundary_weight=args.boundary_weight,
+                              boundary_band_px=args.boundary_band_px)
     print(f"[train] train samples = {len(train_ds)}")
+    if args.boundary_weight is not None:
+        print(f"[train] boundary-weighted CE: weight {args.boundary_weight} within "
+              f"{args.boundary_band_px} px of a label change")
 
     val_dir = data_root / "val"
     val_loader = None
@@ -957,7 +1034,8 @@ def train(args) -> int:
         counts = _train_pixel_counts(train_ds, args.num_classes)
         class_weights = loss_config.class_weights(args.class_weighting, counts,
                                                   args.num_classes)
-    criterion = _build_criterion(loss_spec, class_weights, device, co_stats)
+    criterion = _build_criterion(loss_spec, class_weights, device, co_stats,
+                                 boundary=args.boundary_weight is not None)
     print(f"[train] loss = {loss_spec}"
           + (" | photometric augment ON" if args.photometric_augment else ""))
 
@@ -972,12 +1050,15 @@ def train(args) -> int:
         model.train()
         running = 0.0
         n_batches = 0
-        for images, masks in train_loader:
-            images = images.to(device)
-            masks = masks.to(device)
+        for batch in train_loader:
+            images = batch[0].to(device)
+            masks = batch[1].to(device)
             optimizer.zero_grad()
             logits = arch_spec.forward_logits(model, images)
-            loss = criterion(logits, masks)
+            if len(batch) == 3:  # boundary map (--boundary-weight)
+                loss = criterion(logits, masks, batch[2].to(device))
+            else:
+                loss = criterion(logits, masks)
             loss.backward()
             optimizer.step()
             running += float(loss.item())
@@ -1064,6 +1145,10 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     if args.repeat_factor_threshold is not None:
         # Absence means plain once-per-epoch shuffling (every run before 2026-09-26).
         recipe_extras["repeat_factor_threshold"] = float(args.repeat_factor_threshold)
+    if args.boundary_weight is not None:
+        # Absence means the plain per-pixel mean (every run before 2026-09-27).
+        recipe_extras["boundary_weight"] = float(args.boundary_weight)
+        recipe_extras["boundary_band_px"] = int(args.boundary_band_px)
     if args.arch != archs.DEFAULT_ARCH:
         # Non-default architecture (snaq-parity Req 5.4): recorded in checkpoint
         # + lineage train_config so run_validation.py and export.py resolve the
@@ -1233,8 +1318,34 @@ def main(argv: list[str] | None = None) -> int:
                              "per epoch. Recorded in the checkpoint/lineage "
                              "train_config and checked by the resume "
                              "drift-check.")
+    parser.add_argument("--boundary-weight", type=float, default=None,
+                        metavar="W",
+                        help="Opt-in boundary-weighted per-pixel loss (MD-29): "
+                             "the CE term of the selected loss weights every "
+                             "pixel within --boundary-band-px of a label "
+                             "change by W (1 elsewhere) and takes the weighted "
+                             "mean; dice/presence terms are untouched. "
+                             "Omitted = the plain per-pixel mean. Recorded in "
+                             "the checkpoint/lineage train_config and checked "
+                             "by the resume drift-check.")
+    parser.add_argument("--boundary-band-px", type=int, default=None,
+                        metavar="K",
+                        help="Half-width in pixels (Chebyshev) of the band "
+                             "--boundary-weight up-weights around a label "
+                             f"change; default {loss_config.DEFAULT_BOUNDARY_BAND_PX}. "
+                             "Only meaningful with --boundary-weight.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
+
+    if args.boundary_weight is not None and args.boundary_weight <= 0.0:
+        parser.error("--boundary-weight must be positive")
+    if args.boundary_band_px is not None:
+        if args.boundary_weight is None:
+            parser.error("--boundary-band-px only applies with --boundary-weight")
+        if args.boundary_band_px < 1:
+            parser.error("--boundary-band-px must be at least 1")
+    elif args.boundary_weight is not None:
+        args.boundary_band_px = loss_config.DEFAULT_BOUNDARY_BAND_PX
 
     if not 0.0 <= args.dice_weight <= 1.0:
         parser.error("--dice-weight must be within [0, 1]")
