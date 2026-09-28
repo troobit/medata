@@ -49,7 +49,7 @@ run_variant() {
             # Time asleep is not a stall: measure from the later of the last log
             # line and the Mac's last wake (kern.waketime), or a lid-close /
             # battery sleep kills a healthy run minutes after the machine wakes.
-            local last_wake; last_wake=$(sysctl -n kern.waketime 2>/dev/null | sed -E 's/.*sec = ([0-9]+).*/\1/')
+            local last_wake; last_wake=$(sysctl -n kern.waketime 2>/dev/null | sed -E 's/.*\{ sec = ([0-9]+),.*/\1/')
             local since=$(stat -f %m "$tlog")
             if [ -n "$last_wake" ] && [ "$last_wake" -gt "$since" ] 2>/dev/null; then since=$last_wake; fi
             local age=$(( $(date +%s) - since ))

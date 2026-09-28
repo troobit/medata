@@ -51,6 +51,13 @@ the watchdog killed: `rm build/queue/done/<entry>`, move its train log aside (a
 fresh start appends), `rm PAUSE`. A `.resume.pt` sidecar means an epoch completed;
 resume with identical flags instead of starting fresh.
 
+2026-09-28 afternoon: the first sleep-aware watchdog had a parse bug (`.*sec = ` also
+matches `usec = ` in `kern.waketime`'s `{ sec = N, usec = M }`), so it read the wake
+time as microseconds, fell back to wall-clock, and killed R12 during a maintenance
+DarkWake in a three-hour standby. Fixed (`\{ sec = N,`). A DarkWake counts as a wake
+for this purpose: processes run during it, and `kern.waketime` moves, so the age
+resets. R12 and R13 were re-run from scratch (neither had an epoch).
+
 ## Never edit train.py while a run is live
 
 DataLoader workers spawn each epoch and re-import `train.py` from disk. New
