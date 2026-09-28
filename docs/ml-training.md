@@ -566,8 +566,9 @@ ranges 0.453–0.481, so a single run cannot resolve a class-mean effect under
 about 0.03; single classes move by up to 0.69 (banana, R8 → R10); the per-staple
 tolerance (largest pairwise gap) is bread_white 0.05, chips_fries 0.06, pasta
 0.11, potato_boiled 0.08, white_rice 0.08. The mask-quality block is the
-steadier instrument (food IoU ±0.03, region IoU ±0.01, boundary F ±0.02 across
-the same runs) and is what recipe verdicts read first.
+steadier instrument (max pairwise gap across the same five runs: food IoU 0.008,
+region IoU 0.022, boundary F 0.016, top-3 hit 0.014) and is what recipe verdicts
+read first.
 
 Multi-hour runs go through the serial queue rather than hand-launched
 `nohup` lines: entries in `tools/segmenter/queue/`, runner
