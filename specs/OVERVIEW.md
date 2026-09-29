@@ -51,6 +51,7 @@
 | [Snaqui](#snaqui) | ui · data | 2026-07-13 | In Progress | prd | SNAQ-inspired uplift: portion-adjustment control on the result screen (N-of-M fractions + multiples, persisted as append-only `PbUserCorrection`), Graph carb bars honour corrected totals, full-screen pages lose their redundant navigation titles, metric-chip row wraps instead of truncating. The global portion stepper is since superseded by Serving Adjust's per-food rows. 7/8 tasks done; on-device looks-right pass (task 8) human-gated. |
 | [Serving Adjust](#serving-adjust) | data · ui | 2026-07-17 | Done | prd | Move the portion control onto the per-ingredient rows counting in household servings (spoons, potatoes) with grams secondary: a data-driven solid-food servings table in the DB generator (mirroring `liquid_servings`) and a reshaped result screen with per-row steppers + one-tap plate-fraction, persisted through the existing append-only `PbUserCorrection`. All 11 tasks done. |
 | [Clean Build Baseline](#clean-build-baseline) | platform | 2026-06-03 | Done | smol | Zero-warning baseline: eliminate the five compiler/validator warnings (iPhone-only `TARGETED_DEVICE_FAMILY`, nonisolated reader, `UIScreen.main` deprecation) with the smallest viable changes. Relocated 2026-07-26 from `specs/bugfixes/` — warning cleanup, not a defect. All 4 tasks done. |
+| [Developer Command Surface](#developer-command-surface) | platform | 2026-09-29 | In Progress | smol | Name the two axes every app build actually chooses — `CONFIG=Debug|Release|ProductRelease` and `SEGMENTER=model|stub` — behind `make app`/`make deploy` plus four named combinations, collapse the three deploy scripts into one that owns the build stamp, generate `make help` from the targets, and add `make model` (pair a checkpoint to a build) and `make field-discard` (reclaim the corpus's space on both sides, replacing `device-reset`). 5/6 tasks done; the on-device stamp match is outstanding. |
 
 ---
 
@@ -450,3 +451,11 @@ Zero-warning baseline (top-level folder): eliminate the five compiler/validator 
 - [decision_log.md](clean-build-baseline/decision_log.md)
 - [smolspec.md](clean-build-baseline/smolspec.md)
 - [tasks.md](clean-build-baseline/tasks.md)
+
+## Developer Command Surface
+
+The developer command surface had seven device targets covering a 3x2 matrix of Xcode configuration against segmenter source, with neither axis in any name, and a hand-maintained 52-line `help` that had drifted from the targets below it. This names both axes — `CONFIG=Debug|Release|ProductRelease`, `SEGMENTER=model|stub` — behind `make app` (no device) and `make deploy` (install and launch), with `make debug`/`dev`/`dev-stub`/`product` as the four combinations anyone types. `tools/deploy_release.sh`, `deploy_release_stub.sh` and `deploy_product.sh` collapse into `tools/deploy.sh`, which becomes the single author of the build stamp. New: `make model CHECKPOINT=` pairs a checkpoint to a build, and `make field-discard CONFIRM=yes` reclaims the corpus's space on both sides in seconds, replacing `device-reset`'s hours-long full pull. Declined: tagging automation in the deploy targets, per the repo invariant that git tags carry no tooling (Decision 4). Reference: [docs/build-and-field-loop.md](../docs/build-and-field-loop.md). 5/6 tasks done — the on-device stamp match is outstanding.
+
+- [decision_log.md](platform/developer-command-surface/decision_log.md)
+- [smolspec.md](platform/developer-command-surface/smolspec.md)
+- [tasks.md](platform/developer-command-surface/tasks.md)

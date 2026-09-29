@@ -252,7 +252,7 @@ struct MedataApp: App {
     // it binds — days were lost debugging against stale installs and against
     // the stub without realising. `MedataBuildStamp` lives in
     // MeData/Info.plist as `$(MEDATA_BUILD_STAMP)`, filled in by
-    // `make build-app` / `make deploy-release-stub` (<git sha>-<timestamp>);
+    // `make app CONFIG=Debug` / `make dev-stub` (<git sha>-<timestamp>);
     // a plain Xcode Run leaves it empty => "unstamped". Always match this
     // stamp against the one the Make target printed before trusting a
     // captured trail.
@@ -274,7 +274,7 @@ struct MedataApp: App {
     private static func logLaunchIdentity() {
         let stamp = buildStamp
         let source = Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"
-        // `.notice` so `make logs-device` can actually find it: `.info` is
+        // `.notice` so `make logs` can actually find it: `.info` is
         // memory-only and never reaches the persisted store `log collect`
         // reads (docs/agent-notes/device-build-and-test.md).
         let log = Logger(subsystem: "ie.medata.app", category: "Shutter")

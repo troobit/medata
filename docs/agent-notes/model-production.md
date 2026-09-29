@@ -62,8 +62,8 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   heldout mean food-class IoU 0.4259; staples white_rice 0.60 / chips_fries 0.55
   / pasta 0.55 pass, bread_white 0.45 / potato_boiled 0.47 short, brown_rice /
   bread_wholemeal / potato_mashed absent from heldout. Below-gate release
-  override recorded in lineage; exported and bundled. `make deploy-release`
-  (new; `tools/deploy_release.sh`) deploys plain Release with the real model.
+  override recorded in lineage; exported and bundled. `make dev`
+  (new; `tools/deploy.sh`) deploys plain Release with the real model.
   Superseded by `24e0b022241a` below.
 - **Second real model (2026-07-06)** — letterbox-recipe checkpoint
   `24e0b022241a` (`build/checkpoint_letterbox.pt`, trained at code commit
@@ -88,7 +88,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   0.4259, but the letterbox parity fix is expected to improve real-device
   behaviour, which the offline bench cannot see. Bundled
   `segmenter.mlpackage` carries `medata.modelVersion=24e0b022241a`; deployed
-  via `make deploy-release`, build stamp `0e5f46a-20260706-120508` — expect
+  via `make dev`, build stamp `0e5f46a-20260706-120508` — expect
   `segmenterSource=coreml_24e0b022241a` in the launch log (launch verification
   pending; device was locked at deploy time). `HarnessCLI seg-bench`
   (ml-training.md §5) was intentionally skipped: `run_validation.py` records
