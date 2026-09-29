@@ -1,7 +1,7 @@
 ---
 references:
-    - specs/platform/developer-command-surface/smolspec.md
-    - specs/platform/developer-command-surface/decision_log.md
+    - specs/development/developer-command-surface/smolspec.md
+    - specs/development/developer-command-surface/decision_log.md
 ---
 # Developer Command Surface Tasks
 

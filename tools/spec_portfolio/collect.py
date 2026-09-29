@@ -20,7 +20,11 @@ DEFAULT_OUT = Path("/private/tmp/medata-portfolio/data.json")
 
 SPEC_DOCS = {"requirements.md", "design.md", "smolspec.md", "prd.md", "report.md", "decision_log.md"}
 SKIP_DIRS = {".orbit", "worktrees", "artifacts", "comparison-report", "diffs"}
-AREAS = {"estimation", "ui", "data", "bugfixes"}
+# The closed domain set from specs/PROCESS.md section 3, plus `bugfixes`, which is a
+# real top-level directory rather than a domain. A spec whose path starts with
+# anything else — the four pre-convention top-level folders — reports `other`.
+# Keep in sync with render.py's AREAS, which also fixes the filter-chip order.
+AREAS = {"platform", "capture", "estimation", "data", "ui", "development", "bugfixes"}
 TODAY = dt.date.today()
 ACTIVE_DAYS = 14
 SUMMARY_MAX = 240

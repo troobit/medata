@@ -85,6 +85,7 @@ a logged decision, not an ad-hoc choice. For Medata:
 | `estimation` | the on-device CV/geometry/maths → carb pipeline | the core (`pipeline/`), `mv-volume-estimator`, `lidar-first-scale-fallback` |
 | `data` | persistence, schemas, food/nutrition databases, **data-input streams** (biometrics, glucose) | `event-log-schema` |
 | `ui` | user-facing surfaces, navigation, interaction, visual design | `iphone-experience`, `shutter-blocked-feedback` |
+| `development` | the tooling the project is built with rather than the product itself: build and deploy targets, CI/CD, generators, harnesses, the spec tooling | `developer-command-surface` |
 
 ### Boundary: is it a new spec, or an extension?
 

@@ -12,7 +12,8 @@ import datetime as dt
 import json
 from html import escape as esc
 
-AREAS = ["estimation", "ui", "data", "bugfixes", "other"]
+# Filter-chip order. Keep the domains in sync with collect.py's AREAS.
+AREAS = ["estimation", "ui", "data", "capture", "platform", "development", "bugfixes", "other"]
 STATES = ["active", "dormant", "complete"]
 
 
