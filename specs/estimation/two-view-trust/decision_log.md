@@ -311,6 +311,35 @@ Below the object's true height the carve is accurate. Above it, the two silhouet
 
 With LiDAR this is solvable and is being solved: the nadir frame already carries the depth the single-view path uses to read the same roll at 267–302 cm³, so the grid can be bounded by a measured food height. Without LiDAR there is no height information in the capture at all, at any tilt the app allows. That is the path every phone without LiDAR must use, and the one the ID-1 card exists for.
 
+**Confirmed against weighed truth, and re-ordered, 2026-09-29.** The roll was
+weighed at 104 g (`benchmark_meals` row `backfill-1790655037216-roll`), which at
+the measured bread_wholemeal density of 0.4 g/cm³ puts truth volume at
+**260 cm³**. The historical two-view rows of 851 / 920 / 930 cm³ are therefore
+**3.3–3.6× truth** — the "factor of three" above is now measured against a
+weighed object rather than inferred from a synthetic control, and the
+single-view band of 267–302 cm³ is **+3 % to +16 %**, so the asymmetry this
+decision rests on is real.
+
+The same session also moved what blocks first. Seven two-view captures on build
+`2d39910`, six refused, and every logged estimate ran the same chain:
+
+```
+supportplane.end success=false failure=noLowerSilhouetteEdges candidates=0 inliers=0
+estimate.degraded reason=unbounded_carve_height
+estimate.end      success=false failure=noSupportPlaneWithoutDepth
+```
+
+Both photographs were good every time (`capture.end success=true`, 1920×1440), so
+this is not a capture or framing fault. **`noLowerSilhouetteEdges` with zero
+candidates is now the head of the chain**: without depth the support plane gets
+no candidate to fit, so the estimate dies before any height bound — including
+Decision 11's per-class cap and the footprint-scaled cap in progress — could
+apply. The capture-side experiment this decision asks for (oblique at 70–80°)
+therefore cannot return a number yet, and it is not the next thing to try: the
+plane fit is. The status stays **proposed** for that reason, and the ID-1 card is
+the obvious plane source, since an accepted card supplies three coplanar points
+on the table.
+
 ### Decision
 
 Until a height bound exists for the non-LiDAR path, a two-view estimate taken without depth MUST NOT be presented as a measurement: it is recorded, flagged degraded on the row and in review, and the carb figure it produces is not offered as a dosing number. The capture-side experiment that decides what to build is a single capture of a known object with the oblique deliberately near side-on, which requires a developer-phase way to arm the shutter outside the present band.

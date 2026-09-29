@@ -25,7 +25,7 @@ Readings:
 
 **Morning (build 365aff0, unknown-food-nameable tasks 1–7 on the phone).** Three captures, no refusals now that the shutter needs food-like pixels. The model labelled two specks of the roll as bread on a roll that fills 7 % of the frame (bundle `1790223818017-success`: bread_white 0.16 % + bread_wholemeal 0.33 % of the frame, no `unknown_food` at all), the plane fell back to `edgeBand` (ring median 19.7 mm), and the record read 4.2 g of carbohydrate (9.6 + 16.0 cm³). Outcome `72B75CD0`. The two-view capture (`1790223844719-success`, outcome `FE37458C`) read bread_white 286 cm³ plus an `unknown_food` row of 1148 cm³ from a nadir mask with no unknown pixels — BACKLOG 24. The LiDAR depth showed the whole roll as one raised slab (`bundle_view.py` overlay in the session scratchpad). That gap is what `specs/estimation/depth-grown-food-region` closes.
 
-**Afternoon (build 4feedd1, depth-grown-food-region tasks 1–5 on the phone).** Single-view capture `1790232681422-success`, outcome timestamp 1790232681422: the model now labels 5.3 % of the frame bread_wholemeal (the lighting or angle gave it the crust this time), growth adds 30,250 pixels (146,278 → 176,528, +21 %), the refit lands `foodSupport` (residual 0.95 mm, 7 supporting sectors, ring median −3.6 mm), and the record reads bread_wholemeal 280 cm³ → 112 g → 42.6 g carbohydrate. Developer's field notes on the review screen: "Estimate very good though", "Estimate speckles around edge of roll" (the grown region maps depth cells back as 7.5 × 7.5 px blocks, so the outline's edge is blocky — cosmetic, noted for the outline renderer), and "2 unknown food: not shown in UI. Why?" on the two-view capture `1790232615202-success`, whose record carries bread_wholemeal 383 cm³ + a phantom `unknown_food` 317 cm³ (BACKLOG 24 again; the review's handling of that row is unverified). No weight was taken; 112 g is heavy for a crusty roll and the bread_wholemeal density (0.4 g/cm³) is the suspect, not the geometry.
+**Afternoon (build 4feedd1, depth-grown-food-region tasks 1–5 on the phone).** Single-view capture `1790232681422-success`, outcome timestamp 1790232681422: the model now labels 5.3 % of the frame bread_wholemeal (the lighting or angle gave it the crust this time), growth adds 30,250 pixels (146,278 → 176,528, +21 %), the refit lands `foodSupport` (residual 0.95 mm, 7 supporting sectors, ring median −3.6 mm), and the record reads bread_wholemeal 280 cm³ → 112 g → 42.6 g carbohydrate. Developer's field notes on the review screen: "Estimate very good though", "Estimate speckles around edge of roll" (the grown region maps depth cells back as 7.5 × 7.5 px blocks, so the outline's edge is blocky — cosmetic, noted for the outline renderer), and "2 unknown food: not shown in UI. Why?" on the two-view capture `1790232615202-success`, whose record carries bread_wholemeal 383 cm³ + a phantom `unknown_food` 317 cm³ (BACKLOG 24 again; the review's handling of that row is unverified). No weight was taken at the time; 112 g is heavy for a crusty roll and the bread_wholemeal density (0.4 g/cm³) was the named suspect, not the geometry. **That was wrong — see 2026-09-29 below: the roll weighs 104 g, so this reading was +7.7 %, and both the density and the single-view geometry are vindicated.**
 
 **Re-annotated the same night.** Every two-view figure above (383 cm³, 317 cm³, and the morning's 286 + 1148 cm³) is the §6.6 single-view extrusion at a 30 mm prior height, not a carved volume: the two-view geometry had never intersected two silhouettes on a real capture (`docs/agent-notes/two-view-geometry-audit.md`; four defects fixed 2026-09-25, device verification pending). The same applies to every earlier two-view row in this file, including the 2026-08-16 9.5–10.2× under-read.
 
@@ -483,3 +483,47 @@ existence, and Decision 14's radial-band and support-visibility mitigations have
 of any kind. Recorded as Reqs 7.10 (a weighed single-view lipped-plate case) and 7.11 (a weighed
 capture counts as evidence only where it completed single-view), with the session written up in
 that spec's `prerequisites.md`.
+
+## 2026-09-29 — the roll is weighed: 104 g (build `2d39910`, segmenter `coreml_ab812dc3aa9d`)
+
+**The first weighed object in the corpus, and the first denominator any volume
+figure has ever had.** Field note `1790655037216` on `meal.review`: "Exactly 104g
+on plate", linked to meal `45FE1DF5` / outcome `006D7CFA`. Back-filled into the
+index as `benchmark_meals` row `backfill-1790655037216-roll` — 104 g, 39.52 g
+carbohydrate at the bundled CoFID coefficient (38.0 g/100 g), `fidelity=weighed`.
+At the measured bread_wholemeal density of 0.4 g/cm³ that puts **truth volume at
+260 cm³**.
+
+What it settles:
+
+| Reading | Volume | Against 260 cm³ |
+|---|---|---|
+| single-view band, historical | 267–302 cm³ | +3 % to +16 % |
+| 2026-09-24 single-view | 280 cm³ → 112 g | **+7.7 %** |
+| 2026-09-29 single-view | 226.3 cm³ → 90.5 g | **−13.0 %** |
+| two-view rows, historical | 851 / 920 / 930 cm³ | **3.3–3.6×** |
+| two-view success, 2026-09-29 | 42.2 cm³ | **−84 %** |
+| Decision 10 refit, audit bundles | 268.0 / 390.1 cm³ | +3 % / 1.5× |
+
+- **The density is not the residual error.** 0.4 g/cm³ is right; the measured
+  volumes imply 0.34–0.39. The 2026-09-24 reading was inside the MAPE < 20 % bar
+  (MD-25) all along, and the correction above retracts that note's conclusion.
+- **Single-view precision is ±11 %.** The same roll read 90.5 g and 112 g in two
+  sessions. That spread, not either figure, is the honest number.
+- **The two-view path produced nothing.** Six of seven captures `refused`. Four
+  logged estimates each ran
+  `supportplane.end success=false failure=noLowerSilhouetteEdges candidates=0
+  inliers=0` (bbox all −1) → `estimate.degraded reason=unbounded_carve_height` →
+  `estimate.end success=false failure=noSupportPlaneWithoutDepth`. Both photos
+  were fine every time (`capture.end success=true`, 1920×1440); one separate
+  oblique failed `worldTrackingDegraded`. **`noLowerSilhouetteEdges` with zero
+  candidates is the head of that chain** — the height-bound work in
+  two-view-trust Decisions 8/11 is downstream of a plane that never gets a
+  candidate to fit.
+- **One plate, two regions, one phantom.** A second region came back `coffee`
+  at 59.5 cm³ / density 1.0 and had to be rejected by hand — the same
+  BACKLOG 24 shape as 2026-09-24's phantom `unknown_food`.
+
+The bundle survives the corpus discard at
+`medata-corpus/reports/calibration-20260929-roll/` (fixture + `run_summary.json`
++ README); `captures/` was cleared the same day, so that copy is the last one.

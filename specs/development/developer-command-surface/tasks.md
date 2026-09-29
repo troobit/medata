@@ -35,8 +35,9 @@ references:
   - **Verification:** `grep -rn 'deploy-device\|deploy-release\|deploy-product\|build-product\|build-app\|build-release-check\|logs-device\|field-test' README.md CLAUDE.md docs/ App/` returns nothing; `make spell`.
   - **References:** decision_log.md (Q4).
 
-- [-] 6. Verified end to end
-  - **Outcome:** everything off-device passes. `make help` lists all 24 targets and every one carries a `##` line; `make spell` clean; `make build` clean; `make app CONFIG=Debug`, `CONFIG=ProductRelease` (gate fired, model `ab812dc3aa9d` reported) and `CONFIG=Release SEGMENTER=stub` (manifest edited and reverted, including on a failed build) all exit 0; `make test-python` is 129 + 253 green; `CONFIG=Debug SEGMENTER=model` and a bare `make field-discard` both refuse with their reason and change nothing.
-  - **Remaining:** the on-device half — `make dev-stub` on `you`, matching the launch line's stamp against the deploy output. Not run: another session has work in flight on that phone, and installing this worktree's build would replace theirs. One command once the phone is free.
+- [x] 6. Verified end to end
+  - **Outcome:** everything passes, on and off device. Off device: `make help` lists all 24 targets each with a `##` line; `make spell`, `make build` clean; `make app` at `CONFIG=Debug`, `CONFIG=ProductRelease` (gate fired, model `ab812dc3aa9d` reported) and `CONFIG=Release SEGMENTER=stub` (manifest edited and reverted, including on a failed build) all exit 0; `make test-python` 129 + 253 green; `CONFIG=Debug SEGMENTER=model` and a bare `make field-discard` both refuse with their reason and change nothing.
+  - **On device (2026-09-29):** `make dev` installed and the capture record carries `buildStamp=2d39910-20260929-140738` with no `-dirty`, `segmenterSource=coreml_ab812dc3aa9d` and `profile=field` — the launch line matched the deploy output, and the 12-hex model id reached a capture record. That is the provenance `myfoodrepo-bridge` tasks-training-and-export task 6 has asked for since July; a launch line alone could never supply it (`docs/agent-notes/device-build-and-test.md`, "segmenterSource has two forms").
+  - **Also exercised in anger:** `make field-notes`, `make field-pull` (pull `20260929-1`, 8 bundles) and `make field-discard CONFIRM=yes` (24 GB → 251 MB; notes, DB snapshots, `index.sqlite` and `reports/` all survived; the build-before-wipe ordering meant the phone was never left bare). `make logs` produced the log that diagnosed the two-view failure chain.
   - **Verification:** the on-device stamp equals the deployed one.
-  - **References:** smolspec.md.
+  - **References:** smolspec.md, docs/agent-notes/field-truth-sessions.md (2026-09-29).
