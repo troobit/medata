@@ -1066,4 +1066,23 @@ through the production rule), `HarnessCLI` (`noDepthRatio` line),
 
 The P50 ratio (0.427 for both bread classes) would set caps of 48–53 mm on the five rolls, above every LiDAR maximum (47.6 / 50.7 / 37.1 / 33.8 / 30.5), so it clips nothing here. Extrapolating the audit's near-linear extent-to-volume relation (about 6.5 cm³ per mm of extent on these hulls), a P50 cap lands the rolls near 0.95 / 1.2 / 1.25 / 1.4 / 1.35 times LiDAR against the P90 cap's 1.05 / 1.29 / 1.39 / 1.54 / 1.53. Lower on average, still over 1.3 on the two flattest rolls: a flat roll and a tall roll share a footprint, so no footprint prior separates them. That residual is the non-LiDAR path's structural limit until either the oblique-tilt experiment (Decision 8) closes the hull or the review loop carries a form choice. Measuring the P50 variant exactly needs a percentile flag on `carve-audit`; not built, since the choice between P50 and P90 is a bias trade the weighed sitting should settle.
 
+### Follow-up against weighed truth, and a reachability caveat (2026-09-29)
+
+A 2026-09-29 field session weighed the bread roll at **104 g**, which at bread_wholemeal's
+0.4 g/cm³ is **260 cm³** — the first truth any of these numbers can be scored against. Taking the
+five audit bundles as the same roll (the reading the field pull itself uses when it calls the
+historical two-view rows of 851/920/930 cm³ "3.3–3.6× truth"), Decision 10's refit leaves the
+LiDAR two-view carve at 268–397 cm³, which is **+3 % to +53 % of truth**: the refit removed a
+large error and did not remove the bias. Single-view over the same roll, 267–302 cm³, is +3 % to
++16 %. So the remaining two-view excess is real and larger than the hull bias alone predicts.
+
+**Decisions 11 and 12 are currently unreachable on device.** The same session found that without
+depth the plane fit returns zero candidates (`supportplane.end failure=noLowerSilhouetteEdges
+candidates=0`), so the non-LiDAR estimate dies at `noSupportPlaneWithoutDepth` two steps before a
+grid is ever sized. Both height caps are still correct and still measured offline through
+`carve-audit --no-depth`, but neither can bite in the field until the plane fit produces a
+candidate — the card-derived plane is the obvious fallback. Neither decision changes; what
+changes is that they are not the head of the chain.
+
+
 ---
