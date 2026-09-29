@@ -1077,12 +1077,22 @@ large error and did not remove the bias. Single-view over the same roll, 267–3
 +16 %. So the remaining two-view excess is real and larger than the hull bias alone predicts.
 
 **Decisions 11 and 12 are currently unreachable on device.** The same session found that without
-depth the plane fit returns zero candidates (`supportplane.end failure=noLowerSilhouetteEdges
-candidates=0`), so the non-LiDAR estimate dies at `noSupportPlaneWithoutDepth` two steps before a
-grid is ever sized. Both height caps are still correct and still measured offline through
-`carve-audit --no-depth`, but neither can bite in the field until the plane fit produces a
-candidate — the card-derived plane is the obvious fallback. Neither decision changes; what
-changes is that they are not the head of the chain.
+depth the plane fit **refuses before collecting any candidate**: `SupportPlaneFitter` returns
+`.noLowerSilhouetteEdges` unconditionally on `nadir.depth == nil`, so the non-LiDAR estimate dies
+at `noSupportPlaneWithoutDepth` before a grid is ever sized.
+
+*(This paragraph first read "returns zero candidates (`… candidates=0`)". It does not: that
+figure was a default-constructed `SupportPlaneFitStats` on a branch that never searched, and the
+refusal now logs `stats=unfitted` with no counters — see the correction earlier in this entry.
+The conclusion is unchanged; only the mechanism is. Two sessions reached for the same phantom
+number within a day of each other, which is why the log stopped printing it.)*
+
+Both height caps remain correct as measured, but note where they were measured: Decision 11's
+figures come from LiDAR bundles with depth withheld from the sizer only, and `carve-audit
+--no-depth` replays on `FixtureRunner`'s nominal −300 mm plane, which production refuses. So the
+offline result is not evidence of device behaviour. Neither can bite in the field until the plane
+fit produces a candidate — the card-derived plane is the obvious fallback. Neither decision
+changes; what changes is that they are not the head of the chain.
 
 
 ---
