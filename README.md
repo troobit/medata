@@ -1,13 +1,13 @@
 # MeData
 
-First and foremost - this work is built on, and made possible by, the incredibly dilligent and generous expertise of others. This includes (but is most certainly not limited to - ):
+First and foremost - this work is built on, and made possible by, the incredibly assiduous and generous expertise of others. This includes (but is most certainly not limited to - ):
 
   - Arjen Schwarz (`ArjenSchwarz`), for both guidance, and the amazing spec drivene development based toolset he's worked on:
     - [agentic-coding](https://github.com/ArjenSchwarz/agentic-coding)
     - An LLM context/task manager [rune](https://github.com/ArjenSchwarz/rune)
     - [orbit](https://github.com/ArjenSchwarz/orbit) to orchestrate agent sessions (hit go and come back in the morning to see what's been done.)
   - Sam McLeod (`sammcj`)
-    - mcp-devtools — <https://github.com/sammcj/mcp-devtools> — Once MCP server to rule them all... Seriously. It's good. It's simple. It is immensely useful.
+    - mcp-devtools — <https://github.com/sammcj/mcp-devtools> — Once MCP server to rule them all... Seriously. It's good. It's simple. It is immensely useful. 
 
 Without public data and research, none of this is even feasible. The core of the project relies on the free exchange of information and academic research - to leave their credits to last would be an eggregious disservice. The full credits document (including software, standards, and prior art) is [docs/references.md](docs/references.md); the academic references and data sources are below.
 
@@ -49,6 +49,10 @@ Without public data and research, none of this is even feasible. The core of the
 
 Finally - for a more complete view of the app context, need, and general aspirations for the broader project, read the [project document here](docs/drivers.md).
 
+## Commercial Interest
+
+I intend to provide this application in this form for the arbitrary base price on whatever platforms - rather than creating a subscription service for this. With that said - if you have the skillset to build, deploy, and use the app locally yourself: I fully encourage you to do so - I ask only that you don't charge and compete with me on monetisation of the suite. I want data to be owned by all: but I also don't want my work to be commercialised by others without my input (and I hope not to do the same).
+
 ## App Overview
 
 The app that estimates the carbohydrate content of a meal from one or two
@@ -56,7 +60,7 @@ photographs using **on-device** compute. Deterministic geometry,
 food segmenter, a bundled food-comp database, and calibrated per-class
 correction factors.
 
-It is first built for iPhone devices, however it will be expanded to other OS's as the expertise and time becomes available.
+It is first built for iPhone devices, however the am is to expand to other OS's as the expertise and time becomes available. Ideally I'd like to learn and contribute to other sources where possible.
 
 The application prefers the use of LiDAR for depth mapping of food and geometry, but deferrs to a 2 photo mechanism (using a drivers licens card) for point of reference and scale.
 
