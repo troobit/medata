@@ -1,11 +1,13 @@
 {
   "version": 1,
   "exclude_specs": [],
-  "exclude_findings": [],
+  "exclude_findings": [
+    "SJ-TASK-003:estimation/pipeline:tasks.md:replace-auto-derived-capture-path-with-persistent-capturemode-toggle"
+  ],
   "raised": [
     "SJ-DRIFT-001:estimation/model-production:requirements.md:palette-channel-count",
     "SJ-DRIFT-001:regression-suggestion-integration:prd.md:folder-name-drift",
     "SJ-DRIFT-001:ui/iphone-experience:tasks.md:layered-version-supersession"
   ],
-  "last_run": "2026-07-26"
+  "last_run": "2026-09-10"
 }
