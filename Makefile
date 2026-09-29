@@ -36,7 +36,7 @@ SEGMENTER_PYTHON ?= tools/segmenter/.venv/bin/python
 
 .PHONY: help build test test-corpus test-python spell food-db model app deploy \
         debug dev dev-stub product logs harness-accuracy spec-portfolio worktree \
-        field-pull field-notes field-discard field-triage field-diagnose \
+        field-pull field-notes field-discard field-export field-triage field-diagnose \
         field-report field-close field-derive
 
 help:  ## list every target
@@ -174,6 +174,13 @@ field-discard:  ## drop the Mac's captures and wipe the phone  CONFIRM=yes
 	$(PYTHON) tools/field_loop/field_discard.py --confirm "$(CONFIRM)"
 	xcrun devicectl device uninstall app --device $(DEVICE_UDID) $(BUNDLE_ID)
 	$(MAKE) deploy
+
+# One JSONL record per capture: the calculus promoted out of the outcome's JSON
+# blob, joined to its corrections and any weighed truth, refused rows included.
+# Sentinels (-1 residual, default candidate counts on a refusal) export as null
+# with `placeholders` naming them, so nothing downstream trains on padding.
+field-export:  ## flatten the corpus into learnable JSONL  [OUT=<file>]
+	$(PYTHON) tools/field_loop/field_export.py $(if $(OUT),--out "$(OUT)",)
 
 field-triage:  ## regenerate the triage ledger from the corpus
 	$(PYTHON) tools/field_loop/field_triage.py

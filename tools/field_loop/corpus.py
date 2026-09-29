@@ -316,12 +316,21 @@ def upsert_note(conn, row: dict) -> None:
 
 def upsert_outcome(conn, row: dict) -> None:
     prior = conn.execute(
-        "SELECT pull_id FROM outcomes WHERE id = ?", (row["id"],)
+        "SELECT pull_id, benchmark_meal_id FROM outcomes WHERE id = ?", (row["id"],)
     ).fetchone()
     row = dict(row)
     row["last_pull_id"] = row.get("last_pull_id") or row["pull_id"]
     if prior is not None:
         row["pull_id"] = prior["pull_id"]
+        # A weighed-truth link is Mac-side: the device has no row for a benchmark
+        # back-filled here, so a blind REPLACE from the device wipes it. Observed
+        # 2026-09-29 — a truth link set by hand survived `field-derive`
+        # (ingested=1) and was gone after the next notes pull (ingested=0),
+        # because the pull re-ingests every outcome with the device's empty
+        # value. The device wins when it HAS one; otherwise what is already
+        # attached stands, which is the same first-seen rule `pull_id` follows.
+        if not row.get("benchmark_meal_id"):
+            row["benchmark_meal_id"] = prior["benchmark_meal_id"]
     _replace(conn, "outcomes", row)
 
 

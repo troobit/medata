@@ -575,3 +575,48 @@ def test_notes_only_pull_refuses_to_prune(corpus_root, capsys):
     code = field_pull.main(["--corpus", str(corpus_root), "--notes-only", "--prune"])
     assert code == 2
     assert "notes_only_cannot_prune" in capsys.readouterr().out
+
+
+def test_mac_side_truth_link_survives_reingest(corpus_root, index):
+    """A weighed-truth link is Mac-side and a re-pull must not wipe it.
+
+    Regression for 2026-09-29: a `benchmark_meal_id` back-filled by hand made
+    `field-derive` report ingested=1, and the next notes pull took it back to 0,
+    because every outcome is re-ingested with the device's empty value.
+    """
+    device_row = {
+        "id": "o1", "pull_id": "p1", "last_pull_id": "p1", "timestamp_ms": 1,
+        "outcome": "success", "failure": None, "meal_id": "m1",
+        "model_version": "coreml_abc", "benchmark_meal_id": None,
+        "measurements_json": "{}", "protected": 0,
+    }
+    corpus.upsert_outcome(index, device_row)
+    index.execute("UPDATE outcomes SET benchmark_meal_id = 'bench-1' WHERE id = 'o1'")
+    index.commit()
+
+    # The same pull again, and a later one: the device still has no link.
+    corpus.upsert_outcome(index, device_row)
+    corpus.upsert_outcome(index, dict(device_row, pull_id="p2", last_pull_id="p2"))
+    index.commit()
+
+    assert index.execute(
+        "SELECT benchmark_meal_id FROM outcomes WHERE id = 'o1'"
+    ).fetchone()[0] == "bench-1"
+    # First-seen pull still wins, as before.
+    assert index.execute("SELECT pull_id FROM outcomes WHERE id = 'o1'").fetchone()[0] == "p1"
+
+
+def test_device_truth_link_overrides_a_stale_local_one(corpus_root, index):
+    """The device wins when it actually carries a link."""
+    base = {
+        "id": "o2", "pull_id": "p1", "last_pull_id": "p1", "timestamp_ms": 2,
+        "outcome": "success", "failure": None, "meal_id": "m2",
+        "model_version": "coreml_abc", "benchmark_meal_id": "local-1",
+        "measurements_json": "{}", "protected": 0,
+    }
+    corpus.upsert_outcome(index, base)
+    corpus.upsert_outcome(index, dict(base, benchmark_meal_id="device-1"))
+    index.commit()
+    assert index.execute(
+        "SELECT benchmark_meal_id FROM outcomes WHERE id = 'o2'"
+    ).fetchone()[0] == "device-1"

@@ -128,6 +128,7 @@ def ingest_pull(pull_dir: Path, root: Path, conn) -> IngestSummary:
             _ingest_device_rows(device, conn, summary)
         _ingest_notes(pull_dir, root, conn, summary)
         _resolve_joins(conn, summary)
+        _attribute_captures(conn)
     finally:
         if device is not None:
             device.close()
@@ -418,6 +419,43 @@ def _missing_outcome_reason(conn, outcome_id):
                     (outcome_id,)).fetchone():
         return "deleted"
     return "never_present"
+
+
+def _attribute_captures(conn):
+    """Promote each capture's scale source and model version from ITS OWN outcome.
+
+    A capture's stem is `<timestamp_ms>-<outcome>` and an outcome carries the
+    same two fields, so every capture joins to its outcome directly. That join
+    is what `_backfill_capture` could not use: it runs per NOTE, so a capture
+    only ever gained a scale source when a human happened to annotate it. On
+    2026-09-29 that left `scale_source` NULL on all 183 rows while 84 of their
+    outcomes carried `scaleSource` — and Req 6.2 buckets a capture with no
+    scale source as `unattributable`, so the corpus could not say which scale
+    path produced a volume. Refused rows matter as much as successful ones:
+    a two-view refusal is the evidence that path is being measured on.
+
+    Idempotent, and never overwrites: the guard is the same NULL-or-empty test
+    `_backfill_capture` uses, so re-ingesting an unchanged pull is a no-op and
+    a value already promoted from a note is left alone.
+    """
+    rows = conn.execute(
+        "SELECT c.stem, o.measurements_json FROM captures c "
+        "JOIN outcomes o ON (o.timestamp_ms || '-' || o.outcome) = c.stem "
+        "WHERE c.scale_source IS NULL OR c.scale_source = ''"
+    ).fetchall()
+    for row in rows:
+        if not row["measurements_json"]:
+            continue
+        try:
+            measurements = json.loads(row["measurements_json"])
+        except (ValueError, TypeError):
+            continue
+        source = measurements.get("scaleSource")
+        if source:
+            conn.execute(
+                "UPDATE captures SET scale_source = ? WHERE stem = ? "
+                "AND (scale_source IS NULL OR scale_source = '')",
+                (source, row["stem"]))
 
 
 def _backfill_capture(conn, note, stem):
