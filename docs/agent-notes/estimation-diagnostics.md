@@ -168,7 +168,7 @@ through `FixtureLoader` + `FixtureRunner` with no harness changes.
   build dimensionally consistent frames.
 - The simulator destination fails at codesigning `MedataCore_Pipeline.bundle`
   ("bundle format unrecognized") — pre-existing and unrelated; build for
-  device (`generic/platform=iOS` compiles, `make build-app` needs the phone).
+  device (`generic/platform=iOS` compiles, `make app CONFIG=Debug` needs the phone).
 - A recorded bundle can be **slimmed in place** after the fact:
   `MedataCore/Sources/Pipeline/CaptureBundleSlimmer.swift` drops the
   probability tensors (top-level fields 9 and 10) by walking varints, never

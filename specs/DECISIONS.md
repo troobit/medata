@@ -1312,3 +1312,78 @@ new loop directly: the region and its volume stay correct while the user fixes t
   kitchen scale before the plane-refit change can be judged on device.
 
 ---
+
+---
+
+## MD-30: `development` is a domain; the product is not the only thing specified
+
+**Status**: accepted
+**Sources**: developer direction 2026-09-29; developer-command-surface D1, Q1
+
+### Context
+
+`PROCESS.md` section 3 fixed five domains — `platform`, `capture`, `estimation`, `data`, `ui`
+— and declared the set closed, so adding one is a logged decision. Every one of the five owns
+a layer of the shipped product. Work on the tooling the product is built *with* had no home:
+the developer command surface is build and deploy targets, the field loop's Mac-side
+scripts, the food-DB and segmenter generators, the spec tooling itself. None of that is app
+shell, OS binding, sensor input, estimation maths, persistence or a user surface.
+
+Two symptoms. `specs/platform/developer-command-surface/` was filed under `platform` because
+it was the closest of the five, which put build tooling in the same domain as the app shell
+and the Android port. And `tools/spec_portfolio/collect.py` carried its own domain set —
+`{estimation, ui, data, bugfixes}` — that had never matched `PROCESS.md`, so `capture` and
+`platform` specs reported as `other` alongside the four pre-convention top-level folders.
+
+### Decision
+
+Add `development` to the closed domain set: the tooling the project is built with rather than
+the product itself — build and deploy targets, CI/CD, generators, harnesses, the spec tooling.
+`developer-command-surface` moves to `specs/development/`. `collect.py` and `render.py` both
+take the full `PROCESS.md` set plus `bugfixes`, so `other` now means only a spec that predates
+the domain convention.
+
+### Rationale
+
+A domain exists to name an owner and an acceptance bar (`PROCESS.md` section 2: the seam along
+which the team later splits). Developer tooling has both, and neither is shared with any of the
+five: its acceptance bar is "does the loop run and can someone else run it", owned by whoever
+maintains the build, and the Android port will reuse the product domains unchanged while needing
+its own tooling. Filing it under `platform` conflated two things that will diverge.
+
+`other` was the specific failure. A fallback bucket is useful when it means "not yet filed" —
+it is actively misleading when a convention-correct spec lands in it, because then the bucket
+is indistinguishable from a bug in the classifier, which is exactly what it was hiding.
+
+### Alternatives Considered
+
+- **Leave it under `platform` and widen that domain's description to include build tooling**:
+  no process change, no move. Rejected because `platform` already owns the OS and runtime
+  bindings for two operating systems; adding the tooling gives one domain two unrelated
+  acceptance bars, which section 3 defines as two specs, not one domain.
+- **Name it `tooling` or `infra`**: both narrower than the work. `tooling` reads as scripts and
+  excludes process artifacts like the spec tooling and the task ledger; `infra` suggests hosted
+  services, of which this project has none.
+- **Keep `other` and stop treating it as a defect**: rejected — it is the classifier's fallback,
+  so a spec resting there is unfalsifiable evidence of either a mis-filing or a bug.
+- **Fix only `collect.py` and leave the domain set at five**: the minimum change, and it would
+  have moved this spec from `other` to `platform`. Rejected as fixing the symptom: the reason
+  the spec had no good home is that no domain owned developer tooling.
+
+### Consequences
+
+**Positive:**
+- Build, CI/CD, generator and spec-tooling work has a domain, so it can be specified rather
+  than landing as untracked repo maintenance.
+- `capture` and `platform` specs are classified correctly in the portfolio for the first time.
+- `other` becomes diagnostic: it now contains only the four pre-convention top-level folders.
+
+**Negative:**
+- The domain set is no longer purely product layers, so "which domain owns the primary
+  outcome" needs one extra judgement: is this the product, or what builds it.
+- Boundary cases exist. `clean-build-baseline` is compiler warnings in app source reached
+  through build settings, and could be argued into either `platform` or `development`; it is
+  left where it is (a top-level legacy folder, recorded as `platform` in `OVERVIEW.md`) rather
+  than moved on this decision's authority.
+- Two files still carry their own copy of the domain set. They are commented as needing to
+  agree, which is weaker than deriving one from the other.

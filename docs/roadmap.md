@@ -19,10 +19,10 @@ parity 0.9999. Runbook steps 0–5 are complete; **only step 6, the on-device ve
 outstanding.**
 
 **And step 6 is closer than the ledger suggests.** `myfoodrepo-bridge` task 6 is marked `[-]`
-partial for a mundane reason: `make deploy-release` **installed** the Release build on the
+partial for a mundane reason: `make dev` **installed** the Release build on the
 iPhone 16 Pro, but the launch step failed because the device was locked, so the
 `segmenterSource`/`buildStamp` launch-log check never ran. The build is already on the phone.
-Unlock it, open MeData, run `make logs-device`, confirm `segmenterSource=coreml_ab812dc3aa9d`
+Unlock it, open MeData, run `make logs`, confirm `segmenterSource=coreml_ab812dc3aa9d`
 with a matching stamp — that closes task 6 and unblocks tasks 7 and 8, which are *blocked-by* it
 and which together are the MVP gate.
 
@@ -53,17 +53,17 @@ deploy cycles; batched against **one Release build** it is an afternoon.
 
 Start with the launch-log check described in §1 — the Release build is already installed, so this
 costs minutes and unblocks the gate. If the build stamp is stale, redeploy with
-`make deploy-release` and re-check. Then work the list below without redeploying again.
+`make dev` and re-check. Then work the list below without redeploying again.
 
 **Session log — 2026-08-04.** Release + real segmenter deployed to the iPhone 16 Pro,
 build stamp **`470bb1b-20260804-225023`**, and launched. This build also carries the new
-home-page glucose header (§2a), so one build serves the whole list below. `make logs-device`
+home-page glucose header (§2a), so one build serves the whole list below. `make logs`
 needs **root** on this machine (`log collect --device-name` refuses otherwise) — run
-`sudo make logs-device LOG_LAST=10m` to complete order 0.
+`sudo make logs LOG_LAST=10m` to complete order 0.
 
 | Order | Spec | Task | What to observe |
 |---|---|---|---|
-| 0 | `myfoodrepo-bridge` | 6 `[-]` | **One capture on the current build** (its new estimation-log row carries the live lineage) **or `sudo make logs-device`**. The 2026-08-04 estimation-log reading was historical — rows show each attempt's own `modelVersion`, newest was 3 Aug — so it proved the 2–3 Aug builds, not this one. Closes task 6, unblocks 7 and 8 |
+| 0 | `myfoodrepo-bridge` | 6 `[-]` | **One capture on the current build** (its new estimation-log row carries the live lineage) **or `sudo make logs`**. The 2026-08-04 estimation-log reading was historical — rows show each attempt's own `modelVersion`, newest was 3 Aug — so it proved the 2–3 Aug builds, not this one. Closes task 6, unblocks 7 and 8 |
 | 1 | `estimation/model-production` | prerequisites Stage 7 | **ANE residency** in Xcode's Core ML performance report — the MVP gate; needs Xcode, not the phone |
 | 2 | `myfoodrepo-bridge` | 7, 8 | Point the phone at real meals including a cereal bowl; confirm overlay and carb readings. Tick both ledgers with the model-production prerequisites |
 | 3 | `capture-bundle-recorder` | 4 `[-]` | **Replay half DONE 2026-08-05** — two harness defects found and fixed (palette-shape trap; precondition → throw), device-vs-replay divergence measured at -4.6 %. Device half (Files app, timings, no OOM kill) outstanding |

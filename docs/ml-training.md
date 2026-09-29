@@ -827,7 +827,7 @@ tools/segmenter/.venv/bin/python tools/segmenter/export.py \
 rm -rf MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage
 cp -R tools/segmenter/build/segmenter-e4e92a9df9d3.mlpackage \
       MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage
-make deploy-release
+make dev
 ```
 
 Swapping back to the incumbent is the same two commands with
@@ -848,7 +848,7 @@ Three surfaces name the model, and they agree by construction because all three
 read the same 12-hex id that `export.py` stamps into the Core ML metadata as
 `medata.modelVersion`:
 
-- **The build** — `make deploy-release` prints `BUNDLED SEGMENTER:` before
+- **The build** — `make dev` prints `BUNDLED SEGMENTER:` before
   building and `DEPLOYED SEGMENTER:` after installing. Read it out of the
   artefact itself, not out of a variable, so a stale copy cannot lie.
 - **Every capture** — the app stamps `segmenterSource = coreml_<modelVersion>`
@@ -856,7 +856,7 @@ read the same 12-hex id that `export.py` stamps into the Core ML metadata as
   it per capture, and the Benchmark report is scoped by it, so captures taken
   under different models never pool into one accuracy number.
 - **The launch line** — `event=launch buildStamp=… segmenterSource=…` via
-  `make logs-device`. Note this one reports only `stub` or `coreml`: it tells you
+  `make logs`. Note this one reports only `stub` or `coreml`: it tells you
   whether a real model is bound, **not which**. Use the build output or a capture
   for that.
 

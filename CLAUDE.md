@@ -14,7 +14,7 @@ This development cycle currently runs along the 'research' branch, with intent t
 
 ## Build, test, lint
 
-- Use the repo-root **Makefile**: `make build` / `make test` / `make spell` for the SwiftPM core; `make deploy-device`, `make deploy-release-stub`, `make logs-device` for the on-device loop (see `docs/agent-notes/device-build-and-test.md`).
+- Use the repo-root **Makefile**: `make help` lists every target, and `docs/build-and-field-loop.md` is the reference for the build axes and the field loop. `make build` / `make test` / `make spell` for the SwiftPM core; `make debug` / `make dev` / `make dev-stub` / `make product` for the on-device loop — those are `CONFIG=Debug|Release|ProductRelease` crossed with `SEGMENTER=model|stub`, and `make app` / `make deploy` take both directly. Module gotchas stay in `docs/agent-notes/device-build-and-test.md`.
 - `make test` prints TWO totals — XCTest and swift-testing. Always report both; the swift-testing slice alone is not "the" test count.
 - The iOS app builds via `MeData/MeData.xcodeproj`; every Make-deployed build logs `event=launch buildStamp=… segmenterSource=…` — match the stamp before trusting device output.
 - Always run `make spell` before committing docs or strings.

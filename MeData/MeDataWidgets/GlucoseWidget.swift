@@ -34,7 +34,7 @@ nonisolated struct GlucoseEntry: TimelineEntry {
 // otherwise (see LauncherProvider, docs/agent-notes/widget-extension.md).
 struct GlucoseProvider: TimelineProvider {
 
-    // Same subsystem/category as GlucoseWidgetPublisher, so `make logs-device`
+    // Same subsystem/category as GlucoseWidgetPublisher, so `make logs`
     // interleaves the app's publishes with the extension's wakes in one stream.
     // Every interpolation is `.public` — os_log redacts non-literals otherwise,
     // and these numbers are the whole point of the lines.
@@ -82,7 +82,7 @@ struct GlucoseProvider: TimelineProvider {
             // three unknowns behind the "widget falls out of sync" report
             // (tasks.md 16.7).
             // `.notice`, not `.info`: only notice and above are persisted to
-            // the device's log store, and `log collect` (make logs-device)
+            // the device's log store, and `log collect` (make logs)
             // reads that store. An `.info` line here is invisible to every
             // post-hoc device pull — see docs/agent-notes/device-build-and-test.md.
             Self.log.notice("""

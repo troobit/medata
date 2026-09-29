@@ -65,7 +65,7 @@ after task-14 device verification found the widget absent from StandBy. Do not
 
 - **First build fails signing**: the wildcard team profile did not include the
   device for the new bundle id. One `xcodebuild … -allowProvisioningUpdates
-  build` mints the profile; plain `make build-app` works from then on.
+  build` mints the profile; plain `make app CONFIG=Debug` works from then on.
 - **Debug appex binary looks empty**: Xcode 26 Debug builds emit a
   "blank executor" stub as the appex main executable; the real code (and any
   strings you grep for) is in `MeDataWidgets.appex/MeDataWidgets.debug.dylib`.
@@ -264,7 +264,7 @@ the 30 MB memory cap and no GRDB.
 - `getTimeline` logs one `event=widget.timeline` line per wake with
   `outcome=` (the branch of `refreshedSnapshot`), the stored and rendered
   reading ages, and the booked wake delay — subsystem `ie.medata.app`, category
-  `GlucoseWidget`, so `make logs-device` interleaves it with the app's
+  `GlucoseWidget`, so `make logs` interleaves it with the app's
   publishes. No such line during a locked stretch means WidgetKit never woke the
   extension, which is a budget observation and not a code defect.
 - The shared snapshot can now briefly lead the database. That is intended: the
