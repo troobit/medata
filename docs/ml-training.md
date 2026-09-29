@@ -560,15 +560,17 @@ stable to 0.001 but single classes moving by up to 0.45 and staples by 0.05, so
 recipe comparisons are seeded from here on and read against the seeded
 reference R8 (`--seed 1`).
 
-Five runs of the R3 recipe (R3, R7, R8, R9, R10; 2026-09-26/27) set the noise
-floor the gate has to respect: the mean over the 27 classes with held-out truth
-ranges 0.453–0.481, so a single run cannot resolve a class-mean effect under
-about 0.03; single classes move by up to 0.69 (banana, R8 → R10); the per-staple
-tolerance (largest pairwise gap) is bread_white 0.05, chips_fries 0.06, pasta
-0.11, potato_boiled 0.08, white_rice 0.08. The mask-quality block is the
-steadier instrument (max pairwise gap across the same five runs: food IoU 0.008,
-region IoU 0.022, boundary F 0.016, top-3 hit 0.014) and is what recipe verdicts
-read first.
+Six runs of the R3 recipe (R3, R7, R8, R9, R10, R8b; 2026-09-26 to 09-29) set what this anchor
+can resolve. A class needs about **20 of the 182 held-out images** to be readable at single-run
+resolution: every class above that bar has a spread of 0.097 or less over the six, while soup
+(1 image) swings 0.775, banana and apple (2) swing 0.69 and 0.60, and fruit_juice (3) swings
+0.30. The thirteen readable classes are unknown_food, mixed_vegetables, bread_white,
+potato_boiled, beef, carrot, wine, chicken, white_rice, pork, tomato, broccoli and peas; their
+mean spans 0.4783–0.5031 across the six, so **0.025 is the smallest recipe effect one run can
+resolve**. Score verdicts on that mean and on the mask-quality block (max pairwise gap over the
+six: food IoU 0.008, region IoU 0.022, boundary F 0.016, top-3 hit 0.014). The tool's own
+`mean_iou` is not usable for verdicts — it includes classes with no held-out truth and classes
+present in one image, and it ranks the six runs differently from the readable thirteen.
 
 Multi-hour runs go through the serial queue rather than hand-launched
 `nohup` lines: entries in `tools/segmenter/queue/`, runner
