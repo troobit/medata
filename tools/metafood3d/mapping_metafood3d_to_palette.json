@@ -1,0 +1,588 @@
+{
+  "palette_class_list": [
+    "white_rice",
+    "brown_rice",
+    "pasta",
+    "bread_white",
+    "bread_wholemeal",
+    "potato_boiled",
+    "potato_mashed",
+    "chips_fries",
+    "chicken",
+    "beef",
+    "pork",
+    "fish_white",
+    "egg",
+    "cheese",
+    "salad_leaves",
+    "broccoli",
+    "carrot",
+    "peas",
+    "beans_baked",
+    "lentils",
+    "apple",
+    "banana",
+    "tomato",
+    "mixed_vegetables",
+    "cereal",
+    "water",
+    "coffee",
+    "tea",
+    "milk",
+    "fruit_juice",
+    "soup",
+    "beer",
+    "wine"
+  ],
+  "categories_source": "93070a930fd51c3ee10478465b6acb242d156b23bfea2035c17ac48d06a2580e",
+  "mappings": [
+    {
+      "category": "almond(bowl)",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "almonds",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "apple",
+      "class_id": "apple",
+      "status": "mapped"
+    },
+    {
+      "category": "applesauce",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "asparagus",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "avocado",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "bacon",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "bagel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "baked_potato",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "banana",
+      "class_id": "banana",
+      "status": "mapped"
+    },
+    {
+      "category": "beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "bell_pepper",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "biscuits",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "blueberries",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "blueberry(bowl)",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "breaded_fish",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "broccoli",
+      "class_id": "broccoli",
+      "status": "mapped"
+    },
+    {
+      "category": "brownies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "burger",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "burrito",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cabbage",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "carrot",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "category": "cauliflower",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cereal_bars",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "chicken_breast",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "category": "chicken_nugget",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "chicken_tender",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "chicken_thighs",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "category": "chicken_wings",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "chocolate",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cinnamon_roll",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "coleslaw",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cookies",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "corn(bowl)",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "corn_dog",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "corn_stick",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cottage_cheese",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "crab",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "crab_cake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "croissant",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "cucumber",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "doughnut",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "edamame",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "egg",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "category": "falafel",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "frankfurter_sandwich",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "french_fry",
+      "class_id": "chips_fries",
+      "status": "mapped"
+    },
+    {
+      "category": "french_toast",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "fried_egg",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "fried_mushrooms",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "fried_rice",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "grapes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "green_bean",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "green_beans",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "guacamole",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "gyoza",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "hashbrown",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "ice_cream",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "kiwi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "lasagna",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "lobster",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "mac",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "mango",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "mashed_potato",
+      "class_id": "potato_mashed",
+      "status": "mapped"
+    },
+    {
+      "category": "meatloaf",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "melons",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "muffin",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "nachos",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "nutrition_bars",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "omelet",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "onion",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pancake",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "papaya",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pasta_mixed_dishes",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "peach",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "peanut_butter_and_jelly_sandwiches",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "peanuts",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pie",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pineapple",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pizza",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pork_chop",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "category": "pork_rib",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "pudding",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "quesadilla",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "quickbread",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "rice",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "white_rice",
+        "brown_rice"
+      ]
+    },
+    {
+      "category": "salmon_grill",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "sandwich",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "sausages",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "shrimp",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "soup",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "steak",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "category": "stew_beef",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "strawberry",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "sushi",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "sweet_potato",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "taco",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "tofu",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "tomato",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "category": "tomato_slice",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "category": "tortilla",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "tortilla_chips",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "tuna_salad",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "waffle",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "whole_chicken",
+      "class_id": null,
+      "status": "unmapped"
+    },
+    {
+      "category": "yeast_bread",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "bread_white",
+        "bread_wholemeal"
+      ]
+    },
+    {
+      "category": "yogurt",
+      "class_id": null,
+      "status": "unmapped"
+    }
+  ]
+}

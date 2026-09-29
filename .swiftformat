@@ -1,0 +1,21 @@
+--swiftversion 5.9
+--indent 4
+--maxwidth 120
+--linebreaks lf
+--commas inline
+--trimwhitespace always
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--self remove
+--importgrouping testable-bottom
+--header strip
+
+--enable redundantSelf
+--enable redundantParens
+--enable trailingCommas
+--enable consecutiveSpaces
+--enable blankLinesAtStartOfScope
+--enable blankLinesAtEndOfScope
+
+--disable wrapMultilineStatementBraces

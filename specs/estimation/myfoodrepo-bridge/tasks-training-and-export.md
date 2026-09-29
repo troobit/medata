@@ -1,0 +1,68 @@
+---
+references:
+    - specs/estimation/myfoodrepo-bridge/prd.md
+---
+# MyFoodRepo-273 bridge — Training and export
+
+## 36-channel tooling
+
+- [x] 1. Move export and validation tooling to 36 channels <!-- id:8id22y3 -->
+  - export.py EXPECTED_CHANNEL_COUNT 35 -> 36 (line ~316) and --num-classes default; validation.py sentinel/channel expectations
+  - Update tools/segmenter/tests/test_export_gates.py EXPECTED_PALETTE (36 names in v2 order: cereal at 24, liquids 25-32, sentinels 33/34/35) and any other 35-channel assertions this context owns
+  - Do NOT touch build_class_mapping.py, prepare_dataset.py, test_class_mapping.py (dataset-bridge context owns them) or tools/food_db/ (palette context owns it)
+  - Torch-free pytest green for the owned suites
+  - Context owns: train.py, export.py, validation.py, run_validation.py, lineage.py, test_export_gates.py, test_validation.py, segmenter.mlpackage swap, specs/estimation/segmenter-foundation/decision_log.md verdict entry, docs/agent-notes/model-production.md
+
+## Training run
+
+- [x] 2. Preflight the merged corpus and measure one epoch <!-- id:8id22y4 -->
+  - DONE 2026-07-26: merged corpus verified by merge_corpus_foodrec2022.py asserts (anchor 182 stems heldout-only, digest recorded, mask scan hard-errors on pixels >= 36); measurement via --limit 4000 one-epoch run (3.3 min) cross-checked against the FoodSeg103-only smoke run (5,553 imgs in 3.8 min) — both ~24 img/s, so the documented 20 min/epoch figure is stale; projected full epoch ~33 min
+  - Verify splits.json seed, leak-free anchor untouched, 36-channel masks
+  - Launch a one-epoch measurement run per docs/ml-training.md section 4 before committing to the full run; record epoch wall-clock
+  - Blocked-by: 8id22y3 (Move export and validation tooling to 36 channels)
+
+- [x] 3. Run the full detached training job on the merged corpus at 36 classes <!-- id:8id22y5 -->
+  - LAUNCHED 2026-07-26 from the main checkout: 12 epochs (total-step parity ~1.6x the incumbent's 60x5,553; ~6.5 h projected), batch 16, lr 1e-3, plain CE with class-weighting none (matches incumbent recipe for attributable comparison), geometric augment on, photometric OFF (recorded choice), out build/checkpoint_merged_v2.pt, log build/train_merged_v2.log, resume sidecar active
+  - Launch from the MAIN checkout (/Users/r/repos/medata) after palette + bridge merges — never from a temporary worktree; nohup caffeinate -is with the tools/segmenter/.venv python, log file retained, resume sidecar active
+  - Staple-safe recipe: class rebalancing none or at most sqrt_inverse; NO inverse-frequency weighting; geometric augmentation on; photometric augmentation at your discretion with the choice recorded
+  - NEVER edit train.py or its imports while the run is live (DataLoader spawn workers re-import from disk)
+  - Expect roughly 20 min/epoch on M5 Pro MPS; ~10+ hours for 60 epochs
+  - Blocked-by: 8id22y4 (Preflight the merged corpus and measure one epoch)
+
+- [x] 4. Integration follow-up: align make_fixtures.py and test_lineage.py with the v2 mapping <!-- id:wbyid81 -->
+  - Do this together with the dataset-bridge resume: when class_mapping_foodseg103 regenerates to v2, tools/segmenter/make_fixtures.py DEFAULT_NUM_CLASSES moves 35 -> 36 and tools/segmenter/tests/test_lineage.py:31 palette_version assertion moves v1 -> v2
+  - Spike files NUM_CLASSES = 35 are pinned historical evidence — leave them
+  - Flagged unowned at integration 2026-07-25 by the training context
+
+## Validation and promotion
+
+- [x] 5. Validate against the leak-free anchor and record the promotion verdict <!-- id:8id22y6 -->
+  - run_validation.py output into tools/segmenter/build/lineage.json including per-staple and cereal IoU
+  - Promotion criterion: leak-free mean food-class IoU beats the 0.3776 anchor of 24e0b022241a AND no existing carb-priority staple regresses materially; otherwise record the rejection like Decisions 24/25
+  - Verdict entry (promotion or rejection, with numbers) in specs/estimation/segmenter-foundation/decision_log.md, Enhanced Nygard format; outcome note in docs/agent-notes/model-production.md
+  - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
+  - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
+
+- [x] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+  - DEPLOY LEG DONE 2026-08-15 — `make deploy-release` from a CLEAN tree at `a33cb5d`: build succeeded, `devicectl` installed, and the launch step succeeded this time (the 2026-07-26 failure was only the locked device). `DEPLOYED BUILD STAMP: a33cb5d-20260815-231735`, no `-dirty`, so the binary is rebuildable from the named commit. The bundled `segmenter.mlpackage` compiled into it reads `medata.modelVersion=ab812dc3aa9d`, read out of the same package by `tools/deploy_release.sh:37`
+  - CLOSED 2026-08-16 — nine capture attempts on that install (11:42–11:56 local) each wrote an `estimation_outcomes` row reading `modelVersion=coreml_ab812dc3aa9d`. That is the live lineage of the CURRENT build, which is what this task asked for and what the 2026-08-05 Settings reading could not give. Pulled without root by the `devicectl` recipe in `docs/agent-notes/device-build-and-test.md`; the session is written up in `docs/agent-notes/field-truth-sessions.md` under 2026-08-16
+  - **Route (b) cannot close this task and the line above asking for `segmenterSource=coreml_<12-hex>` in the launch log is wrong.** `App/App.swift:185` computes the launch line's source as a compile-time branch — `Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"` — so the launch line reads `segmenterSource=coreml` and never carries a model id. The 12-hex id is `PipelineFactory.swift:124`'s `"coreml_\(modelVersion)"`, stamped onto captures (`MealRecord.segmenterSource`). `sudo make logs-device` therefore proves the build stamp and that the install is not the stub build — worth having, not sufficient here
+  - STILL PARTIAL 2026-08-05 — an earlier note in this ledger closed this task and was WRONG; corrected here. The developer did read `coreml_ab812dc3aa9d` in Settings → Estimation log, but `EstimationLogView` renders each row's historical `EstimationOutcome.modelVersion`, and the newest attempt in the device DB is 2026-08-03. So the reading proves the 2-3 August builds bound the promoted model; it says nothing about the build now installed. There is no surface in the app that displays the CURRENT build's `captureLineage`
+  - Circumstantial but not sufficient: today's Release was built from the same unchanged `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, so it almost certainly binds the same model — 'almost certainly' is not what this gate asks for
+  - PARTIAL at closeout 2026-07-26: export gates passed (22,169,442 B, 36 channels, oracle argmax parity 0.9999), bundled segmenter.mlpackage swapped (medata.modelVersion=ab812dc3aa9d), make deploy-release INSTALLED the release build on the iPhone 16 Pro but the launch step failed with the device locked
+  - Only on promotion; export.py gates: 24 MiB weight budget, 36 channels in palette order, oracle parity
+  - make deploy-release; verify device launch log shows the new segmenterSource=coreml_<12-hex> with matching buildStamp via make logs-device
+  - Blocked-by: 8id22y6 (Validate against the leak-free anchor and record the promotion verdict)
+
+## Human gates
+
+- [-] 7. STOP — on-device capture verification by a human <!-- id:8id22y8 -->
+  - A human points the phone at real meals (including a cereal bowl) to confirm the overlay and carb readings; the agent verifies only launch log and build stamp
+  - PASS RUN 2026-08-16, NOT CONFIRMED — the sitting happened on build `a33cb5d-20260815-231735`: one slice of toast and one bowl (milk, yogurt, submerged Weetbix), nine attempts, full numbers in `docs/agent-notes/field-truth-sessions.md` under 2026-08-16. The task stays open because what it asks for is *confirmation* of the readings, and the readings were not confirmable: toast read ~2x over nominal (28.7 g carbs on a slice worth ~15), and the bowl read `cheese` at **0.07 g carbs** on the LiDAR path and `bread_wholemeal + tomato` at 14.5 g on the two-view path
+  - The cereal leg of this task cannot be judged from that sitting and should NOT be read as "the model fails on cereal". The bowl's visible surface was milk and yogurt with the Weetbix beneath it, so `cereal` (24) was never on screen to be predicted and yogurt has no palette class at all. The gap it exposes is occlusion — the pipeline estimates the visible surface and has no concept of food submerged under a liquid — which no amount of cereal training data addresses. A fair cereal test needs dry cereal, or milk poured after the capture
+  - What a re-run needs to be worth more than this one: scale-weighed truth (this sitting took none), and a dry-cereal scene for the cereal leg
+  - Blocked-by: 8id22y7 (Export, swap the bundled model, and deploy for verification)
+
+- [ ] 8. STOP — ANE residency check in Xcode <!-- id:8id22y9 -->
+  - Core ML performance report is a manual Xcode step; record as pending rather than claiming it
+  - Blocked-by: 8id22y7 (Export, swap the bundled model, and deploy for verification)

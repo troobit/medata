@@ -1,0 +1,840 @@
+# Decision Log: Glucose Lock Screen Widget
+
+## Decision 1: New `ui` spec rather than extending regression-suggestion-integration
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+The Lock Screen already carries two widgets from `specs/regression-suggestion-integration` (the `MeDataWidgets` extension): static launchers for "Log dose" and "Capture" that only deep-link into the app. The new request is a data-driven glucose readout with a trend arrow. `regression-suggestion-integration` is a done PRD-lane spec whose widgets deliberately carry no data and no App Group.
+
+### Decision
+
+Author a new `ui`-domain spec at `specs/ui/glucose-lock-widget/`. Reuse the existing `MeDataWidgets` extension target by adding a new widget kind to it, but keep requirements, design, and decisions in this spec.
+
+### Rationale
+
+A data-driven readout is a distinct capability — it needs a new App Group, a process-crossing snapshot cache, trend maths, staleness/colour states, and a timeline refresh policy — none of which the launcher widgets have. Reopening a completed PRD spec to bolt this on would blur its scope. Reusing the extension target avoids a second widget-extension process and duplicate signing.
+
+### Alternatives Considered
+
+- **Extend regression-suggestion-integration**: Add the glucose widget into that done spec — Rejected: it is complete and its widgets are launcher-only; a data bridge is out of its scope.
+- **New widget extension target**: A second `.appex` for glucose — Rejected: unnecessary process/signing overhead; WidgetKit hosts multiple kinds from one bundle.
+
+### Consequences
+
+**Positive:**
+- Clear scope boundary; the data-bridge and trend maths live with the feature that needs them.
+- One widget extension continues to host all kinds.
+
+**Negative:**
+- The `MeDataWidgets` target now spans two specs; both must be considered when touching it.
+
+---
+
+## Decision 2: WidgetKit accessory widget, not a Live Activity
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+The user framed the surface around "live-events". For an always-present Lock Screen glucose readout, the two candidate mechanisms are a WidgetKit accessory widget and an ActivityKit Live Activity.
+
+### Decision
+
+Deliver a WidgetKit accessory widget only. A Live Activity is an explicit non-goal for this feature.
+
+### Rationale
+
+A Live Activity is ephemeral: it must be explicitly started and self-expires (8h default, 12h hard cap), so it cannot be the persistent glucose tile. An accessory widget is always present, needs no lifecycle management, and updates via timeline reload when the app writes a new reading — the right fit for a glance surface.
+
+### Alternatives Considered
+
+- **Live Activity primary**: Lead with ActivityKit — Rejected: cannot stay resident; wrong tool for an always-on tile.
+- **Widget + Live Activity now**: Ship both — Rejected for this cycle: doubles scope; a time-boxed "watch now" session can layer on later if wanted.
+
+### Consequences
+
+**Positive:**
+- Always-present, zero-lifecycle surface; no expiry handling.
+
+**Negative:**
+- Update latency is bounded by the app/background-refresh write cadence, not push — mitigated by the staleness treatment (Req 5).
+
+---
+
+## Decision 3: Placements — Lock Screen accessory families + StandBy via `systemSmall`
+
+**Date**: 2026-07-27 (amended 2026-08-03)
+**Status**: accepted
+
+### Context
+
+WidgetKit offers accessory families (`accessoryCircular`, `accessoryRectangular`, `accessoryInline`) plus Home Screen system families. The existing launcher widgets also expose `systemSmall`.
+
+### Decision
+
+Support `accessoryCircular`, `accessoryRectangular`, `accessoryInline`, and `systemSmall`. The Lock Screen accessory families are the intended surface; `systemSmall` exists to reach StandBy.
+
+### Rationale
+
+The reference surface (the FreeStyle LibreLink screenshot) and the "minimise interaction / glance" goal are Lock Screen concerns, so the accessory families remain the design target.
+
+StandBy is not free, as this decision originally assumed. StandBy's widget panel is populated from the **Home Screen** widget pool: `systemSmall` is auto-promoted into it, and accessory families never appear there. `supportedFamilies` is placement-agnostic, so there is no way to expose `systemSmall` to StandBy while withholding it from the Home Screen. Supporting StandBy therefore requires accepting a Home Screen listing.
+
+Given the choice between dropping StandBy (a stated Req 2 user story) and accepting an unwanted Home Screen listing, the listing is the lesser cost: it is inert unless the user places it, and the `systemSmall` view reuses the existing render states, adding layout but no new logic or data path.
+
+### Amendment (2026-08-03)
+
+The original decision claimed "StandBy reuses the accessory rendering for near-free" and on that basis rejected `systemSmall` while requiring StandBy — a combination that cannot be built. The error surfaced during task 14 on-device verification, when the widget proved unreachable in StandBy. The requirement was kept and the rejection reversed; Req 2.2 and the Non-Goals list were amended to match.
+
+### Alternatives Considered
+
+- **Accessory families only, drop StandBy**: Honour the original no-`systemSmall` stance by amending Req 2.2 to remove the StandBy promise — Rejected: StandBy is a genuine glance surface for a charging bedside phone, which is squarely the feature's use case.
+- **`systemSmall` restricted to StandBy**: Offer the family to StandBy but hide it from the Home Screen gallery — Rejected: WidgetKit exposes no such control; `supportedFamilies` cannot discriminate by placement.
+- **Separate StandBy-only widget kind**: A fourth kind carrying only `systemSmall` — Rejected: it would still be listed on the Home Screen, so it buys nothing while adding a kind and splitting the gallery.
+
+### Consequences
+
+**Positive:**
+- StandBy actually works, so Req 2.2 and the Req 4.3 full-colour enhancement are reachable rather than permanently failing.
+- The `systemSmall` view reuses the existing four render states — no new logic, data path, or timeline behaviour.
+
+**Negative:**
+- Glucose is listed as a Home Screen widget, which this decision originally set out to avoid.
+- One more layout to keep consistent as the render states evolve.
+
+---
+
+## Decision 4: Trend derived from recent readings, not a source-specific arrow
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+LibreLinkUp's payload carries a native `TrendArrow`, but it is dropped at ingest and does not persist. HealthKit and screenshot imports carry no trend field. The widget needs a trend arrow across all sources.
+
+### Decision
+
+Derive the trend from `bsl` readings within the most recent 15 minutes as a rate of change, in the shared `TrendsMath` module, mapped to seven arrow states by fixed thresholds. Do not plumb any source-specific trend value.
+
+### Rationale
+
+A derived trend is uniform across HealthKit, LibreLinkUp, and screenshots, keeps the widget source-agnostic, and gives the graph a reusable helper. Persisting a source-specific arrow would be undefined for two of three sources and would add an ingest-path change this feature is meant to avoid.
+
+**Rate method (pinned so `TrendsMath` is testable):** the rate is the slope of a least-squares linear regression over all `bsl` readings whose timestamps fall within the 15 minutes preceding *now* (device time), in mmol/L per minute. Anchoring to now (not to the latest reading) keeps trend and staleness on the same clock. A trend is reported only when ≥2 readings fall in the window **and** the earliest and latest span ≥10 minutes — this guards against two near-simultaneous readings amplifying into a spurious fast arrow.
+
+Threshold mapping by signed rate `r` (mmol/L per minute), non-overlapping half-open bands on `|r|`, sign choosing direction (Dexcom convention, adjustable in code):
+
+| Band | State | Arrow |
+|---|---|---|
+| `\|r\| < 0.056` | steady | → |
+| `0.056 ≤ \|r\| < 0.111` | slow | ↗ / ↘ |
+| `0.111 ≤ \|r\| < 0.166` | medium | ↑ / ↓ |
+| `\|r\| ≥ 0.166` | fast | ↑↑ / ↓↓ |
+
+Positive `r` → up arrow, negative → down. Boundaries are testable exact values (0.056, 0.111, 0.166).
+
+### Alternatives Considered
+
+- **Plumb LibreLinkUp `TrendArrow`**: Persist the source arrow where present, derive otherwise — Rejected: source-specific, undefined for HealthKit/screenshots, requires an ingest-path change.
+- **Two-point rate (latest vs earliest in window)**: Simpler — Rejected: sensitive to a single noisy endpoint; regression over the 5-minute-grid points is steadier.
+- **Window anchored to the latest reading**: Rejected: diverges from staleness (which is now-relative), so a lagging reading would report a trend the staleness rule already calls stale.
+
+### Consequences
+
+**Positive:** One computation for all sources; reusable by the graph; testable in MedataCore with exact boundary and min-span cases.
+**Negative:** Needs ≥2 recent readings spanning ≥10 min; sparse screenshot-only data yields no arrow (Req 3.3) — accepted as correct behaviour.
+
+---
+
+## Decision 5: Staleness thresholds — dim after 15 min, hide value after 30 min
+
+**Date**: 2026-07-27
+**Status**: accepted — the *thresholds* stand; the colour wording below is superseded by Decision 7
+
+**Note:** this entry was written before the WidgetKit rendering review and describes the
+status signal as a colour ("status colour", "colour suppressed"). Decision 7 established
+that the Lock Screen always renders accessory widgets in monochrome vibrant mode, so status
+is carried by a non-colour token instead. Read every "colour" below as "status indicator";
+the 15/30-minute thresholds and the dim-then-hide ladder are unaffected.
+
+### Context
+
+The widget is only as fresh as the last app/background-refresh write; between writes the displayed reading ages. CGM cadence is 5 minutes. A stale value must not read as authoritative.
+
+### Decision
+
+Full prominence + status colour when the reading is ≤15 minutes old; dimmed (colour suppressed, value + age still shown) when >15 and ≤30 minutes; replace the value with a no-recent-reading placeholder when >30 minutes.
+
+### Rationale
+
+Fifteen minutes is roughly three missed CGM cycles — past that, the reading is drifting and should stop looking live. Thirty minutes is stale enough that a precise number misleads more than a placeholder. The user chose the stricter of the offered policies.
+
+### Alternatives Considered
+
+- **Dim >20 / hide >60**: Looser horizon — Rejected by the user in favour of tighter control.
+- **Never dim, always show age**: Rejected: a hours-old value looks as authoritative as a live one.
+
+### Consequences
+
+**Positive:** Stale data is visually distinct; no misleading precision past 30 min.
+**Negative:** During real CGM gaps the value hides sooner; the timeline must schedule entries at both age boundaries (Req 5.4).
+
+---
+
+## Decision 6: Tap opens the Graph view via a `medata://` deep link
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+The app already handles `medata://` deep links (`AppRoot` handleDeepLink) for the launcher widgets. The glucose tile needs a single tap target consistent with "minimise interaction".
+
+### Decision
+
+Tapping the widget opens the app to the Graph view via a `medata://` deep link, reusing the existing handler.
+
+### Rationale
+
+The graph is the natural "see more" destination for a glucose glance, and the deep-link infrastructure already exists. One tap target keeps the accessory widget simple.
+
+### Alternatives Considered
+
+- **Open app to Home**: Rejected: extra navigation to reach the trend.
+- **No tap target**: Rejected: wastes the obvious see-more affordance.
+
+### Consequences
+
+**Positive:** One tap to the full trend; reuses existing routing.
+**Negative:** Adds one new `medata://` route to define and handle.
+
+---
+
+## Decision 7: Status is a non-colour channel; colour is a StandBy-day-only enhancement
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+The initial requirement encoded low / in-range / high as a colour treatment, matching the FreeStyle LibreLink reference (red LOW banner). WidgetKit review (Apple WWDC22/23 material, corroborated) established that Lock Screen accessory widgets **always render in vibrant mode**: the system desaturates content to monochrome and re-tints it to the wallpaper. `accessoryInline` is always monochrome. Only StandBy *day* mode renders in full colour; StandBy night is vibrant. So per-status hue is invisible on the primary surface (the Lock Screen) for every user, and colour-only encoding is a colour-blind failure regardless.
+
+### Decision
+
+Distinguish low / in-range / high with a channel that survives monochrome vibrant rendering — a functional glyph or short status token — as the sole status signal. Per-status colour is permitted only as an enhancement where the system renders full colour (StandBy day), layered on top of the non-colour channel.
+
+### Rationale
+
+The Req 4 user story ("notice an out-of-range level without reading the number") only holds if the signal survives the Lock Screen's monochrome rendering. A glyph/token also passes colour-blind accessibility. Functional status text is not disclaimer/reassurance copy, so it complies with the developer-phase rule. Opacity (used for the dimmed staleness state, Decision 5) also survives vibrant rendering, so the two visual cues remain distinct in monochrome.
+
+### Alternatives Considered
+
+- **Colour per status (original)**: Red/amber/green — Rejected: invisible on the Lock Screen; colour-blind failure.
+- **`accented` render mode with three tints**: Rejected: `accented` applies the user's single chosen tint, so it cannot encode three semantic states by hue.
+
+### Consequences
+
+**Positive:** Status readable on the primary surface and in monochrome; colour-blind safe; no disclaimer copy.
+**Negative:** A glyph/token costs layout space in the already-tight circular and inline families — design must budget it against the value and arrow.
+
+---
+
+## Decision 8: Distinguish >30-min-stale from never-recorded; add a snapshot schema version
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+Requirements review found the >30-minute stale state and the never-connected state collapsing into one identical placeholder, discarding "last reading, 41 min ago" — the exact signal that tells a CGM sensor gap from an unconfigured app. Separately, the app and the widget extension can run mismatched builds, and a snapshot has no version, atomicity, or widget-side decode-failure contract, so a format change or torn read had undefined behaviour.
+
+### Decision
+
+Keep the locked "hide the number past 30 minutes" (Decision 5) but still show the reading's relative age as a "last reading · Xh ago" label, visually distinct from a never-recorded placeholder. Give the snapshot a schema version field, write it atomically, and define the widget to fall back to the never-recorded state when the snapshot is missing, undecodable, or carries an unrecognised version.
+
+### Rationale
+
+Showing age-without-value preserves the staleness signal the whole feature is built on while honouring the locked decision to hide a misleadingly-precise stale number. A version field plus atomic write plus a defined decode-failure fallback makes the app↔extension contract testable and immune to cross-build drift and torn reads — the standard App Group snapshot discipline.
+
+### Alternatives Considered
+
+- **Single placeholder for both states (original)**: Rejected: loses the sensor-gap-vs-unconfigured distinction.
+- **Show the stale number past 30 min**: Rejected: contradicts the locked Decision 5 and shows misleading precision.
+- **Unversioned snapshot**: Rejected: a format change between app and extension builds would silently misdecode.
+
+### Consequences
+
+**Positive:** Users can tell "sensor dropped out" from "never set up"; the snapshot contract survives mismatched builds and concurrent reads.
+**Negative:** One more state to render and test; the snapshot writer must handle versioning and atomic replace.
+
+---
+
+## Decision 9: Timeline staleness modelled as a pure entry-generation function
+
+**Date**: 2026-07-27
+**Status**: accepted — refined by Decision 12 (the pure function emits render states, not WidgetKit `TimelineEntry` values)
+
+### Context
+
+The staleness transitions (full → de-emphasised at 15 min → last-reading at 30 min) happen with the passage of time, not on new data. The original requirement asserted the timeline "SHALL schedule entries at the boundaries", which is OS-scheduler behaviour that cannot be unit-tested.
+
+### Decision
+
+Model the transitions as a pure function of (snapshot, reference time) that emits timeline entries at the 15- and 30-minute age boundaries carrying the pre-computed rendered state, and unit-test that function. The observable staleness outcomes (Req 5.1–5.3) remain the requirement; the OS scheduler is not asserted against.
+
+### Rationale
+
+Pre-baking the state transitions into the timeline is WidgetKit's intended pattern and mirrors the discipline already applied to trend derivation (a pure `TrendsMath` function). It makes the behaviour testable without depending on the opaque reload budget.
+
+### Alternatives Considered
+
+- **Assert scheduler behaviour (original)**: Rejected: not unit-testable; delivery timing is system-controlled.
+- **Rely on data-write reloads only**: Rejected: staleness would not advance during a gap between writes, which is exactly when it matters.
+
+### Consequences
+
+**Positive:** Staleness transitions are deterministic and unit-tested; correct WidgetKit usage.
+**Negative:** The provider must compute future-dated entries, slightly more logic than a single-entry timeline.
+
+---
+
+## Decision 10: Shared snapshot code in one Foundation-only linkable product
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+The snapshot DTO and its `GlucoseTrend`/`GlucoseBandStatus` enums must be readable by both the app and the widget extension. The widget cannot import `Persistence` (it drags in GRDB, blowing the ~30 MB extension budget), and `PortableContracts` carries a SwiftProtobuf dependency. `TrendsMath` (in `Persistence`) must return `GlucoseTrend`.
+
+### Decision
+
+Create one new SwiftPM target `GlucoseWidgetShared` (Foundation only, zero third-party deps) exposed as its own library product, holding the DTO, the two enums, the App Group id, and `GlucoseSnapshotStore`. The extension links exactly that product; `Persistence` depends on it for the enums.
+
+### Rationale
+
+A single tiny Foundation-only target is the least-ceremony way to share the contract without coupling the widget to GRDB. Making it a discrete product (not an umbrella) means the extension link list references only it, so GRDB cannot ride in transitively. The dependency edge `Persistence → GlucoseWidgetShared` is one-way and the module has no path to `GlucoseIngestion`, so the cgm-connect estimation firewall is unaffected; a `dump-package` assertion pins the module's empty dependency list.
+
+### Alternatives Considered
+
+- **Split enums and the UserDefaults store into two targets**: so estimation targets link only leaf enums, not App-Group I/O — Rejected: extra target for negligible gain; the I/O code is inert unless called and never runs on the estimation path.
+- **Reuse `PortableContracts`**: Rejected: pulls SwiftProtobuf into the widget needlessly.
+- **Put the enums in `Persistence`**: Rejected: the widget can't import `Persistence` (GRDB), so the DTO's enums can't live there.
+
+### Consequences
+
+**Positive:** Widget stays light; one contract source; firewall intact.
+**Negative:** Estimation binaries transitively link a (tiny, Foundation-only) display DTO — accepted and documented.
+
+---
+
+## Decision 11: Snapshot publisher — actor, prime write, kind-scoped reload, best-effort background
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+WidgetKit review established: `reloadAllTimelines()` would burn the shared reload budget on the co-hosted static launcher widgets; the CGM 5-minute cadence (~288 writes/day) far exceeds any reload budget; an app-lifetime observer must own a real `Task` (not a SwiftUI `.task`) to catch HealthKit background-delivery ticks; and a reaction-only publisher shows never-recorded on first launch until the next event.
+
+### Decision
+
+`GlucoseWidgetPublisher` is an `actor` that (1) does a prime recompute+write at construction before subscribing, (2) owns a process-lifetime `Task` consuming `store.eventsDidChange`, established before glucose sources start, and (3) writes then calls `WidgetCenter.shared.reloadTimelines(ofKind:)` for the glucose kind only. Background reloads are best-effort under the reload budget; the staleness ladder (Decision 5/9) is the degradation path.
+
+### Rationale
+
+An `actor` keeps the 24h store read off the main thread and serialises the compare-read-then-write. The prime write fixes the cold-start never-recorded bug. Kind-scoped reload avoids spending budget on widgets whose content never changes. Tying freshness to the write cadence with a graceful staleness ladder is the only workable model given the budget — chasing per-reading reloads would fail silently.
+
+### Alternatives Considered
+
+- **`@MainActor` publisher (like `TrendsModel`)**: Rejected: hops the 24h read to the main thread on every CGM tick.
+- **`reloadAllTimelines()`**: Rejected: reloads the launcher widgets needlessly.
+- **Couple the write to the CGM `BGTask` completion**: Considered — Rejected for now: adds coupling to `GlucoseConnectionsModel`; the shared `eventsDidChange` path already fires on the background ingest write, and the staleness ladder covers a dropped background reload.
+
+### Consequences
+
+**Positive:** Correct cold start; budget-efficient; thread-correct; degrades gracefully.
+**Negative:** Background updates are not guaranteed real-time — accepted (Req 6.2); a dropped background reload shows a dimmed/last-reading state until the next foreground or permitted reload.
+
+---
+
+## Decision 12: WidgetKit types stay in the extension; the shared module exposes pure render points
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+Decision 10 established `GlucoseWidgetShared` as a Foundation-only target with zero
+dependencies, linked by the widget extension and depended on by `Persistence`. The first
+draft of the design then placed the whole timeline layer in that module — including
+`struct GlucoseEntry: TimelineEntry` and a `TimelineReloadPolicy` — so that the staleness
+transitions (Decision 9) would be unit-testable in MedataCore.
+
+Both of those are WidgetKit types. Putting them in `GlucoseWidgetShared` would force an
+`import WidgetKit` into a module that `Persistence` depends on, so WidgetKit would ride
+transitively into `Pipeline` and on into the macOS `HarnessCLI` executable — a UI framework
+in the estimation and harness link closures, for no benefit. The `dump-package` assertion
+guarding that module cannot detect this: it enumerates *package* dependency edges, and
+system frameworks never appear there.
+
+### Decision
+
+Keep every unit-testable value in `GlucoseWidgetShared` and Foundation-only: `GlucoseRender`,
+`GlucoseTimeline.render`, `GlucoseTimeline.renderPoints` (returning
+`[(date: Date, render: GlucoseRender)]`), and `GlucoseTimeline.nextBoundary` (returning
+`Date?`). The widget extension owns the WidgetKit surface: a `GlucoseEntry: TimelineEntry`
+wrapper over `(date, render)`, and the `Date?` → `.after(_)` / `.never` reload-policy mapping.
+
+### Rationale
+
+The split puts the module boundary where the testability argument actually needs it. Every
+branch of the staleness ladder is a pure function of `(snapshot, reference date)` and stays
+in `make test`; what moves to the extension is a struct declaration and a two-case mapping,
+which have no logic to test and are covered by the on-device pass anyway. `Date?` is the
+honest shared vocabulary for "when does this next change" — `TimelineReloadPolicy` is
+WidgetKit's encoding of that same fact, and encoding it twice is what created the problem.
+
+### Alternatives Considered
+
+- **Import WidgetKit into `GlucoseWidgetShared`**: Simplest edit — Rejected: falsifies
+  Decision 10's central claim, drags WidgetKit into `Persistence` → `Pipeline` → `HarnessCLI`,
+  and the existing package-graph assertion cannot catch the regression.
+- **Split off a third target for the timeline maths**: A `GlucoseWidgetTimeline` module the
+  extension links alongside — Rejected: same objection Decision 10 already made to splitting
+  the enums out; an extra target for one enum and three functions that share the DTO anyway.
+- **Move the staleness maths into the extension entirely**: Rejected: it is the logic
+  Decision 9 exists to make unit-testable, and the app target has no test surface.
+
+### Consequences
+
+**Positive:**
+- Decision 10's Foundation-only guarantee is true as written.
+- The full staleness ladder stays inside `make test`; no WidgetKit in the estimation or
+  harness link closures.
+
+**Negative:**
+- One extra hop in the extension (`renderPoints` → `[GlucoseEntry]`, `nextBoundary` → policy)
+  that would not exist if the module could speak WidgetKit directly.
+- The boundary is held by review, not by an executable assertion — the `dump-package` test
+  is blind to framework imports, so this is called out explicitly in the design's testing
+  strategy.
+
+### Impact
+
+`GlucoseWidgetShared` API surface (design "Components and Interfaces"), tasks 7 and 11.
+
+---
+
+## Decision 13: Ladder transition instants sit one second past the age boundary
+
+**Date**: 2026-08-01
+**Status**: accepted — refines the `renderPoints` / `nextBoundary` contract in Decisions 9 and 12
+
+### Context
+
+Req 5.1 makes the fresh band inclusive ("15 minutes old **or less**") and Req 5.2 makes the
+stale band inclusive at its far edge ("30 minutes old or less"). Decision 9's timeline
+function was then specified to emit its transition entries at `readingDate + 15m` and
+`readingDate + 30m` exactly.
+
+Those two statements contradict each other. Evaluating the render at exactly
+`readingDate + 15m` yields *fresh*, because the age is exactly 15 minutes and the band is
+inclusive. WidgetKit shows each entry until the next one, so the entry meant to start the
+de-emphasised phase would instead re-assert full prominence for the whole 15–30 minute
+window, and the entry at `readingDate + 30m` would render *stale* rather than last-reading.
+The ladder would run one step behind for its entire life and never reach the last-reading
+state at all — the exact failure Decision 9 exists to prevent.
+
+### Decision
+
+Keep `render(_:at:)` inclusive at both boundaries, matching Reqs 5.1 and 5.2 literally.
+Anchor the transition instants emitted by `renderPoints(_:from:)` and returned by
+`nextBoundary(_:after:)` one second past each boundary — `readingDate + 15m + 1s` and
+`readingDate + 30m + 1s` — as the first whole second at which the ladder has actually
+advanced. The offset is a named constant, `GlucoseTimeline.transitionOffset`.
+
+### Rationale
+
+The requirement text is about which state a given age is *in*; the timeline is about when
+the state *changes*. For an inclusive band these are one second apart, and conflating them
+is what produced the off-by-one-step ladder. Putting the offset in the timeline layer keeps
+the requirement's wording untouched and testable as written, and one second is the natural
+grain: WidgetKit schedules to the second, and no requirement distinguishes ages finer than a
+minute.
+
+### Alternatives Considered
+
+- **Make the bands half-open (`age < 15m` is fresh)**: The transition instants would then be
+  the boundaries exactly — Rejected: it contradicts the literal "15 minutes old or less" in
+  Req 5.1 and would require a requirements change for a purely internal scheduling concern.
+- **Leave the instants on the boundary and special-case the render at those points**: A
+  render that disagrees with `render(_:at:)` for the same instant — Rejected: two answers for
+  one input, and the pure function stops being the single source of truth for the ladder.
+- **Sub-second offset (`nextUp`)**: Mathematically the true infimum — Rejected: not
+  meaningfully representable through WidgetKit's second-grained scheduling, and it makes the
+  tests read as floating-point trivia rather than behaviour.
+
+### Consequences
+
+**Positive:**
+- The ladder advances through all four states, with every transition covered by a unit test.
+- Reqs 5.1/5.2 stay literally true of `render(_:at:)`; no requirement rewording.
+
+**Negative:**
+- The transition instants are one second later than a reader of Decision 9 would expect; the
+  constant and this entry are the only places that explain why.
+- The widget is de-emphasised one second later than the strictest reading of Req 5.2 would
+  have it — below any perceptible threshold.
+
+### Impact
+
+`GlucoseTimeline.renderPoints` / `nextBoundary` (design "Timeline maths"), task 7, and the
+`.after(_)` policy the extension derives in task 11.
+
+---
+
+## Decision 14: The widget entry carries `readingDate` so a fresh reading's age can tick
+
+**Date**: 2026-08-01
+**Status**: accepted
+
+### Context
+
+Req 2.4 asks `accessoryRectangular` to show the reading's relative age alongside the value,
+token and arrow, and the design's per-family line says exactly that. But `GlucoseRender.fresh`
+carries no age string — only `.stale` and `.lastReading` do. That is not an oversight in
+Decision 9's ladder: the stale and last-reading entries are minted AT a known transition
+instant (readingDate + 15m + 1s / + 30m + 1s), so their baked age is correct when the entry
+first renders. A fresh entry has no such anchor — it is minted at whatever moment
+`getTimeline` runs and then stays on screen for up to 15 minutes, so any age baked into it
+would read "0m" for almost its entire life.
+
+The design's `GlucoseEntry` snippet declared only `{ date, render }`, which leaves the
+extension no way to render a fresh age at all.
+
+### Decision
+
+Add `readingDate: Date?` to `GlucoseEntry` (the extension-side WidgetKit adapter only —
+`GlucoseWidgetShared` is untouched) and render the fresh state's age in `accessoryRectangular`
+with SwiftUI's `Text(readingDate, style: .relative)`. The stale and last-reading states keep
+the pure ladder's own age string.
+
+### Rationale
+
+`.relative` is WidgetKit's own answer to a label that must tick without new timeline entries —
+the system re-renders the text itself, so the fresh age stays truthful for the whole 15
+minutes at zero cost to the reload budget. Confining the field to `GlucoseEntry` keeps
+Decision 12's boundary intact: the shared module still speaks only `GlucoseRender` and `Date?`,
+and no test in `GlucoseWidgetSharedTests` changes.
+
+Keeping the baked string for the stale and last-reading states is deliberate, not
+inconsistency for its own sake: Req 5.5 pins that format ("12m" to the minute for the first
+hour, hours beyond) and `GlucoseTimeline.ageString` is the tested implementation of it.
+Replacing it with `.relative` everywhere would make the specified format untested and unused.
+
+### Alternatives Considered
+
+- **Omit the age from the fresh rectangular state**: No new field, no format split - Rejected:
+  silently drops the Req 2.4 age for the one state a user looks at most, leaving no way to
+  tell a 1-minute reading from a 14-minute one.
+- **Bake an age string into the fresh entry**: Reuse `ageString` at entry-mint time - Rejected:
+  frozen at "0m" for up to 15 minutes, which is a wrong number rather than a missing one.
+- **Emit a fresh entry per minute**: Fifteen extra entries so the baked string stays accurate -
+  Rejected: fifteen times the timeline for one label, and it contradicts Decision 9's
+  transition-anchored point set.
+- **Use `.relative` for every state**: One format throughout - Rejected: leaves `ageString`
+  and its Req 5.5 format tested but unused in production, and the terminal states have a
+  correct anchored value already.
+
+### Consequences
+
+**Positive:**
+- Req 2.4's age holds in the fresh state without extra timeline entries or reload budget.
+- `GlucoseWidgetShared` and its tests are unchanged; Decision 12's boundary still holds.
+
+**Negative:**
+- Two age formats on one surface — the system's "12 min" when fresh, the ladder's "12m" when
+  stale. Worth a look during the on-device pass (task 14).
+- `GlucoseEntry` now carries a field that only one family and one state reads.
+
+### Impact
+
+`GlucoseEntry` in `MeData/MeDataWidgets/GlucoseWidget.swift`; the design's Decision 12 entry
+snippet (marked superseded there); task 11.
+
+## Decision 15: Trend window widened to 30 minutes to match the real LibreLinkUp cadence
+
+**Date**: 2026-08-05
+**Status**: accepted (supersedes the 15-minute window in Req 3.1)
+
+### Context
+
+Req 3.1 derived the trend over `[now − 15m, now]`, with Req 3.3 requiring at least two in-window readings spanning at least 10 minutes. That was written against the assumption of a CGM delivering a reading every 5 minutes, which makes three marks fall inside any 15-minute window.
+
+The device session on 2026-08-05 falsified the assumption. The home page showed a fresh reading — 3.4 mmol/L, "just now", red for a low — with no arrow. Pulling `Documents/meals.sqlite` off the iPhone 16 Pro and measuring the 282 live `librelinkup` rows gave the gap distribution between consecutive readings:
+
+| Gap | Count |
+|---|---|
+| 5 min | 96 |
+| 10 min | 31 |
+| **15 min** | **152** |
+| 25 min | 1 |
+| 515 min (one sensor outage) | 1 |
+
+The modal gap is 15 minutes, not 5. A 15-minute window therefore usually holds exactly one reading, and one reading can never yield a rate. Simulating the rule once a minute across the whole record, restricted to the minutes when the reading was fresh enough to display an arrow at all:
+
+| Window | minSpan | Arrow derivable |
+|---|---|---|
+| 15 min (as specified) | 10 min | **33.5 %** |
+| 30 min | 10 min | **99.1 %** |
+| 45 min | 10 min | 99.2 % |
+
+### Decision
+
+Widen the trend window from 15 minutes to 30, keeping `minSpan` at 10 minutes and the four rate thresholds unchanged. `TrendsMath.glucoseRate`'s `window` default carries the change, so the widget, the home-page header and any future Graph consumer move together.
+
+The staleness ladder is **not** touched: `staleAge` stays at 15 minutes.
+
+### Rationale
+
+30 minutes is twice the modal cadence, which is exactly what guarantees two consecutive readings fall inside it regardless of where `now` lands between marks. That is the property that fails at 15 minutes, and it is a property of the feed rather than a tuning constant — hence 30 rather than a rounder-sounding 20 or 60.
+
+Widening further buys nothing measurable: 45 minutes adds 0.1 percentage points, because the remaining ~1 % is genuine sensor gaps (the 515-minute outage, warm-up periods) that no window closes. Every extra minute of window only lengthens the regression baseline and slows the arrow, so 30 is where the curve flattens.
+
+The cost is real and was measured rather than assumed. Over the 1,233 minutes where both windows yield an arrow, the two agree on 1,007 (81.7 %). Of the 226 disagreements, 212 are one band apart — a longer baseline averages a swing into a gentler slope — and 14 (1.1 % of the co-derivable minutes) cross `steady` and so differ in sign. That is the trade: an arrow that is slightly laggy and occasionally one band gentle, roughly three times as often as no arrow at all. For MVP an arrow that is usually present and directionally right beats one that is absent two thirds of the time; a 15-minute-resolution arrow is not achievable from a 15-minute feed by any windowing choice.
+
+Leaving `staleAge` at 15 minutes is deliberate and independently evidenced: the newest reading is 15 minutes old or less 87.9 % of the time, so the ladder is not the thing suppressing the arrow, and loosening it would let a genuinely old value render as current. It also means the window being wider than `staleAge` never surfaces an arrow beside a value the ladder already calls stale — the stale rung carries no trend by construction.
+
+### Alternatives Considered
+
+- **Leave the window at 15 minutes**: no change, arrow stays maximally responsive when it appears — Rejected: it appears in only a third of the eligible minutes on the actual feed, which is indistinguishable from a broken feature.
+- **Lower `minSpan` below 10 minutes instead of widening the window**: keeps the short baseline — Rejected: it does not address the failure. The problem is one reading in the window, not a short span; and it reinstates exactly the noise amplification `minSpan` exists to prevent.
+- **45- or 60-minute window**: marginally more coverage — Rejected: +0.1 pp for a baseline half again as long. The residual is sensor outage, not window width.
+- **Interpolate or resample the feed onto a 5-minute grid before fitting**: would restore a short-baseline fit — Rejected as fabrication: it invents readings the sensor never produced and would feed the same fictitious points to the arrow that the user reads as measurement.
+- **Different windows for the widget and the home page**: tune each to its surface — Rejected: two derivations of the same quantity is precisely what home-router Decision 15 collapsed into one shared `GlucoseSnapshotSource`.
+
+### Consequences
+
+**Positive:**
+- The arrow is present in 99.1 % of eligible minutes on the measured feed, against 33.5 %.
+- The window is now derived from an observed cadence rather than an assumed one, and the evidence is recorded here for the next time it is questioned.
+- Widget, home header and any future Graph consumer stay in lockstep — one default, one change.
+
+**Negative:**
+- The arrow lags: it describes up to 30 minutes of history, so a sharp turn shows up later and gentler than it would on a 5-minute feed.
+- 1.1 % of the time it points the opposite way to the 15-minute fit, which is a real if rare wrong direction near a turning point.
+- The rate thresholds were chosen for a 15-minute baseline and have not been re-derived for a 30-minute one; the band edges are now approximate.
+- The window is pinned to one device's feed. Another sensor or account with a true 5-minute cadence gets an unnecessarily long baseline.
+
+### Impact
+
+`TrendsMath.glucoseRate` default `window`, its tests, `glucose-lock-widget` Reqs 3.1/3.3/3.4, and both consumers of `GlucoseSnapshotSource` (the widget publisher and the home-page header). **Follow-up, deliberately deferred:** re-derive the rate thresholds for the 30-minute baseline, and make the window adapt to the observed cadence rather than being pinned — recorded as `glucose-lock-widget` task 15.
+
+---
+
+## Decision 16: The widget fetches its own reading when the app is suspended
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The task 14 device pass closed with one defect: the widget often falls out of sync until the phone is unlocked or the app is opened. This is the Decision 11 architecture behaving as built — the snapshot publisher only runs while the app process is alive, background reloads ride a best-effort `BGAppRefreshTask`, and terminal timeline states wait on the app's explicit reload. The staleness window also made the StandBy-day render unverifiable, since StandBy runs precisely while the phone is docked and locked. The developer's verdict: up-to-date data is what makes the widget useful.
+
+While the phone is locked with the app suspended, only the widget's own process can act. There is no push server, `BGAppRefreshTask` carries no frequency guarantee, and HealthKit is not a wake source for this sensor — Abbott's writes arrive late and batched (glucose-ingestion note, corrected 2026-08-05).
+
+### Decision
+
+`getTimeline` fetches the latest LibreLinkUp readings itself when the stored snapshot is at least one poll interval old, gated by a single shared vendor-request timestamp in the App Group. The shared poll interval is **5 minutes** — one constant in `LibreLinkUpKit` adopted by the app's `pollInterval` and the gate alike, so the steady-state vendor request rate is one fetch per 5 minutes regardless of which process asks. The interval itself is cgm-connect Decision 13's call (uniform 5-minute baseline, superseding the adaptive scheme, with a recorded rollback to 15 minutes on vendor rate-limit signals); this decision only binds the gate to that shared constant. The gate is advisory (no cross-process atomicity); rare overlapping fetches are accepted. The fetch is display-only: it rewrites the shared snapshot; the app's database remains the source of record and ingests the same readings on its own poll. The widget never re-logins — on a 401 it falls back to the stored snapshot and leaves auth repair to the app. Requirement 6.2 is redefined in place (it previously forbade widget-side fetching) and Reqs 6.3/6.4 state the shared budget and fallback.
+
+### Rationale
+
+Every alternative leaves the locked-phone window unfixed. The widget process is the only process iOS reliably wakes while the phone is locked (on the WidgetKit timeline budget), lock-screen and StandBy widgets receive those wakes, and the LLU keychain items are already `AfterFirstUnlock` so a locked fetch can authenticate. The shared rate gate holds the combined app+widget rate to one fetch per interval, so Decision 16 adds surfaces without adding traffic beyond what cgm-connect Decision 13 already accepts. Packaging as a Foundation-only `LibreLinkUpKit` keeps GRDB out of the appex, preserving Decision 12's constraint.
+
+### Alternatives Considered
+
+- **Status quo (BGAppRefresh + unlock-driven refresh)**: Already built - Rejected: measured insufficient; Apple's own guidance is that BackgroundTasks offers no frequency guarantee, and the field evidence is the widget staying stale until unlock.
+- **HealthKit background delivery as the wake source**: OS-immediate wakes on sample writes - Rejected: recorded 2026-08-05 as wrong for this sensor; Abbott's HealthKit writes are late and batched (zero healthkit rows on the primary device), so the wake fires on already-stale data.
+- **Live Activity with frequent updates**: Higher update budget - Rejected: updates still originate from the app process or a push server the project does not have; it is a different surface, not a fix for the Lock Screen widget.
+- **Push notifications / server-driven reload**: Real push freshness - Rejected: requires a server and an account infrastructure; contradicts the project's local-only posture and is far out of MVP scope.
+
+### Consequences
+
+**Positive:**
+- The widget self-heals while the phone stays locked — the actual usefulness window; StandBy-day colour becomes verifiable at all.
+- The shared gate holds the combined app+widget rate to the one-per-interval budget Decision 13 (cgm-connect) sets — the widget adds surfaces, not traffic.
+- Screenshot-import-only users see zero widget network activity (policy stays `.never` without a connected flag).
+
+**Negative:**
+- Network code enters the widget extension, reversing the original "renders solely from the snapshot" simplicity; the appex gains a keychain-sharing entitlement and re-provisioning churn.
+- The shared snapshot can briefly lead the database until the app's next catch-up.
+- Still not real-time: WidgetKit wakes are budgeted and best-effort, and the 5-minute vendor cadence (cgm-connect Decision 13) is the floor — the staleness ladder remains load-bearing.
+
+### Impact
+
+Req 6 (redefined in place), the extension-side refresh section of design.md, `LibreLinkUpKit` extraction from `GlucoseIngestion`, the pure snapshot derivation moving from `Persistence` to `GlucoseWidgetShared`, `LibreLinkUpGlucoseSource` adopting the shared rate gate, shared-storage migration of the LLU flag/host/patientId and keychain items, and both targets' entitlements.
+
+---
+
+## Decision 17: The shared gate counts requests sent, and no wake is booked inside one interval
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 16.7's device pass found the widget showing a reading nearly ten minutes old while the app was suspended, recovering only when the app was opened — the same symptom Decision 16 set out to fix. Reading the shipped path turned up a scheduling defect that would produce exactly that shape without any of Decision 16's machinery being wrong.
+
+`LibreLinkUpRateGate.recordFetch` ran only after a good response, and `nextWake` booked the next reload at `lastFetch + interval`, floored at one second from now. So a failed vendor request left no record: the computed gate-reopen instant was already in the past, the floor collapsed the wake to "as soon as possible", and the extension asked to be re-run immediately — repeatedly, for as long as the failure lasted. WidgetKit answers those requests out of a small daily budget (tens of wakes, shared with every other widget on the device). A burst spends it, after which the widget receives no wakes for a long stretch and sits stale until the app republishes.
+
+The app-side poll had the same recording gap, without the same consequence: its retry cadence is its own timer, not the gate.
+
+### Decision
+
+Record the vendor request in the shared gate immediately **before** it is sent, on both sides, so a failed request closes the gate exactly as a successful one does. Floor the widget's next wake at one poll interval from now instead of one second. Requirement 6.3 is redefined in place: the gate records each request *sent*, not each *successful* fetch.
+
+### Rationale
+
+The gate exists to bound vendor traffic, and a request that fails has already been spent — the vendor saw it. Recording on send makes the gate's meaning match its purpose, and gives failure a backoff for free: the failed request's own record is what pushes the next wake out by an interval.
+
+The one-second floor was never useful. Every staleness transition is pre-baked as a timeline entry (Req 5.4), so the ladder advances with no reload at all; the only thing a wake can accomplish is a fetch, and a fetch inside the interval is refused by the gate. A wake sooner than one interval is therefore budget spent on nothing, and the budget is the scarce resource that keeps the locked-phone window working.
+
+### Alternatives Considered
+
+- **Record failures in a separate "last attempt" key**: Keeps "last successful fetch" available for diagnostics - Rejected: two timestamps for one budget, and every caller would have to consult both correctly to stay safe; the one thing either key is used for is deciding whether to spend a request.
+- **Exponential backoff on consecutive failures**: Standard remedy for a retry storm - Rejected: needs failure-count state shared across two processes, and one interval is already the cadence beyond which fetching is pointless — there is nothing for a longer backoff to protect.
+- **Leave the app side recording on success**: Smaller change - Rejected: it would make Req 6.3 true of one process and false of the other; the app's own comment already stated the intended rule ("the request is what the budget counts").
+- **Drop the floor entirely and return the raw gate-reopen instant**: Simplest code - Rejected: a past instant is a valid `.after` date that WidgetKit reads as "as soon as possible", which is the defect itself.
+
+### Consequences
+
+**Positive:**
+- A failing vendor call costs one request per interval instead of as many as WidgetKit will run, which is the churn task 16.7's ban-watch is looking for.
+- The reload budget is spent only on wakes that can fetch, so the locked-phone window gets the wakes it needs.
+- One rule for both processes: the gate counts requests.
+
+**Negative:**
+- A transient failure (a dropped connection at the wrong moment) now costs a full interval before the next attempt, where previously the retry was immediate.
+- A wake whose gate reopens in less than an interval is deferred to the full interval, so the widget's fetch cadence can drift up to one interval behind the app's.
+- Nothing records *successful* fetches distinctly any more; a future "last known good vendor contact" display would need its own timestamp.
+
+### Impact
+
+`GlucoseWidget.swift` (`refreshedSnapshot`, `nextWake`), `LibreLinkUpGlucoseSource.fetchAndIngest`, Req 6.3, and the refresh section of `docs/agent-notes/widget-extension.md`.
+
+---
+
+## Decision 18: The booked wake is advisory; staleness is the real reload clock, and `staleAge` stays 15 minutes
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 16.7's device pass collected three hours of tethered logs (`make logs-device LOG_LAST=3h`) with the app suspended for most of the window. Nine extension wakes were recorded. Every one booked `nextWakeSeconds=300`. None arrived at 300 seconds. The gaps were 20.1, 20.7, 20.1, 20.1, 22.2, 20.1 and 20.1 minutes — the one 15.0-minute gap was the app's own `publish.reloadRequested`, not a WidgetKit wake.
+
+The `com.apple.chrono` subsystem records why each reload happened. Across the window: **14 × `Reload widget for reason: stale`, 4 × `environmentMismatch`, 0 attributable to the booked timeline date.** Each staleness reload is preceded by `Widget is visible and effectively stale, reloading content.`
+
+Decision 17 reasoned about the booked wake as though it were the mechanism that schedules the extension, and floored it at one poll interval to avoid spending budget on wakes that could not fetch. The floor is right. The causal model behind it was not: the booked date is not what wakes this widget.
+
+### Decision
+
+Treat the `.after(date)` timeline policy as advisory rather than as a schedule. The reload cadence is a platform property — WidgetKit's staleness evaluation, gated on the widget being visible — and lands at roughly 20 minutes on this device.
+
+Keep `GlucoseTimeline.staleAge` at 15 minutes. Do **not** raise it to close the gap against the observed cadence, and do not lower the Decision 17 wake floor to chase a shorter one.
+
+### Rationale
+
+The floor from Decision 17 survives unchanged, and the evidence strengthens it: if the booked date is not honoured at all, booking one sooner cannot produce an earlier wake and can only spend budget.
+
+`staleAge` is a *truth threshold*, not a display-tuning knob. It answers "is this reading still meaningful?" — a question about the reading, not about the refresh schedule. Because it is also what WidgetKit's staleness timer keys on, raising it to 20 minutes would postpone the reload by the same 5 minutes it bought, and the widget would spend that time rendering a reading it had relabelled as fresh. In a health display, widening the fresh band to hide a stale state trades a visible, correct "stale" for an invisible, wrong "fresh". The stale render is the system working.
+
+The consequence must therefore be stated plainly rather than engineered away: with a 15-minute threshold and a ~20-minute cadence, the widget will routinely show stale for several minutes of each cycle, even with a perfect vendor feed and every part of Decision 16 working. That is the platform's floor on this display, not a defect in it.
+
+The field data supports the threshold on its own terms. Of nine wakes, eight rendered a reading 0–2.2 minutes old after `refreshedSnapshot` ran. The single stale render (29.8 minutes, `outcome=refreshed`) came from a genuine 45-minute vendor gap between the 19:10 and 19:55 readings — there was nothing fresher to fetch, which is exactly the case the threshold exists to expose.
+
+### Alternatives Considered
+
+- **Raise `staleAge` to 20–25 minutes to match the observed cadence**: Removes the routine stale render - Rejected: it relabels stale data as fresh rather than making it fresher, and because staleness is the reload trigger it would push the cadence out by roughly the same amount, reproducing the gap one rung higher.
+- **Lower the booked wake below one interval to request more reloads**: More chances to refresh - Rejected: reverts Decision 17 for a mechanism the logs show is not in play; the reloads are staleness-driven, so the extra requests buy nothing and spend the budget that the locked-phone window depends on.
+- **Request reloads from the app on a background timer to drive the widget**: Sidesteps WidgetKit scheduling - Rejected: the app is suspended for exactly the window this is meant to cover, which is the premise of Decision 16.
+- **Treat the ~20-minute cadence as a device-specific artifact and re-measure before concluding**: Cautious - Partially adopted: the cadence figure is device-specific and recorded as such, but the *trigger* (`reason: stale`, zero booked-date reloads) is a mechanism observation that does not depend on the number.
+
+### Consequences
+
+**Positive:**
+- The refresh model in the notes now matches what the platform does, so future scheduling work starts from the measured mechanism rather than the assumed one.
+- Decision 17's floor is retained on stronger evidence.
+- A stale reading stays labelled stale, which is the honest rendering for a health value.
+
+**Negative:**
+- The widget will show stale for part of most cycles, and that is now an accepted property rather than an open bug — it needs saying in the requirements so it is not re-raised as a defect.
+- The cadence was measured on one device over one three-hour window with the widget periodically visible; "visible" is part of the trigger, so some of the regularity may reflect how often the phone was woken. A locked-and-untouched stretch would separate the two.
+- Nothing here improves the locked-phone window; it establishes what its ceiling is.
+
+### Impact
+
+`GlucoseTimeline.staleAge` (unchanged, now load-bearing by decision), the refresh section of `docs/agent-notes/widget-extension.md`, and Decision 17's rationale, which is amended rather than superseded.
+
+---
+
+## Decision 19: The published snapshot must be monotonic in `readingDate`
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The same device pass caught the app publishing an older reading over a newer one at launch:
+
+```
+21:12:50.144  trigger=prime  was=…10:55:00Z  now=…09:55:00Z  lagSeconds=4670
+21:12:50.418  trigger=tick   was=…09:55:00Z  now=…11:10:00Z  lagSeconds=170
+```
+
+While the app was suspended, the widget's own fetches (Decision 16) advanced the App Group snapshot to the 10:55Z reading. On launch, `GlucoseWidgetPublisher`'s prime write read the trailing rows from the database — whose newest row was the 09:55Z reading from before the app was suspended — and published it, moving the shared snapshot back by an hour. The tick 274 ms later fetched fresh data and published 11:10Z, correcting it.
+
+`widget-extension.md` already records that "the shared snapshot can now briefly lead the database" and that this is intended. The publisher was never taught it: it writes when the value **differs** from what is stored, which is a change test, not an ordering test.
+
+### Decision
+
+Gate the publish on the candidate reading being strictly newer than the stored snapshot's `readingDate`, in addition to the existing difference check. A publish carrying an older reading is dropped, not written. Prime and tick both go through the guard.
+
+### Rationale
+
+Once two processes write the same snapshot from different sources — one from persistence, one from the vendor — "has it changed?" stops being sufficient, because change is symmetric and time is not. Decision 16 created that second writer deliberately and accepted that the snapshot may lead the database; the ordering guard is the invariant that makes leading safe rather than merely tolerated.
+
+The observed exposure was 274 ms and self-correcting, which is why this is a guard and not an architecture change. But its size is incidental: the correcting tick is a vendor fetch that can fail or be refused by the shared gate, and the prime path runs at exactly the moment a user has opened the app to look at a number. A stale-by-an-hour reading rendered as fresh is the failure this display exists to avoid.
+
+Deriving the guard from `readingDate` rather than from wall-clock write order is what makes it correct across two processes with no shared clock discipline — the reading's own timestamp is the only ordering both writers already agree on, and both already carry it in the snapshot.
+
+### Alternatives Considered
+
+- **Have the widget write its fetched readings back into the database**: Removes the divergence at the source - Rejected: puts GRDB, or a second write path into persistence, inside a 30 MB extension — the constraint Decision 16 was built to respect. The notes state plainly that nothing reads the snapshot back into persistence.
+- **Skip the prime write when the stored snapshot is recent**: Smaller change, no ordering logic - Rejected: "recent" is a second threshold to pick and defend, and it fails the case this actually guards — a stored reading that is recent *and* newer than what prime holds.
+- **Let the tick correct it, as it already does**: No code change - Rejected: relies on a network call that Decision 17 can legitimately refuse, at the one moment the user is looking at the display.
+- **Compare on value equality alone (status quo)**: Already implemented - Rejected: it is the defect; an hour-old reading with a different value is "changed" and gets written.
+
+### Consequences
+
+**Positive:**
+- The shared snapshot becomes monotonic, so the widget can never render backwards regardless of which process wrote last.
+- Makes the "snapshot may lead the database" property from Decision 16 an enforced invariant rather than a comment.
+- The guard is a pure comparison on data both writers already carry — testable on the package side, no new state.
+
+**Negative:**
+- A genuine correction that lowers `readingDate` — a vendor retraction, or a clock adjustment on the device — would now be refused. No such case has been observed, but the guard would hide it if it occurred.
+- Adds an ordering rule that any future writer of the snapshot must also honour; a third writer that skips it reintroduces the defect silently.
+- Prime becomes a conditional write, so "the app was launched" no longer implies "the snapshot was rewritten" when reading logs.
+
+### Impact
+
+`App/GlucoseWidgetPublisher.swift` (the publish gate, both prime and tick paths), `GlucoseSnapshotStore`, and the data-flow section of `docs/agent-notes/widget-extension.md`. Tracked as task 16.9.
+
+---

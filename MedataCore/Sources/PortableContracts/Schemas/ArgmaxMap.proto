@@ -1,0 +1,11 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+// PORTABLE CONTRACT: pixels is UInt8 row-major [H × W], top-left origin (per §6.0).
+message ArgmaxMap {
+    bytes pixels = 1;
+    int32 height = 2;
+    int32 width = 3;
+}

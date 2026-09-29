@@ -1,0 +1,436 @@
+import CaptureKit
+import Foundation
+import PortableContracts
+import Segmentation
+import SupportPlane
+
+// Two-view voxel carving with class-ownership rule per design §6.6. Pure Swift
+// reference implementation. The equivalent Metal kernel lives in
+// Kernels/voxel_carve.metal for GPU dispatch on device (Apple Silicon UMA via
+// `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`).
+
+public struct VoxelCarveView: Sendable {
+    public let probabilities: ProbabilityTensor
+    public let intrinsics: CameraIntrinsics
+    /// The REGULARISED label map for this view — what `MaskMatcher`,
+    /// `VoxelGridSizer`, the review outline and persistence all read. When it
+    /// is present a pixel is in the silhouette only if its label is carvable;
+    /// when it is nil the legacy soft test `(1 − q[bg]) ≥ τ_sil` on the raw
+    /// tensor is used instead.
+    ///
+    /// Why the label map wins (two-view-trust, 2026-09-25): the soft test
+    /// admits every pixel with half its probability mass spread across
+    /// non-background channels, and `ObjectReconciler.relabel` then piles all
+    /// carvable channels into one, so a pixel with no winning class passes.
+    /// On bundle `1790318627741` that halo was 138,671 px against 108,531 px
+    /// of label-food in the nadir (+28 %) and 77,932 against 60,949 in the
+    /// oblique — a footprint ~40 % larger than the roll's real ~84 cm²,
+    /// carved before height even enters. Every shipping caller (Pipeline,
+    /// FixtureRunner) supplies the map; the nil case is for synthetic tests
+    /// that build a tensor and no label map.
+    public let argmax: ArgmaxMap?
+
+    public init(probabilities: ProbabilityTensor, intrinsics: CameraIntrinsics,
+                argmax: ArgmaxMap? = nil) {
+        self.probabilities = probabilities
+        self.intrinsics = intrinsics
+        self.argmax = argmax
+    }
+}
+
+public struct VoxelCarveEstimate: Sendable {
+    public let perClassVolumesCm3: [String: Float]
+    public let ambiguousVoxelFraction: Float
+    public let voxelGridSummary: PbVoxelGridSummary
+    public let perClassVoxelCount: [String: Int]
+    public let degradedClasses: Set<String>      // single-view-only fallback used
+
+    public init(perClassVolumesCm3: [String: Float], ambiguousVoxelFraction: Float,
+                voxelGridSummary: PbVoxelGridSummary, perClassVoxelCount: [String: Int],
+                degradedClasses: Set<String>) {
+        self.perClassVolumesCm3 = perClassVolumesCm3
+        self.ambiguousVoxelFraction = ambiguousVoxelFraction
+        self.voxelGridSummary = voxelGridSummary
+        self.perClassVoxelCount = perClassVoxelCount
+        self.degradedClasses = degradedClasses
+    }
+}
+
+public enum VoxelCarveEstimator {
+    public static let tauSilhouette: Float = 0.5
+    public static let tauOwnership: Float = 0.04
+    public static let singleViewPriorHeightMm: Float = 30
+    public static let minVoxelCountForClass: Int = 30
+
+    public struct Inputs: Sendable {
+        public let grid: VoxelGrid
+        public let view1: VoxelCarveView
+        public let view2: VoxelCarveView
+        public let transform1To2: Mat4              // p_2 = T · p_1
+        public let supportPlane: SupportPlane
+        public let matchedClasses: Set<Int>         // classes_in_both_views (food only)
+        public let singleViewOnlyClassesView1: Set<Int>
+        public let singleViewOnlyClassesView2: Set<Int>
+        public let beta: BetaCorrection
+        public let palette: ClassPalette
+
+        public init(grid: VoxelGrid, view1: VoxelCarveView, view2: VoxelCarveView,
+                    transform1To2: Mat4, supportPlane: SupportPlane,
+                    matchedClasses: Set<Int>,
+                    singleViewOnlyClassesView1: Set<Int>,
+                    singleViewOnlyClassesView2: Set<Int>,
+                    beta: BetaCorrection, palette: ClassPalette) {
+            self.grid = grid
+            self.view1 = view1
+            self.view2 = view2
+            self.transform1To2 = transform1To2
+            self.supportPlane = supportPlane
+            self.matchedClasses = matchedClasses
+            self.singleViewOnlyClassesView1 = singleViewOnlyClassesView1
+            self.singleViewOnlyClassesView2 = singleViewOnlyClassesView2
+            self.beta = beta
+            self.palette = palette
+        }
+    }
+
+    public static func carve(_ inputs: Inputs) -> VolumeOutcome<VoxelCarveEstimate> {
+        let grid = inputs.grid
+        let palette = inputs.palette
+        let bgId = palette.background
+        let liquidId = palette.unsupportedLiquid
+
+        let probs1 = inputs.view1.probabilities
+        let probs2 = inputs.view2.probabilities
+        guard probs1.classes == palette.totalClasses,
+              probs2.classes == palette.totalClasses else {
+            return VolumeOutcome(
+                estimate: nil,
+                stats: VolumeStats(),
+                refusal: .mismatchedViewDimensions(
+                    "probability tensors must match palette.totalClasses=\(palette.totalClasses)"
+                )
+            )
+        }
+        for (view, probs) in [(inputs.view1, probs1), (inputs.view2, probs2)] {
+            guard let a = view.argmax else { continue }
+            guard a.width == probs.width, a.height == probs.height else {
+                return VolumeOutcome(
+                    estimate: nil,
+                    stats: VolumeStats(),
+                    refusal: .mismatchedViewDimensions(
+                        "argmax \(a.width)×\(a.height) ≠ probabilities \(probs.width)×\(probs.height)"
+                    )
+                )
+            }
+        }
+
+        // Per-class voxel ownership sets are flattened into a count map.
+        var counts: [Int: Int] = [:]
+        var passedSilhouettePlaneTest = 0
+        var ambiguousCount = 0
+        // Voxels that pass the silhouette test in both views but resolve to no
+        // owning class — previously silently skipped (Req 3.2).
+        var ownerlessVoxelCount = 0
+
+        // Walk every voxel. The 8×8×8 threadgroup constraint on the Metal kernel is
+        // satisfied by §6.10 (dims are multiples of 8); the CPU reference walks the
+        // full grid directly.
+        let classList = inputs.matchedClasses.sorted()
+        withOptionalLabels(inputs.view1.argmax) { labels1 in
+        withOptionalLabels(inputs.view2.argmax) { labels2 in
+        probs1.bytes.withUnsafeBytes { rawP1 in
+            let buf1 = rawP1.bindMemory(to: Float16.self).baseAddress!
+            probs2.bytes.withUnsafeBytes { rawP2 in
+                let buf2 = rawP2.bindMemory(to: Float16.self).baseAddress!
+                for iz in 0..<grid.dimsZ {
+                    for iy in 0..<grid.dimsY {
+                        for ix in 0..<grid.dimsX {
+                            let p1 = grid.voxelCentre(ix: ix, iy: iy, iz: iz)
+                            if signedDistanceToPlane(p1, plane: inputs.supportPlane) < 0 {
+                                continue
+                            }
+                            guard let u1 = projectCamera1(inputs.view1.intrinsics, p1) else { continue }
+                            let (u1x, u1y) = u1
+                            if !pixelInside(u: u1x, v: u1y, width: probs1.width, height: probs1.height) {
+                                continue
+                            }
+                            let p2 = applyMat4(inputs.transform1To2, p1)
+                            guard let u2 = projectCamera1(inputs.view2.intrinsics, p2) else { continue }
+                            let (u2x, u2y) = u2
+                            if !pixelInside(u: u2x, v: u2y, width: probs2.width, height: probs2.height) {
+                                continue
+                            }
+
+                            let pix1 = nearestPixel(u: u1x, v: u1y,
+                                                    width: probs1.width, height: probs1.height)
+                            let pix2 = nearestPixel(u: u2x, v: u2y,
+                                                    width: probs2.width, height: probs2.height)
+                            let off1 = (pix1.y * probs1.width + pix1.x) * probs1.classes
+                            let off2 = (pix2.y * probs2.width + pix2.x) * probs2.classes
+
+                            // In-silhouette in BOTH views, against the label
+                            // map when there is one (see `VoxelCarveView`).
+                            if !inSilhouette(labels: labels1, probs: buf1,
+                                             pixelIndex: pix1.y * probs1.width + pix1.x,
+                                             classOffset: off1, backgroundId: bgId,
+                                             palette: palette) { continue }
+                            if !inSilhouette(labels: labels2, probs: buf2,
+                                             pixelIndex: pix2.y * probs2.width + pix2.x,
+                                             classOffset: off2, backgroundId: bgId,
+                                             palette: palette) { continue }
+
+                            passedSilhouettePlaneTest += 1
+
+                            // Per-pixel-pair argmax over classes_in_both_views, in FP32.
+                            var bestScore: Float = 0
+                            var bestClass: Int = -1
+                            for c in classList {
+                                let qc1 = Float(buf1[off1 + c])
+                                let qc2 = Float(buf2[off2 + c])
+                                let score = qc1 * qc2
+                                if score > bestScore {
+                                    bestScore = score
+                                    bestClass = c
+                                }
+                            }
+                            if bestClass < 0 {
+                                ownerlessVoxelCount += 1
+                                continue
+                            }
+                            if bestClass == liquidId { continue }      // safety
+                            if bestScore < tauOwnership {
+                                ambiguousCount += 1
+                                continue
+                            }
+                            counts[bestClass, default: 0] += 1
+                        }
+                    }
+                }
+            }
+        }
+        }
+        }
+
+        // Single-view-only fallback per §6.6: extrude silhouette to π_sup at a 30 mm
+        // prior height for any class that appears only in one view.
+        //
+        // `unknown_food` is exempt from the OBLIQUE-only fallback (bugfix
+        // two-view-unknown-carve). The sentinel marks pixels the model cannot
+        // name; the nadir is the primary silhouette on both capture paths
+        // (Pipeline's coverage gate reads it), and an unknown region only the
+        // oblique view labels is not evidence of food on the plate — on
+        // 2026-09-24 it extruded the oblique frame's unknown pixels into
+        // 1148 cm³ and 317 cm³ rows beside a plate with no unknown pixels
+        // from above. Named classes keep the fallback from either view, and an
+        // unknown region the nadir sees alone still carries (unknown-food-
+        // nameable Req 3).
+        var fallbackVolumesMm3: [Int: Double] = [:]
+        var raySkipCount = 0
+        let fallbackClasses1 = inputs.singleViewOnlyClassesView1.filter { palette.isCarvableClass($0) }
+        let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter {
+            palette.isCarvableClass($0) && $0 != palette.unknownFood
+        }
+        for c in fallbackClasses1 {
+            let extruded = singleViewExtrudedVolumeMm3(
+                classId: c, view: inputs.view1,
+                supportPlane: inputs.supportPlane, palette: palette
+            )
+            fallbackVolumesMm3[c] = extruded.volumeMm3
+            raySkipCount += extruded.degenerateRaySkips
+        }
+        for c in fallbackClasses2 {
+            let extruded = singleViewExtrudedVolumeMm3(
+                classId: c, view: inputs.view2,
+                supportPlane: inputs.supportPlane, palette: palette
+            )
+            fallbackVolumesMm3[c] = extruded.volumeMm3
+            raySkipCount += extruded.degenerateRaySkips
+        }
+
+        // Volumes: mm³ → cm³ → β-correct. Pre/post-β and threshold-discard
+        // detail is retained in VolumeStats on both exits (Req 3.1/3.2).
+        let voxelVolumeMm3 = Double(grid.edgeMm) * Double(grid.edgeMm) * Double(grid.edgeMm)
+        var perClassVolumes: [String: Float] = [:]
+        var perClassVoxelCount: [String: Int] = [:]
+        var degraded: Set<String> = []
+        var foodClassesPresent: [String] = []
+        var preBeta: [String: Float] = [:]
+        var postBeta: [String: Float] = [:]
+        var betaApplied: [String: Float] = [:]
+        var thresholdDiscarded: Set<String> = []
+
+        for (classId, count) in counts {
+            guard let name = palette.volumetricClassName(at: classId) else { continue }
+            let mm3 = Double(count) * voxelVolumeMm3
+            let preCm3 = Float(mm3 / 1000.0)
+            let beta = inputs.beta.beta(for: name)
+            let cm3 = preCm3 * beta
+            preBeta[name] = preCm3
+            postBeta[name] = cm3
+            betaApplied[name] = beta
+            guard count >= minVoxelCountForClass else {
+                thresholdDiscarded.insert(name)
+                continue
+            }
+            perClassVolumes[name] = cm3
+            perClassVoxelCount[name] = count
+            foodClassesPresent.append(name)
+        }
+        for (classId, mm3) in fallbackVolumesMm3 {
+            guard let name = palette.volumetricClassName(at: classId) else { continue }
+            let preCm3 = Float(mm3 / 1000.0)
+            let beta = inputs.beta.beta(for: name)
+            let cm3 = preCm3 * beta
+            preBeta[name] = preCm3
+            postBeta[name] = cm3
+            betaApplied[name] = beta
+            if cm3 < 1 {                                // tiny-class refusal
+                thresholdDiscarded.insert(name)
+                continue
+            }
+            perClassVolumes[name] = cm3
+            degraded.insert(name)
+            foodClassesPresent.append(name)
+        }
+
+        let stats = VolumeStats(
+            perClassVolumesPreBetaCm3: preBeta,
+            perClassVolumesPostBetaCm3: postBeta,
+            betaApplied: betaApplied,
+            thresholdDiscardedClasses: thresholdDiscarded.sorted(),
+            degenerateVoxelSkipCount: ownerlessVoxelCount,
+            degenerateRaySkipCount: raySkipCount
+        )
+
+        if foodClassesPresent.isEmpty {
+            return VolumeOutcome(estimate: nil, stats: stats, refusal: .noFoodVolumeRecovered)
+        }
+
+        let ambiguous: Float = passedSilhouettePlaneTest > 0
+            ? Float(ambiguousCount) / Float(passedSilhouettePlaneTest)
+            : 0
+
+        let summary = VoxelGridSizer.summary(grid, perClassVoxelCount: perClassVoxelCount)
+
+        let estimate = VoxelCarveEstimate(
+            perClassVolumesCm3: perClassVolumes,
+            ambiguousVoxelFraction: ambiguous,
+            voxelGridSummary: summary,
+            perClassVoxelCount: perClassVoxelCount,
+            degradedClasses: degraded
+        )
+        return VolumeOutcome(estimate: estimate, stats: stats, refusal: nil)
+    }
+
+    // MARK: - helpers
+
+    // Silhouette membership for one pixel of one view: the regularised label
+    // map when the view carries one, the raw tensor's (1 − q[bg]) ≥ τ_sil
+    // otherwise.
+    @inline(__always)
+    static func inSilhouette(
+        labels: UnsafePointer<UInt8>?, probs: UnsafePointer<Float16>,
+        pixelIndex: Int, classOffset: Int, backgroundId: Int, palette: ClassPalette
+    ) -> Bool {
+        if let labels {
+            return palette.isCarvableClass(Int(labels[pixelIndex]))
+        }
+        return (1 - Float(probs[classOffset + backgroundId])) >= tauSilhouette
+    }
+
+    @inline(__always)
+    static func withOptionalLabels<R>(
+        _ map: ArgmaxMap?, _ body: (UnsafePointer<UInt8>?) -> R
+    ) -> R {
+        guard let map else { return body(nil) }
+        return map.pixels.withUnsafeBytes { raw in
+            body(raw.bindMemory(to: UInt8.self).baseAddress!)
+        }
+    }
+
+    static func pixelInside(u: Float, v: Float, width: Int, height: Int) -> Bool {
+        u >= 0 && v >= 0 && u < Float(width) && v < Float(height)
+    }
+
+    static func nearestPixel(u: Float, v: Float, width: Int, height: Int) -> (x: Int, y: Int) {
+        let x = max(0, min(width - 1, Int(u.rounded(.down))))
+        let y = max(0, min(height - 1, Int(v.rounded(.down))))
+        return (x, y)
+    }
+
+    // Single-view extrusion: silhouette pixels in the given view, extruded a fixed
+    // 30 mm down to π_sup. Each silhouette pixel contributes its metric area at the
+    // food-plane depth multiplied by the prior height. Per §6.6, this is the
+    // degraded fallback used when a class is missing from one view. Degenerate
+    // rays (plane parallel to the ray, or intersection behind the camera) are
+    // counted rather than silently skipped (Req 3.2).
+    static func singleViewExtrudedVolumeMm3(
+        classId: Int, view: VoxelCarveView,
+        supportPlane: SupportPlane, palette: ClassPalette
+    ) -> (volumeMm3: Double, degenerateRaySkips: Int) {
+        let probs = view.probabilities
+        let k = view.intrinsics
+        let bgId = palette.background
+        let liquidId = palette.unsupportedLiquid
+        let fMean = (k.fx + k.fy) / 2
+        var totalMm3: Double = 0
+        var raySkips = 0
+        withOptionalLabels(view.argmax) { labels in
+        probs.bytes.withUnsafeBytes { raw in
+            let buf = raw.bindMemory(to: Float16.self).baseAddress!
+            for y in 0..<probs.height {
+                for x in 0..<probs.width {
+                    let off = (y * probs.width + x) * probs.classes
+                    // The extruded silhouette is the same region as the carve's:
+                    // the label map's pixels of this class when there is a map,
+                    // the tensor's soft test plus a carvable argmax otherwise.
+                    if let labels {
+                        if Int(labels[y * probs.width + x]) != classId { continue }
+                    } else {
+                        let qBg = Float(buf[off + bgId])
+                        if (1 - qBg) < tauSilhouette { continue }
+                        // argmax over carvable classes only (solid food, unknown).
+                        var bestC = -1
+                        var bestQ: Float = -1
+                        for c in 0..<probs.classes {
+                            if !palette.isCarvableClass(c) { continue }
+                            if c == liquidId { continue }
+                            let q = Float(buf[off + c])
+                            if q > bestQ { bestQ = q; bestC = c }
+                        }
+                        if bestC != classId { continue }
+                    }
+
+                    // Compute pixel area at food-plane depth via ray-plane intersection.
+                    let dir = Vec3(
+                        (Float(x) - k.cx) / k.fx,
+                        (Float(y) - k.cy) / k.fy,
+                        -1
+                    ).normalised()
+                    let denom = supportPlane.normal.dot(dir)
+                    if abs(denom) < 1e-9 {
+                        raySkips += 1
+                        continue
+                    }
+                    let alpha = supportPlane.distanceMm / denom
+                    if alpha <= 0 {
+                        raySkips += 1
+                        continue
+                    }
+                    let pFood = dir * alpha
+                    let zT = abs(pFood.z)
+
+                    let du = Float(x) - k.cx
+                    let dv = Float(y) - k.cy
+                    let denomRoot = (fMean * fMean + du * du + dv * dv).squareRoot()
+                    let cosTheta = fMean / denomRoot
+                    let cos3 = cosTheta * cosTheta * cosTheta
+                    let aP = (zT * zT) / (k.fx * k.fy * cos3)
+                    totalMm3 += Double(aP * singleViewPriorHeightMm)
+                }
+            }
+        }
+        }
+        return (totalMm3, raySkips)
+    }
+}

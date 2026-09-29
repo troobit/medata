@@ -1,0 +1,16 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+// Right-handed, +X right, +Y up, -Z forward (camera looks along -Z); per design §6.0.
+message Vec3 {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+
+// Column-major 4x4. Storage: m[col*4 + row]; m[0..3] = column 0, etc. Per design §6.0.
+message Mat4 {
+    repeated float m = 1;  // exactly 16 entries
+}

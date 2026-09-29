@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Medata — Wireframes v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Caveat:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles/wireframe.css" />
+<style>
+  body { margin: 0; background: #f0eee9; font-family: "Inter", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="screens/shell.jsx"></script>
+<script type="text/babel" src="screens/capture.jsx"></script>
+<script type="text/babel" src="screens/result.jsx"></script>
+<script type="text/babel" src="screens/supporting.jsx"></script>
+<script type="text/babel" src="screens/trends.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "showAnnotations": true
+}/*EDITMODE-END*/;
+
+const Wrap = ({ children, anno }) => (
+  <div className="artboard-wrap">
+    {children}
+    {anno}
+  </div>
+);
+
+const App = () => {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(() => {
+    if (t.showAnnotations) document.body.classList.remove("no-annot");
+    else document.body.classList.add("no-annot");
+  }, [t.showAnnotations]);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="core" title="Medata — core flow" subtitle="Selected directions · capture A · result A">
+          <DCArtboard id="capture" label="Capture · telemetry + bubble level" width={400} height={740}>
+            <Wrap anno={
+              <>
+                <Annot style={{ top: 60, left: -160, width: 150 }}>
+                  Two-step rail<br/>shows progress.<br/>Single-view path<br/>auto-skips step 2
+                </Annot>
+                <Annot style={{ top: 200, right: -150, width: 140 }} tone="ok">
+                  Bubble-level<br/>—familiar metaphor.<br/>Green when within ±5°
+                </Annot>
+                <Annot style={{ bottom: 160, left: -160, width: 150 }}>
+                  Live telemetry<br/>tilt / dist / sensor<br/>—no chatty copy,<br/>data only
+                </Annot>
+                <Annot style={{ bottom: 50, right: -150, width: 140 }}>
+                  Mode toggle:<br/>1-view / 2-view<br/>(reqs. §3.5)
+                </Annot>
+              </>
+            }><CaptureA /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="result" label="Result · single-number hero" width={400} height={740}>
+            <Wrap anno={
+              <>
+                <Annot style={{ top: 90, right: -160, width: 150 }}>
+                  Hero number first.<br/>1g rounding per req §12.4.<br/>Confidence chip below
+                </Annot>
+                <Annot style={{ top: 280, left: -170, width: 160 }}>
+                  Per-class breakdown<br/>tucked below — visible<br/>without scroll, but<br/>hero is the answer
+                </Annot>
+                <Annot style={{ bottom: 120, right: -160, width: 150 }} tone="warn">
+                  Protein &amp; fat<br/>reserved as dashed<br/>chips — layout won't<br/>shift when they land
+                </Annot>
+              </>
+            }><ResultA /></Wrap>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="trends" title="Trends — historical graphs" subtitle="Carbs + blood glucose over time · metric toggles · scale options">
+          <DCArtboard id="trends-day" label="Day view · dual axis" width={400} height={740}>
+            <Wrap anno={
+              <>
+                <Annot style={{ top: 130, left: -170, width: 160 }} tone="warn">
+                  Glucose line (mmol/L,<br/>left axis) from CGM /<br/>meter import — amber,<br/>never confused w/ carbs
+                </Annot>
+                <Annot style={{ top: 210, right: -160, width: 150 }}>
+                  Carb bars sit at<br/>meal timestamps<br/>(right axis, g)
+                </Annot>
+                <Annot style={{ top: 320, right: -160, width: 150 }} tone="ok">
+                  Green band =<br/>target range<br/>3.9–10 mmol/L
+                </Annot>
+                <Annot style={{ bottom: 220, left: -160, width: 150 }}>
+                  Chips include/exclude<br/>metrics inline.<br/>Protein &amp; fat dashed<br/>= future
+                </Annot>
+                <Annot style={{ bottom: 60, right: -150, width: 140 }}>
+                  Meals listed under<br/>graph — tap → result<br/>screen for that meal
+                </Annot>
+              </>
+            }><Trends /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="trends-week" label="Week view · daily totals" width={400} height={740}>
+            <Wrap anno={
+              <>
+                <Annot style={{ top: 160, right: -160, width: 150 }}>
+                  Week rolls up to<br/>total carbs/day (bars)<br/>+ avg glucose (line)
+                </Annot>
+                <Annot style={{ bottom: 140, left: -170, width: 160 }} tone="ok">
+                  Glucose import is<br/>read-only — stated<br/>plainly in UI
+                </Annot>
+              </>
+            }><TrendsWeek /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="trends-options" label="Graph options sheet" width={400} height={740}>
+            <Wrap anno={
+              <>
+                <Annot style={{ top: 240, left: -170, width: 160 }}>
+                  Per-metric toggles.<br/>Source of each metric<br/>named under label
+                </Annot>
+                <Annot style={{ bottom: 130, right: -160, width: 150 }}>
+                  Scale: auto or fixed<br/>y-max — fixed helps<br/>day-to-day comparison
+                </Annot>
+              </>
+            }><TrendsOptions /></Wrap>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="flow" title="Supporting screens" subtitle="Fork · segmentation · error · correction · data · overview · settings · about">
+          <DCArtboard id="lidar-fork" label="LiDAR vs no-LiDAR fork" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 80, right: -150, width: 140 }} tone="ok">
+                Quick path is the<br/>recommended one<br/>per req §3.5
+              </Annot>
+            }><LidarFork /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="seg" label="Segmentation review" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ bottom: 200, right: -160, width: 150 }} tone="warn">
+                Unknown / liquid<br/>regions surfaced as<br/>banners — graceful<br/>per §8.6 / §8.7
+              </Annot>
+            }><Segmentation /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="error" label="Capture error · tilt off" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 110, left: -160, width: 150 }} tone="warn">
+                Soft failure: bubble<br/>turns amber, ghost<br/>copy says what's wrong,<br/>"skip to 2-view" escape hatch
+              </Annot>
+            }><Errors /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="correction" label="Manual correction" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ bottom: 120, left: -160, width: 150 }}>
+                Original value<br/>preserved alongside<br/>correction (§14.2)
+              </Annot>
+            }><Correction /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="history" label="Data (meal log)" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 100, right: -160, width: 150 }}>
+                Anonymous rows — no<br/>meal names. Carbs +<br/>time + confidence.<br/>Tap → meal overview
+              </Annot>
+            }><History /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="overview" label="Meal overview" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 150, left: -170, width: 160 }}>
+                Between Result and<br/>Segmentation review:<br/>masked photo + total<br/>+ per-class σ in one view
+              </Annot>
+            }><MealOverview /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="settings" label="Settings" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 90, right: -150, width: 140 }}>
+                "Account" greyed out<br/>= placeholder for<br/>future sign-in
+              </Annot>
+            }><Settings /></Wrap>
+          </DCArtboard>
+          <DCArtboard id="about" label="About / Legal" width={360} height={720}>
+            <Wrap anno={
+              <Annot style={{ top: 130, right: -160, width: 150 }}>
+                CoFID OGL v3<br/>attribution required<br/>by §11.1
+              </Annot>
+            }><About /></Wrap>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel>
+        <TweakSection label="Display" />
+        <TweakToggle label="Designer annotations" value={t.showAnnotations}
+          onChange={(v) => setTweak("showAnnotations", v)} />
+      </TweaksPanel>
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

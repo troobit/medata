@@ -1,0 +1,16 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+message SupportPlane {
+    Vec3 normal = 1;                            // unit vector, ≈ gravity, per §6.0
+    float distance = 2;                         // signed mm from camera origin (note: design §6 uses mm)
+    float residual_mm = 3;                      // RANSAC inlier σ
+    // Iteration count for card-only fit; oneof distinguishes "absent" (LiDAR fit) vs "present".
+    oneof converged_iterations_oneof {
+        int32 converged_iterations = 4;
+    }
+}

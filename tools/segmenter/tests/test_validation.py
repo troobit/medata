@@ -1,0 +1,176 @@
+"""Validation reporting + export-eligibility tests (model-production task 8).
+
+Pure decision logic over synthetic per-class IoU inputs (Req 3.2 / 3.5 / 3.6):
+a checkpoint is export-eligible only when mean food-class IoU >= 0.48 AND every
+carb-priority staple >= 0.45 (re-derived bars, segmenter-foundation Decisions 5
+and 14; were 0.60/0.50). Independent of the gated GPU run that produces the
+real IoUs — these tests feed fixed synthetic IoUs.
+"""
+
+import json
+
+import pytest
+
+import validation
+
+
+def _food_iou(value: float) -> dict[str, float]:
+    """Every food class at ``value`` (special channels are excluded by the reporter)."""
+    return {name: value for name in validation.food_class_names()}
+
+
+# The committed mapping file is regenerated to the 36-channel v2 order by the
+# dataset-bridge context (myfoodrepo-bridge tasks); the v2 expectations below are
+# integration-gated and activate automatically once channel_count reads 36.
+_COMMITTED_MAPPING_IS_V2 = (
+    json.loads(validation._MAPPING_PATH.read_text()).get("channel_count") == 36
+)
+
+
+# ── Bars / set contract ─────────────────────────────────────────────────────────
+
+def test_bars_and_carb_priority_set_match_spec():
+    # Re-derived bars: segmenter-foundation Decision 5 (gate) and Decision 14 (floors).
+    assert validation.MEAN_IOU_BAR == 0.48
+    assert validation.CARB_PRIORITY_IOU_BAR == 0.45
+    assert validation.CARB_PRIORITY_CLASSES == (
+        "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
+        "potato_boiled", "potato_mashed", "chips_fries",
+    )
+    # Carb-priority staples are a subset of the food classes.
+    assert set(validation.CARB_PRIORITY_CLASSES) <= set(validation.food_class_names())
+
+
+@pytest.mark.skipif(
+    not _COMMITTED_MAPPING_IS_V2,
+    reason="class_mapping_foodseg103.json still v1/35-channel — the "
+           "dataset-bridge context regenerates it to v2; lock activates on "
+           "integration",
+)
+def test_v2_palette_has_cereal_and_three_sentinels():
+    foods = validation.food_class_names()
+    assert "cereal" in foods
+    assert len(foods) == 33  # 36-channel v2 minus the 3 special channels
+    assert set(validation.special_channel_names()) == {
+        "background", "unknown_food", "unsupported_liquid",
+    }
+
+
+# ── Export-eligibility decision (Req 3.2 / 3.5) ─────────────────────────────────
+
+def test_eligible_when_mean_and_carb_priority_pass():
+    report = validation.evaluate(_food_iou(0.70))
+    assert report["export_eligible"] is True
+    assert report["mean_iou"] >= validation.MEAN_IOU_BAR
+    assert report["shortfall"] == []
+    assert set(report["carb_priority_iou"]) == set(validation.CARB_PRIORITY_CLASSES)
+
+
+def test_not_eligible_when_mean_below_bar():
+    # Mean 0.46 < 0.48, even though each carb-priority staple clears its 0.45 floor.
+    report = validation.evaluate(_food_iou(0.46))
+    assert report["export_eligible"] is False
+    assert any(s["class"] == "mean" for s in report["shortfall"])
+
+
+def test_not_eligible_when_a_carb_priority_class_below_floor():
+    # Mean is high, but one staple dips under the 0.45 per-class floor (Req 3.5):
+    # a mean alone would hide it (Decision 6).
+    iou = _food_iou(0.90)
+    iou["white_rice"] = 0.40
+    report = validation.evaluate(iou)
+    assert report["mean_iou"] >= validation.MEAN_IOU_BAR
+    assert report["export_eligible"] is False
+    failing = {s["class"] for s in report["shortfall"]}
+    assert "white_rice" in failing
+
+
+def test_missing_carb_priority_class_is_a_shortfall():
+    # A staple absent from the held-out IoU report cannot prove the floor (Req 3.6).
+    iou = _food_iou(0.90)
+    del iou["pasta"]
+    report = validation.evaluate(iou)
+    assert report["export_eligible"] is False
+    assert "pasta" in {s["class"] for s in report["shortfall"]}
+
+
+# ── Reporting (Req 3.3) ─────────────────────────────────────────────────────────
+
+def test_reports_mean_per_class_and_carb_priority():
+    iou = _food_iou(0.65)
+    report = validation.evaluate(iou)
+    assert report["per_class_iou"] == iou
+    assert report["carb_priority_iou"] == {
+        c: 0.65 for c in validation.CARB_PRIORITY_CLASSES
+    }
+    assert abs(report["mean_iou"] - 0.65) < 1e-9
+
+
+def test_special_channels_excluded_from_mean():
+    iou = _food_iou(0.70)
+    # Background near zero must NOT drag the food-class mean down.
+    iou["background"] = 0.0
+    report = validation.evaluate(iou)
+    assert abs(report["mean_iou"] - 0.70) < 1e-9
+
+
+# ── Lineage recording (Req 3.4) ─────────────────────────────────────────────────
+
+def test_records_metrics_into_lineage():
+    lineage = {"metrics": {"mean_iou": None, "per_class_iou": None, "carb_priority_iou": None}}
+    out = validation.record_metrics_into_lineage(lineage, _food_iou(0.70))
+    metrics = out["metrics"]
+    assert metrics["mean_iou"] is not None
+    assert metrics["per_class_iou"] == _food_iou(0.70)
+    assert set(metrics["carb_priority_iou"]) == set(validation.CARB_PRIORITY_CLASSES)
+    assert metrics["export_eligible"] is True
+    assert metrics["shortfall"] == []
+
+
+def test_records_shortfall_into_lineage_when_sub_bar():
+    lineage = {"metrics": validation.empty_metrics() if hasattr(validation, "empty_metrics") else {}}
+    out = validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
+    metrics = out["metrics"]
+    assert metrics["export_eligible"] is False
+    assert metrics["shortfall"]  # non-empty: records what fell short
+
+
+# ── Developer-phase release override (Decision 11) ──────────────────────────────
+
+def test_release_override_is_attributable_and_keeps_gate_truthful():
+    lineage = {"metrics": {}}
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
+    validation.record_release_override(lineage, "  dev-phase normal-use testing ")
+    metrics = lineage["metrics"]
+    assert metrics["export_eligible"] is False  # gate verdict untouched
+    assert metrics["release_override"] == {
+        "allowed": True,
+        "reason": "dev-phase normal-use testing",
+        "authorised_by": "developer",
+    }
+
+
+def test_release_override_requires_a_reason():
+    with pytest.raises(ValueError):
+        validation.record_release_override({"metrics": {}}, "   ")
+
+
+def test_release_allowed_truth_table():
+    eligible = validation.evaluate(_food_iou(0.70))
+    below = validation.evaluate(_food_iou(0.30))
+    overridden = {"metrics": dict(below)}
+    validation.record_release_override(overridden, "dev-phase")
+
+    assert validation.release_allowed(eligible) is True
+    assert validation.release_allowed(below) is False
+    assert validation.release_allowed(overridden["metrics"]) is True
+
+
+def test_revalidation_drops_a_stale_override():
+    # A new metrics outcome must need a fresh, deliberate override.
+    lineage = {"metrics": {}}
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
+    validation.record_release_override(lineage, "dev-phase")
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.35))
+    assert "release_override" not in lineage["metrics"]
+    assert validation.release_allowed(lineage["metrics"]) is False

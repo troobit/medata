@@ -1,0 +1,15 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+message VoxelGridSummary {
+    float edge_mm = 1;                          // 3.0 by default (§6.10)
+    int32 dims_x = 2;                           // multiples of 8
+    int32 dims_y = 3;
+    int32 dims_z = 4;
+    Vec3 origin_camera1 = 5;                    // mm, camera-1 frame per §6.0
+    map<string, int32> per_class_voxel_count = 6;
+}

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- cgm-connect Req 2: HealthKit read access for the glucose source, plus
+	     background delivery so HKObserverQuery wakes fire while backgrounded
+	     (required for enableBackgroundDelivery since iOS 15). The signing
+	     profile must have HealthKit enabled for a device install. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.background-delivery</key>
+	<true/>
+	<!-- glucose-lock-widget Req 1: shared container between the app and the
+	     MeDataWidgets extension. The app writes the glucose snapshot into
+	     UserDefaults(suiteName: group.rtob.MeData); the widget reads it.
+	     MeDataWidgets.entitlements MUST carry the same group, and both
+	     signing profiles must include the App Group for a device install. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.rtob.MeData</string>
+	</array>
+	<!-- glucose-lock-widget Decision 16: the widget fetches from LibreLinkUp
+	     itself while the app is suspended, so the credentials and session
+	     keychain items must be readable from BOTH processes. The same group
+	     must appear in MeDataWidgets.entitlements, and the value here has to
+	     match LibreLinkUpKeychain.accessGroup once $(AppIdentifierPrefix)
+	     expands. Adding this re-mints the provisioning profiles — the first
+	     device build after it may need -allowProvisioningUpdates. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)rtob.MeData.shared</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,64 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "BetaCorrectionTable.proto";
+import "CameraIntrinsics.proto";
+import "ConfidenceResult.proto";
+import "MacroResult.proto";
+import "MetricScale.proto";
+import "RawFrameMetadata.proto";
+import "SupportPlane.proto";
+import "UserCorrection.proto";
+import "VolumeResult.proto";
+
+option swift_prefix = "Pb";
+
+// Ranked alternative classes the segmenter's own output supported over one
+// detected food's pixels (estimation/alternative-class-candidates Req 1).
+//
+// Parallel arrays rather than one message per candidate: the record persists as
+// protobuf-JSON (Decision 31), where per-candidate object framing costs ~50 B
+// and would carry the worst case to ~2.2 KB, over double the Req 4.4 budget
+// (Decision 10). Equal lengths are an invariant the writer enforces and every
+// reader checks — a mismatch reads as no evidence for that class, never as an
+// error.
+message CandidateSet {
+    repeated string class_names = 1;    // ranked, at most 5 (Req 1.5)
+    repeated uint32 mean_permille = 2;  // parallel to class_names, 0...1000
+}
+
+message MealRecord {
+    string id = 1;                              // UUID string
+    int64 created_at_ms = 2;                    // unix epoch ms
+    CapturePath capture_path = 3;
+    string database_edition = 4;
+    repeated RawFrameMetadata frames = 5;
+    CameraIntrinsics calibration = 6;
+    SupportPlane support_plane = 7;
+    MetricScale scale = 8;
+    VolumeResult volumes = 9;
+    MacroResult macros = 10;
+    ConfidenceResult confidence = 11;
+    map<string, BetaCalibrationStatus> per_class_calibration = 12;
+    UserCorrection user_correction = 13;        // optional
+    // PHAsset.localIdentifier for the original captured nadir frame saved to the
+    // user's Photos library (Decision 37, Req §17.3). Empty string when the user
+    // denied PHAuthorizationStatus(for: .addOnly) — estimation still completes.
+    string photo_asset_id = 14;
+    // Identifier for the segmenter that produced this meal (Decision 42, Req §23.6).
+    // Phase 1 records carry "dev_stub"; Phase 3 records carry "coreml_<modelVersion>".
+    // The result view branches on this string (not on the build flag) so a Phase 1
+    // record viewed under a later Phase 3 build still surfaces the placeholder banner.
+    string segmenter_source = 15;
+    // Retained alternative-class evidence, keyed by detected class name
+    // (estimation/alternative-class-candidates Req 4.1). Sets are retained for
+    // at most the five detected classes with the greatest sampled support
+    // (Decision 10).
+    map<string, CandidateSet> candidate_evidence = 16;
+    // Whether the evidence pass ran for this capture, independent of how many
+    // sets qualified (Decision 4). Absence of evidence on a record that predates
+    // the spec, lost it to a palette migration, or never ran the pass is not the
+    // same fact as a computed but empty set, and Req 8.1's denominator is the
+    // population where the pass ran.
+    bool candidate_evidence_produced = 17;
+}

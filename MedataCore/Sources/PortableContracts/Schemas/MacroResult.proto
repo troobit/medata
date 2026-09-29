@@ -1,0 +1,14 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "ClinicalMacros.proto";
+import "PerClassMacros.proto";
+
+option swift_prefix = "Pb";
+
+message MacroResult {
+    float total_carbs_g = 1;                    // displayed rounded to 1 g (Req 12.4) but persisted full precision (Req 12.5)
+    map<string, PerClassMacros> per_class = 2;
+    ClinicalMacros clinical_totals = 3;
+    bool liquid_over_estimate = 4;              // both liquid estimate paths over-read (nutrition5k-calibration Req 8.2, Decision 19)
+}

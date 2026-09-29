@@ -1,0 +1,149 @@
+# Depth-grown food region
+
+Spec: `specs/estimation/depth-grown-food-region/` (smolspec + decision log).
+Code: `MedataCore/Sources/Volume/FoodRegionGrowth.swift`; wiring in
+`Pipeline.estimate` (single-view branch) and `HarnessCore/FixtureRunner.run`.
+
+## What it does
+
+Grows every food-like region of the regularised nadir label map into the
+raised depth slab around it before volume, so a food the segmenter only
+partly recognises (the 2026-09-24 sesame roll: 0.5 % of the frame labelled,
+7 % raised) is measured whole. The single-view LiDAR branch integrates over
+the grown map. Since two-view-trust Decision 10 the two-view branch runs the
+same sequence but takes the PLANE only: the carve silhouette, the review
+outline and the persisted mask stay the segmenter's own (see "Two-view: plane
+only" below).
+
+Order matters and is the whole design: **grow → refit → prune.**
+
+The sequence lives in one place, `Volume/GrownRegionPlaneRefit.refit`, with
+the fitter injected as a closure (`SupportPlaneFitter.fitOutcome` on device,
+`LiDARSupportPlaneFitter.fitFromDepth` in the harness — the same code under
+the wrapper). `Pipeline.refitPlaneFromGrownRegion` adds the pipeline's own
+consequences of an adopted plane (diagnostics row, LiDAR rescale, the
+`event=region.grow` line); `FixtureRunner.refitPlaneFromGrownRegion` is the
+replay twin and `CarveResidualAudit`'s `grownRefit` variant calls it too, so
+the audit reports the plane production adopts, not a raw refit.
+
+1. `FoodRegionGrowth.grow` — multi-source BFS on the 256×192 depth grid from
+   the cells under food-like colour pixels. A neighbour is admitted when
+   |Δz| ≤ `cliffMm`, confidence ≥ `HeightFieldEstimator.tauConfidence`, and
+   its height above the **support surface** ≥ `floorMm`. First arrival
+   labels a cell. Over `frameFractionCap` of the frame → the input is
+   returned with `capTripped`.
+2. The pipeline refits the plane with the grown mask (`supportPlaneFitter.
+   fitOutcome`), and adopts it (plus recomputes the LiDAR metric scale) only
+   when step 3 leaves added pixels.
+3. `FoodRegionGrowth.prune` — the same height test against the plane the
+   volume will use, plus the seed band (Decision 4): height above that
+   surface ≥ the seed cells' median height − `seedBandMm`.
+
+Grown pixels bypass the integrator's probability silhouette test through
+`HeightFieldEstimator.Inputs.grownRegion`; nothing else in the integrator
+changes, so ungrown estimates are byte-identical.
+
+## The support surface, and why continuity alone failed
+
+The first plane is fitted before segmentation from the pre-shutter mask. On
+an `edgeBand` fallback it is the **table**, and the fitter's ring median is
+the plate top's height above it (+18…+26 mm on the corpus; 19.7 mm on the
+roll). `Pipeline.supportOffsetMm` / `SingleViewPlaneFit.supportOffsetMm`
+return that median on an `edgeBand` fit and 0 on `foodSupport`; growth
+measures height above plane + offset.
+
+The first draft admitted cells by depth continuity alone and pruned after the
+refit. The corpus sweep killed it in one run: at cliff 3, 4 and 6 mm the fill
+tripped the cap on 7 of 10 captures (the roll among them) and leaked 5–11 %
+of the frame on the other 3. ARKit's smoothed depth has no cliff at a food's
+edge — it is a slope of a few mm per cell. Do not reintroduce a
+continuity-only rule; the cliff now only stops the fill crossing a real drop.
+
+Known inert case: a first plane admitted as `foodSupport` on a flat food's own
+top (speck seed on a flat-topped food). Nothing is raised above it, growth adds
+nothing, and the estimate is today's.
+
+## Constants (Decision 1 table, 2026-09-24)
+
+`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm (floor was 3 mm until 2026-09-25, Decision 3; the band is Decision 4). The band is a second prune test: an added cell whose height above the support surface is more than 10 mm below the seed cells' median height is dropped. It exists because the first plane can sit 4–5° off the table — on `1790315900185` the plate read 6–16 mm above it with the food at 30 mm, so no fixed floor separates them, while a food-relative band does and the tilt cancels out of it (`HarnessCLI ... --growth-band-mm N`, 0 = no band). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
+Floor 2 mm let plate noise in (median added area on well-segmented plates
++40 %, one plate 2.5×); floor 3 mm reads +9 %; floor 5 mm dropped the roll's
+refit back to `edgeBand`. Cliff made no difference to the median; 3 was
+chosen over 6 for one unverifiable outlier. Sweep with
+`HarnessCLI accuracy --growth-cliff-mm C --growth-floor-mm F --growth-cap X`
+(cap 0 disables the pass and reproduces the ungrown numbers); it prints one
+`growth fixture=… before= after= applied= capTripped= refit= plane=` line per
+fixture on stderr. Only 10 single-view successes on `ab812dc3aa9d` load from
+the corpus; `1786450130307-success.fixture` is truncated at exactly
+170,000,000 bytes and must be excluded or the loader refuses the directory.
+
+## The sweep that gates the merge (Decision 2, re-run 2026-09-25)
+
+Decision 1's table came from the divergent replay path and is superseded by
+the re-run in Decision 2, over 20 single-view `ab812dc3aa9d` bundles (19
+scored) at commit `a785187`. Headline: at the shipped cliff 3 / floor 5 /
+cap 0.35 / band 10 the median added area on the 11 captures with at least
+5 % ungrown food-like area is **+0.5 %**, the largest single addition is
+**+36 %**, the **cap trips on nothing** anywhere in the grid (verified by
+re-running every no-growth cell at `--growth-cap 1.0`), and the roll
+`1790223818017` grows 0.49 % → 7.45 % of the frame with a `foodSupport`
+refit. That passes Req 8. Floor 3 with the band also passes (+5.5 % median),
+so the rule's "smallest floor" clause names floor 3 and the shipped floor 5
+is one notch above it, carried by Decision 3's device evidence and backed by
+the corpus on the two figures the median hides (largest addition halves;
+13 of 19 refits land `foodSupport` against 11 of 19). Against the corpus's
+three weighed plates, growth **costs** accuracy: carb mean absolute error
+rises 33.2 g → 40.4 g, all of it on `1785901032716`, an 80 g flat-bread plate
+that already read 3.2× over.
+
+Two practical corrections to the paragraph above. `HarnessCLI accuracy` is
+the wrong command for field bundles — they carry zero ground truth, so every
+meal is UNSCORED and it exits non-zero, and its loader holds the whole
+directory in memory; use `HarnessCLI volumes` one bundle at a time, which
+reports `foodPixelsBefore/After`, `refitReference`, `planeReference` and the
+per-class volumes as JSON. And the corpus has more than 10 loadable
+single-view successes: `captures/1786450130307-success.fixture` is the
+truncated copy, but `pulls/20260827-3/captures/1786450130307-success.fixture`
+is intact and loads, and `1785054950406` (the 208 g rice plate that once
+yielded zero meals) now replays at 636 cm³. Build the harness from a scratch
+copy of committed `HEAD` when other agents are editing the tree, or a
+mid-sweep rebuild will mix two binaries into one table.
+
+## Two-view: plane only (two-view-trust Decision 10)
+
+The two-view branch fitted its plane once and never refitted; the carve
+residual audit (`two-view-geometry-audit.md` §7 (c)) measured that as the one
+structural difference between the branches, worth 6–23 % on two of five
+bundles. The plane is both the carve's floor and the origin the grid height is
+measured from, so a first plane sitting on the table hands the carve a slab of
+hull under the food. `Pipeline`'s two-view branch now calls the same
+`refitPlaneFromGrownRegion` after reconciliation, with `planeOnly: true`:
+`plane`, `planeReference` and the LiDAR scale follow an adopted refit exactly
+as on the single-view branch; `measuredArgmax` and the carve silhouette do
+not. Growth here is a plane-fitting instrument, nothing else — do not pass
+`growth.grownRegion` or `growth.argmax` anywhere on that branch. If growth is
+ever gated or retired, the two-view refit falls back to a refit from the
+reconciled argmax, never silently to the first plane.
+
+Offline replay (`HarnessCLI carve-audit`, `volumes`) is the regression bar:
+the single-view rows are byte-identical to before the refactor, and the
+two-view rows moved only where the refit lands `foodSupport` and the pruned
+region stands.
+
+## Gotchas
+
+- The bundle keeps the segmenter's (ungrown) argmax; replay re-grows. The
+  mask artefact the review outline reads is the grown map on the single-view
+  branch and the segmenter's map on the two-view branch.
+- Outcome rows carry `regionGrowth.planeOnly` (`true` on the two-view
+  branch, `false` single-view, absent on rows written before it existed).
+- The colour-grid edge follows the bilinear depth contour, not the 7.5 × 7.5
+  px cell blocks: a pixel is added when its own bilinear depth clears the
+  floor and its cell or a 4-neighbour cell was filled (evening 2026-09-24,
+  after the "speckles around edge of roll" field note). Counts in tests are
+  therefore ranges, not cell multiples.
+- `pipelineStageLog` is Debug-only; `event=region.grow` is on
+  `supportPlaneLog` so it reaches the Release log.
+- Outcome rows carry `regionGrowth {applied, capTripped, foodPixelsBefore,
+  foodPixelsAfter, refitReference, refitRefused}`; the plane fields describe
+  the plane the volume used (the refit when adopted).

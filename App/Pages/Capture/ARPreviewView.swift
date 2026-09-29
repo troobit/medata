@@ -1,0 +1,52 @@
+import ARKit
+import CaptureKit
+import RealityKit
+import SwiftUI
+
+// Renders the live camera feed for the capture flow. `ARView.session` is
+// get-only, so the engine cannot be handed its own session to render; instead
+// the engine ADOPTS the ARView's session as the one authoritative `ARSession`
+// (Decision 11). This guarantees a single camera capture source — running a
+// second, separate ARSession alongside the ARView's contends for the camera
+// and produces capture-source failures and interruption churn.
+//
+// We bind at both makeUIView and updateUIView because RealityKit may reattach
+// itself as the session delegate; `bindPreviewSession` is idempotent and only
+// re-asserts the engine as delegate when the session is unchanged.
+//
+// `automaticallyConfigureSession: false` lets the engine own the configuration
+// (world tracking + scene depth) rather than ARView overriding it.
+struct ARPreviewView: UIViewRepresentable {
+    let engine: ARKitCaptureEngine
+
+    func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        // The preview is render-only: every control is SwiftUI chrome layered
+        // above it. ARView installs its own gesture recognisers and, as a real
+        // UIView, wins UIKit hit-testing over SwiftUI-drawn siblings regardless
+        // of `zIndex`/`allowsHitTesting` on the representable — which left the
+        // capture-error overlay's Retry/2-view buttons dead wherever the AR
+        // layer sat underneath (only Cancel, outside it, responded). Opting the
+        // view out of UIKit interaction entirely routes all touches to SwiftUI.
+        arView.isUserInteractionEnabled = false
+        bind(to: arView.session)
+        #if FIELD_LOOP
+        // Field-note screenshots of the capture screen need the AR content:
+        // `drawHierarchy` renders this Metal-backed layer black, so the
+        // composite path asks the view itself (App/FieldScreenshot.swift). The
+        // registry holds it weakly, so dismissing the cover needs no teardown.
+        FieldARViewRegistry.current = arView
+        #endif
+        return arView
+    }
+
+    func updateUIView(_ uiView: ARView, context: Context) {
+        bind(to: uiView.session)
+    }
+
+    // Testable seam shared by makeUIView and updateUIView (the SwiftUI
+    // `Context` has no public initialiser, so tests drive this directly).
+    func bind(to session: ARSession) {
+        engine.bindPreviewSession(session)
+    }
+}
