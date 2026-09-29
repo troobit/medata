@@ -84,7 +84,7 @@ The high-frequency pre-shutter `event=segmenter.mask` log (`.info`, ~2–3.5 Hz)
 **Manual / on-device (the acceptance gate — user step):**
 1. `make deploy-release` to put THIS build (with the logging fix + `06b86fa`) on device `you`; note the printed build stamp.
 2. Capture on the matte table (single-view). It will still refuse if the plane-fit bug is unfixed — that is expected this round.
-3. `make logs-device`. It should now show `event=launch buildStamp=<matches step 1>` AND `event=supportplane.end success=false failure=… candidates=… inliers=… residual_mm=… bboxW=… bboxH=…`.
+3. `make logs`. It should now show `event=launch buildStamp=<matches step 1>` AND `event=supportplane.end success=false failure=… candidates=… inliers=… residual_mm=… bboxW=… bboxH=…`. **Amended 2026-09-29:** that field list holds only for a refusal where a fit actually ran. A refusal that precedes any fit (the no-depth card-only branch) now logs `failure=… stats=unfitted` and no counters, because the counters it used to print were a default-constructed `SupportPlaneFitStats` — zeros and a −1 sentinel that read as measurements. Target `lidarFitDegenerate` to exercise the measured form.
 4. Those counters pinpoint the refusal (point-starvation vs degeneracy vs residual-too-high vs bbox geometry) → the plane-fit fix follows precisely, next round.
 
 ## Prevention

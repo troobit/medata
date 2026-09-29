@@ -26,7 +26,10 @@ give identical output; no RNG was added.
   the previous pass's plane — the polish can never fail a fit that previously
   succeeded.
 - `debugLastInlierCount` now reports the POLISHED inlier count (feeds the
-  `supportplane.end success=false` trace in `Pipeline.swift`).
+  `supportplane.end success=false` trace in `Pipeline.swift`). The `debugLast*`
+  statics were since replaced by `SupportPlaneFitStats` (snaq-parity), and as of
+  2026-09-29 that trace omits the counters entirely on a refusal that precedes
+  any fit (`stats=unfitted`).
 - Existing accuracy/determinism tests in
   `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` cover the
   polished path unchanged.

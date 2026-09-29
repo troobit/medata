@@ -286,7 +286,8 @@ roughly 20-minute support-plane corpus beam search, which is `make test-corpus`.
 both directories carry a `conftest.py` and the field-loop modules import theirs by
 name, so pytest cannot collect them together. Xcode's `python3` has no pytest, so
 this usually needs `PYTHON=/opt/homebrew/bin/python3` — the same escape hatch
-`make food-db` documents.
+`make food-db` documents. As of 2026-09-29 it is 129 food-DB tests and 255
+field-loop tests.
 
 The app-target files under `MeData/Tests/` and `MeData/UITests/` are
 documentation contracts, not an executable suite: no committed test target runs

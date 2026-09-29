@@ -46,6 +46,12 @@ Req 4; audit of its history in `two-view-geometry-audit.md` §3.
   exclusion it is integrated with a solid density.
 - Both estimators take the silhouette from the background probability, not the
   label map; clearing labels alone changes nothing.
+- **`scale_source` is attributed per capture since 2026-09-29.** It was NULL on
+  all 183 corpus rows because promotion ran only via an annotating note;
+  `ingest._attribute_captures` now reads each capture's own outcome. 84 rows
+  carry a source — two-view 34 `card+lidar` / 9 `lidar`, single-view 21
+  `card+lidar` / 20 `lidar` — so the `card+lidar` false-positive population is
+  finally countable. `scale_source = 'card'` alone is still 0 rows.
 - The card-only plane fitter is **never reached**: the no-depth branch of
   `SupportPlaneFitter` refuses with `noLowerSilhouetteEdges` rather than seeding
   from the card corners plus a constant offset, which is Req 4.4's refusal half

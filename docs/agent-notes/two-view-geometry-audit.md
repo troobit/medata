@@ -166,9 +166,14 @@ Vision returns on the device path to the pixel. What it measured on the two
   fit's food mask. ~15 s per 400 MB bundle, most of it protobuf decode.
 - The carve cannot be demonstrated on real bundles until §2 is fixed; the
   demo variants prove only that silhouettes are not the blocker.
-- Non-LiDAR volume replay (depth cleared, card branch) does not exist:
-  `FixtureRunner` requires depth. Card *detection* replays (above); the
-  card-only plane fit and the carve it would feed do not.
+- Non-LiDAR volume replay of the **card branch** does not exist. The blanket
+  "`FixtureRunner` requires depth" is no longer right: a depth-free two-view
+  fixture DOES replay, on `FixtureRunner`'s gravity-aligned nominal plane at
+  −300 mm, which since 2026-09-29 reports `residualMm = -1` so the run summary
+  cannot be mistaken for a fitted plane. Production refuses that same capture, so
+  **a successful harness carve there is not evidence of device behaviour** — the
+  parity gap is at this boundary. Card *detection* replays (above); the card-only
+  plane fit and the carve it would feed do not.
 
 ## 5. Object reconciliation before volume (2026-09-25, two-view-trust Decisions 5–6)
 

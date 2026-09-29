@@ -639,7 +639,7 @@ Route the pre-shutter (`.livePreview`) `segmenter.mask` log to `.debug`; keep th
 ### Consequences
 
 **Positive:**
-- `launch` and `supportplane.end` (with `candidates`/`inliers`/`residual_mm`/`bbox`) survive collection → plane-fit refusals are finally diagnosable on device.
+- `launch` and `supportplane.end` (with `candidates`/`inliers`/`residual_mm`/`bbox`) survive collection → plane-fit refusals are finally diagnosable on device. (Amended 2026-09-29: those counters are emitted only where a fit ran; a pre-fit refusal logs `stats=unfitted` instead, since the values printed there were placeholders.)
 - No estimation-path behaviour change; purely observability.
 - The build stamp is visible again, so "failed on device" can be tied to a known build.
 

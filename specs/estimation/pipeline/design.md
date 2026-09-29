@@ -279,7 +279,7 @@ Vision returns four corners in normalised coordinates; we convert to pixels and 
 public struct SupportPlane: Sendable {
     public let normal: simd_float3              // unit vector, ≈ gravity
     public let distance: Float                  // signed metres from camera origin
-    public let residualMm: Float                // RANSAC inlier σ
+    public let residualMm: Float                // RANSAC inlier σ (LiDAR); point-to-plane RMS (card, §6.3)
     public let convergedIterations: Int?        // nil for LiDAR fit; iter count for card-only
 }
 
