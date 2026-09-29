@@ -1096,3 +1096,165 @@ changes; what changes is that they are not the head of the chain.
 
 
 ---
+
+---
+
+## Decision 13: What supplies the food's support plane when there is no depth
+
+**Date**: 2026-09-29
+
+**Status**: proposed — this entry scopes the question and fixes what must be answered before any option is built. It decides no geometry.
+
+### Context
+
+Decision 8 established that a non-LiDAR two-view volume is not defensible without a
+height bound, and its follow-up established that the height bound is not what blocks
+first: `SupportPlaneFitter` refuses unconditionally when `nadir.depth == nil`, so
+Decisions 11 and 12 cannot bite in the field. The question this entry opens is the one
+immediately upstream — **what supplies `π_sup` on a capture with no depth** — and it is
+an MVP question, not a research one: not every user has a Pro, and the two-view + ID-1
+card path is what serves the rest (segmenter-foundation Decision 26).
+
+Five facts constrain it, all verified 2026-09-29 against the code and the corpus.
+
+**The card already carries a plane, and the fitter already receives it.**
+`CardPose` holds `cardNormalCameraFrame` and `translationMm`, which give
+$n \cdot X = n \cdot t$ — a complete plane. `SupportPlaneFitter.fit` takes `cardPose`
+as a parameter and discards it. So the missing quantity is not a plane; it is a
+*justified* one.
+
+**The normal was never missing either.** `nadir.gravity` is available with or without
+depth and is what `CardOnlyPlaneFitter` already uses for its normal. The only unknown
+is the plane's **distance along that normal** — one scalar.
+
+**That one scalar is first-order, not a rounding error.** The card lies on whatever it
+lies on; the food rests on the plate. `pipeline/requirements.md` documents a 26.1 mm
+support error producing a **2–3.6× volume over-read**. Worse, the error is not bounded
+by a percentage: adding a spurious support slab of thickness $\Delta h$ under a
+constant footprint adds $\approx A\Delta h$, so the relative error is
+$\Delta h / h_{\text{food}}$ — a 30 mm floor error beneath 5 mm of flat food is about
+**7× total volume**. "Bounded to 0–30 mm" is therefore not equivalent to "usable".
+
+**Req 4.3's evidence is asserted, not established.** It says to back-project the lower
+silhouette edges across **both** views and iterate. Three things are unproven: a
+silhouette pixel defines a ray, not a contact point; the bottom of a nadir silhouette
+of rounded food can lie above the contact patch; and corresponding boundaries in two
+views need not be the same physical points. The requirement assumes those edges already
+lie on the support surface, which is the claim the whole path rests on.
+
+**And the production interface cannot receive that evidence today.**
+`SupportPlaneFitter.fit` takes one nadir frame, a card pose, corners and one mask, and
+the plane fit runs *before* full nadir segmentation; oblique segmentation and the
+inter-view transform happen much later in `Pipeline`. Req 4.3 is a data-flow change, not
+an edge extractor.
+
+Two measurement caveats bear on any option. `scale_source` is now attributed per capture
+(84 of 183 rows) and `scale_source = 'card'` alone is still **0 rows** — the card has
+never supplied scale in production, so no option can assume a reliable card pose without
+first showing one. And the offline harness substitutes a nominal −300 mm plane where
+production refuses, so **no `carve-audit --no-depth` result is evidence of device
+behaviour** until that parity gap closes.
+
+### Decision
+
+The question is scoped as: *what justified support plane can a depth-free capture
+produce, and with what stated error, such that a volume derived from it is either
+defensible or explicitly refused?*
+
+Three things are decided now, all procedural:
+
+1. **No option is built before the three acceptance questions below are answered.** The
+   failure mode this path has already exhibited twice is a plausible plane with no
+   evidence behind it (the removed 20 mm constant; the nominal −300 mm harness plane).
+2. **The candidates to test first are Alternatives 2 and 4**, because each bounds the
+   unknown scalar with something measurable rather than asserting it away.
+3. **Harness/device parity is a prerequisite, not a follow-up.** While
+   `FixtureRunner` fabricates a plane where production refuses, no offline run can
+   validate any option here.
+
+### Rationale
+
+The unknown is one scalar, which makes this look cheap, and the arithmetic above is why
+it is not: the same 30 mm is negligible under a dome and catastrophic under a slice. Any
+option must therefore carry the offset's *uncertainty* into the output, not just a point
+estimate — which is a confidence question as much as a geometry one, and σ_plane is
+already mis-wired for it (Req 13.2's card-path caveat: acceptance gates on the iteration
+step while σ_plane consumes the residual).
+
+Alternatives 2 and 4 are preferred for testing because they differ in *where the evidence
+comes from* rather than in how the maths is arranged. Alternative 4 in particular may
+dissolve the problem rather than solve it: if the capture instruction puts the card on
+the food's own support surface, the offset collapses to the card's thickness (0.76 mm)
+and no silhouette reconstruction is needed at all. That is a product decision available
+today, and it has never been tested because the "include a card" guidance was marked done
+and never built (BACKLOG 27).
+
+### Alternatives Considered
+
+- **A1 — Card plane directly as the floor.** Cheapest; the pose is already in hand and
+  needs no new evidence. Rejected as a default: it silently assumes the card and the
+  food share a surface, and it fails worst exactly where the food is flattest, which is
+  the 7× case above. Viable only as a component of A2 or under A4's instruction.
+- **A2 — Card plane plus a stated support-offset interval.** Take the card plane as the
+  floor, carry an explicit offset interval (from plate/board geometry priors), propagate
+  it into the volume as an interval, and refuse when the interval dominates the estimate
+  rather than reporting a midpoint. Open: where the interval comes from, and whether the
+  refusal threshold leaves any usable population. Preferred candidate because the
+  uncertainty is in the output rather than in a comment.
+- **A3 — Req 4.3 as specified (lower silhouette edges across both views).** The
+  designed answer, and the only one that measures the offset from the capture itself.
+  Open, and the most expensive: it needs the data-flow change described above, and it
+  rests on the unevidenced assertion that silhouette bottoms are contact points. Not
+  rejected — it is the right end state if the assertion holds, and it should be tested
+  on synthetic renders where the contact patch is known before any pipeline rewiring.
+- **A4 — Require the card on the food's support surface, and say so.** Turns the
+  unknown into the card's thickness. Open: whether Vision detects an ID-1 card against a
+  plate or placemat (it already misses a yellow card on pale wood at 35°), and whether
+  the instruction is acceptable to a user putting a card next to their dinner. Preferred
+  candidate because it is a copy change plus a detection measurement, not a geometry
+  project.
+- **A5 — Nadir-only lowest-food-pixel back-projection at card scale.** Cheaper than A3
+  and was this session's first proposal. Rejected as specified: it contradicts Req 4.3's
+  "both views", and it inherits A3's ray-not-contact problem without A3's second view to
+  constrain it.
+- **A6 — Refuse and offer a portion picker instead.** Honest, and it is today's
+  behaviour in effect. Rejected as the end state because it abandons the capability the
+  non-LiDAR path exists to provide, and that path is MVP scope. Retained as the fallback
+  if A2, A3 and A4 all fail.
+
+### Acceptance questions
+
+No option proceeds to implementation until all three are answered in writing:
+
+1. **Where must the card sit, and what measurable relationship to the food's support
+   surface does that establish?** An answer names the surface, not a tolerance.
+2. **What image evidence recovers the support offset, including captures where the
+   contact boundary is hidden** (food overhanging its plate, a lipped bowl)? An answer
+   states what happens when the evidence is absent.
+3. **What end-to-end, depth-free test — on device *and* in the harness — recovers a
+   known geometry within a stated error?** It must fail today, and it stays an open task
+   until it passes. This is what closes the parity gap in Decision 13's prerequisite 3.
+
+### Consequences
+
+**Positive:**
+- The question upstream of Decisions 11 and 12 is written down, so the non-LiDAR work
+  has a head rather than a set of downstream tunings.
+- A4 offers a route that needs no geometry work, which has never been tested.
+- The acceptance questions make "a plausible plane" unshippable by construction.
+
+**Negative:**
+- Nothing ships from this entry. The non-LiDAR path continues to refuse, which is the
+  honest behaviour and the wrong product behaviour, and MVP scope includes it.
+- Prerequisite 3 (parity) is Swift work in `FixtureRunner` that buys no user-visible
+  improvement on its own.
+- A2 needs an uncertainty to be carried through the volume and into confidence, and
+  σ_plane's card-path wiring is already known to be wrong (Req 13.2).
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportPlaneFitter.swift` (the refusing branch),
+`CardOnlyPlaneFitter.swift` (built, unreachable), `Pipeline.swift` stages C and D
+ordering, `HarnessCore/FixtureRunner.swift` (parity), `Confidence.swift` (σ_plane),
+pipeline Reqs 4.3/4.5/13.2, and the capture guidance copy (BACKLOG 27). BACKLOG 26
+remains the tracker for the unbuilt Req 4.3 input.
