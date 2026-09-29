@@ -738,7 +738,7 @@ The Swift types in §3 are typealiases or thin wrappers over the generated proto
 | `cardTooOblique` | §6.1 step 7 (edge case 1) | Card seen >78° edge-on. Surface "place card flat in view" |
 | `lidarFitDegenerate` | §6.2 step 3 | Plane-fit covariance singular. Refuse, "place on flat surface" |
 | `lidarFitResidualTooHigh` | §6.2 step 5 / [4.5] | Residual >20 mm (raised from 8 mm per Decision 46). Refuse, "place on flat surface". Residuals in (8, 20] mm accept; σ_plane = exp(−r/5) carries the degradation. |
-| `iterationDiverged` | §6.3 / [4.3] | Card-only fit best-of-5 residual >1.5 mm. Refuse, "include card in nadir view" |
+| `iterationDiverged` | §6.3 / [4.3] | Card-only fit best-of-5 **step** (Δd, not the residual) >1.5 mm. Refuse, "include card in nadir view" |
 | `noScaleAvailable` | §6.4 / [7.5] | Neither card nor LiDAR scale. Refuse with message |
 | `noFoodPixels` | §6.5 step 12 / [13.1] (edge case 3) | Zero food pixels after silhouette test. Aligned with `(1−q[bg]) ≥ τ_sil`, NOT argmax=bg |
 | `noFoodVolumeRecovered` | §6.6 / §6.7 (edge case 2) | All classes below 1 cm³ post-correction |
@@ -1007,27 +1007,33 @@ Output: π_sup = (n̂, d), residual_mm
 
 ```
 Inputs: views v1, v2; card observation; gravity; s_card,init
-Output: π_sup, convergedIterations
+Output: π_sup, convergedIterations, residual_mm
 
 h_food_(0) := 0 mm                                              // initial food height above π_sup
 π_sup_(0)  := plane(normal=gravity, d=card_centre_depth)        // initial guess: π_sup at card depth
-best_residual := ∞
-best_plane    := null
-best_iter     := -1
+best_step  := ∞
+best_plane := null
+best_iter  := -1
 for k in 0..<5:
     s_card_(k) := s_card,init * (1 + h_food_(k) / d_card)         // food-plane lift
     edges := lower silhouette edges from v1, v2 back-projected with s_card_(k)
     π_sup_(k+1) := least-squares fit through edges, normal constrained to gravity
     h_food_(k+1) := mean (food_silhouette_centroid_height_above_π_sup_(k+1))
-    Δd := ||d_(k+1) − d_(k)||                                    // mm
-    if Δd < best_residual:
-        best_residual := Δd
-        best_plane    := π_sup_(k+1)
-        best_iter     := k+1
+    # TWO DISTINCT QUANTITIES. Δd is how far the plane MOVED and is the
+    # convergence and best-of-N measure; residual_mm is how far the edges LIE
+    # FROM it and is what π_sup reports. Conflating them let a stationary fit
+    # through scattered points claim a perfect one (corrected 2026-09-29).
+    Δd          := ||d_(k+1) − d_(k)||                             // mm, convergence
+    residual_mm := sqrt(mean((gravity·edge_i · s_card_(k) − d_(k+1))²))  // mm, fit quality
+    if Δd < best_step:
+        best_step  := Δd
+        best_plane := π_sup_(k+1) with residualMm = residual_mm
+        best_iter  := k+1
     if Δd < 1 mm: return best_plane, best_iter
 
-# Best-of-5 fallback: accept oscillating-but-bounded iterations
-if best_residual ≤ 1.5 mm: return best_plane, best_iter
+# Best-of-5 fallback: accept oscillating-but-bounded iterations. The gate is the
+# STEP, not the residual: a bounded oscillation is what this tolerates.
+if best_step ≤ 1.5 mm: return best_plane, best_iter
 throw iterationDiverged
 ```
 

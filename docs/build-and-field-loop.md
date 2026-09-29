@@ -132,6 +132,7 @@ make field-close      six guards → commits or proposals → verdict.json
 make field-report     alignment metrics                              (any time)
 make field-derive     training + calibration inputs                  (any time)
 make field-discard    reclaim the space both sides hold
+make field-export     the whole corpus as learnable JSONL            (any time)
 ```
 
 ### Getting material off the phone
@@ -243,6 +244,28 @@ a run stays a human step.
 make field-derive OUT=data/merged_foodseg_foodrec2022 IDENT=anthropic:claude-opus-5:2026-06
 make field-derive CALIBRATION_OUT=/tmp/field-calibration
 ```
+
+### Exporting the calculus
+
+`make field-export [OUT=<file>]` emits one JSONL record per capture. Every
+estimation quantity the device records lives in `outcomes.measurements_json` — a
+single opaque TEXT column that neither `field-report` nor `field-derive` reads —
+so this promotes it to named fields and joins each capture to its corrections and
+any weighed truth. Refused rows are included and are the point: a two-view
+refusal is the evidence the non-LiDAR fallback is measured on, and it is the row
+carrying both tilts and the card candidate count.
+
+**Sentinels export as null.** `SupportPlaneFitStats` documents `-1` as "the fit
+refused before a residual was computed", and the refusal path returns a
+default-constructed value, so a refused row's `candidates=0 inliers=0
+residual=-1` describes nothing having run. Exported raw those become zeros and a
+negative millimetre no fit produces. Each is emitted `null` with a
+`placeholders` list naming it, so a later training or calibration pass cannot
+learn from padding. On the corpus as of 2026-09-29: 183 rows, 289 suppressed
+placeholders.
+
+`fixture_present` says whether the bundle survived the last `field-discard` —
+`false` means the row is readable but not replayable.
 
 ### Where the corpus lives
 

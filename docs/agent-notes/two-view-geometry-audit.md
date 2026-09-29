@@ -99,13 +99,22 @@ citations): `scaleSource = "card"` has never been recorded in any corpus DB;
 every `"card+lidar"` row is Vision's rectangle detector firing on a plate rim
 or placemat (σ_scale disagreements of 17–66 % on the 2026-09-24 rows, no card
 in the scene); a false card can only raise σ_scale, never lower it;
-`CardOnlyPlaneFitter` is fed the card's own bottom corners plus a hard-coded
-20 mm "food centroid" instead of the food's lower silhouette edges (Req 4.3);
+`CardOnlyPlaneFitter` is **never called** — the no-depth branch refuses with
+`noLowerSilhouetteEdges` (commit `b916db1`; it formerly fabricated a plane from
+the card's bottom corners plus a hard-coded 20 mm "food centroid"), and the
+lower-silhouette-edge input it needs (Req 4.3) is unbuilt;
 the "include a card" reminder (iphone-experience Req 6.1) is marked done and
 not built; `includeCardThisCapture` has no readers; `noLidarConfidence` /
-`noCardConfidence` (pipeline Req 7.3/7.4) are unimplemented. The path that
-non-LiDAR phones must use has zero production observations and no tracker
-entry. Backlog 25–27 now carry it.
+`noCardConfidence` (pipeline Req 7.3/7.4) are unimplemented. The **no-depth
+card-only plane** path has zero successful production observations, and refuses
+by construction rather than for want of data. Backlog 25–27 carry it.
+
+**Attribution landed 2026-09-29.** `scale_source` was NULL on all 183 corpus
+captures because the promotion ran only per annotating note; it now runs from each
+capture's own outcome (`ingest._attribute_captures`). 84 rows are attributed —
+two-view 34 `card+lidar` / 9 `lidar` / 48 none, single-view 21 `card+lidar` /
+20 `lidar` / 51 none — so the buckets above are queryable rather than a claim.
+`scale_source = 'card'` alone is still 0 rows, so the sentence above stands.
 
 **Card detection replays off-device since 2026-09-25.** `VisionCardDetector`
 moved from the App target into the `CardDetectionVision` SwiftPM target

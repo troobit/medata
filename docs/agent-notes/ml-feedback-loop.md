@@ -533,6 +533,33 @@ tests only tried `\n`.
 invocations: the two test directories both carry a `conftest.py` and pytest
 cannot collect them together — see the gotcha below.
 
+### Attribution and Mac-side durability (2026-09-29)
+
+**A capture's scale source comes from its OWN outcome, not from an annotating
+note.** `ingest._attribute_captures` joins `(o.timestamp_ms || '-' || o.outcome) =
+c.stem`, which resolves for every capture. Before it, `_backfill_capture` ran only
+inside the note-join loop, so a capture gained a scale source only if a human
+happened to write a note about it: `scale_source` was NULL on all 183 corpus rows
+while 84 of their outcomes carried `scaleSource`, and Req 6.2 buckets a capture
+without one as `unattributable`. It is NULL-or-empty guarded, so re-ingest is a
+no-op and a value already promoted from a note is left alone. After the
+back-fill: two-view 34 `card+lidar` / 9 `lidar` / 48 none, single-view 21
+`card+lidar` / 20 `lidar` / 51 none.
+
+**A Mac-side weighed-truth link survives re-ingest.** `corpus.upsert_outcome`
+REPLACEs each outcome from the device, and the device has no row for a
+`benchmark_meals` entry back-filled on the Mac — so a hand-set
+`benchmark_meal_id` was silently destroyed by the next pull. Observed the same
+day: `field-derive` reported `ingested=1`, then `ingested=0` after
+`make field-discard`, whose own first step is a notes pull. The device now wins
+when it HAS a link; otherwise what is attached stands, the same first-seen rule
+`pull_id` already followed. Two regression tests in `test_pull_ingest.py`.
+
+**`support_plane_residual_mm` can be `-1`.** On a two-view replay of a depth-free
+fixture the harness uses a nominal plane, which since 2026-09-29 reports
+`residualMm = -1` rather than 0. Read it as "nominal plane, nothing fitted" — a
+consumer treating it as a measurement reads an invented plane as a perfect one.
+
 ### Where the corpus lives
 
 `<repo-parent>/medata-corpus/`, resolved by `corpus.corpus_root()` from

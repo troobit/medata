@@ -46,5 +46,8 @@ Req 4; audit of its history in `two-view-geometry-audit.md` §3.
   exclusion it is integrated with a solid density.
 - Both estimators take the silhouette from the background probability, not the
   label map; clearing labels alone changes nothing.
-- The card-only plane fitter (`LiDARSupportPlaneFitter`, no-depth branch) still
-  seeds from the card corners plus a constant offset (Req 4.4, open).
+- The card-only plane fitter is **never reached**: the no-depth branch of
+  `SupportPlaneFitter` refuses with `noLowerSilhouetteEdges` rather than seeding
+  from the card corners plus a constant offset, which is Req 4.4's refusal half
+  satisfied. Open is the other half — feeding `CardOnlyPlaneFitter` the food's
+  real lower silhouette edges (pipeline Req 4.3).

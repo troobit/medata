@@ -220,15 +220,20 @@ composition only; all behaviour is in the model and is unit-tested.
   `segment()` emits `event=segmenter.mask` at `.info` every call. Over a `log collect --last`
   window that floods the persisted unified-log store and EVICTS the low-frequency `.info`
   lines you actually need — `event=launch` (buildStamp) and `event=supportplane.end
-  success=false` (the plane-fit refusal counters: `candidates`/`inliers`/`residual_mm`/`bbox`).
+  success=false` (on a MEASURED refusal: `candidates`/`inliers`/`residual_mm`/`bbox`; on a
+  refusal that precedes any fit, just `failure=` and `stats=unfitted`).
   Symptom: `/tmp/medata-device.log` is only `segmenter.mask` lines in a few-second window,
   no launch/supportplane/estimate. Fixed (Decision 18 / `capture-log-flood-…`): the
   pre-shutter instance is built with `CoreMLSegmenter.MaskLogCadence.livePreview` → `.debug`
   (in-memory tier, does not evict persisted `.info`); the Pipeline's shutter-time segmenter
   keeps `.perCapture` → `.info`. Rule: a per-frame diagnostic MUST be `.debug`, never `.info`.
   Note: Stage D (SupportPlane) runs BEFORE Stage F (Segmentation), so on a "no flat surface"
-  refusal there is NO shutter-time `segmenter.mask` — the `supportplane.end` bbox counters are
-  your mask-quality proxy.
+  refusal there is NO shutter-time `segmenter.mask` — on a MEASURED refusal the
+  `supportplane.end` bbox counters are your mask-quality proxy. **`stats=unfitted` means
+  there is no proxy**: the branch refused before collecting a candidate, so the counters do
+  not exist (they were formerly printed as `candidates=0 … bbox=-1`, which read as a
+  measurement and misled two diagnoses on 2026-09-29). Read the outcome row instead — an
+  `EstimationAttemptRecord` still carries `planeResidualMm = -1` for that case.
 - **Speckled-coloured mask over the food photo is a MODEL artefact, not a stride/format
   bug.** The whole image pipeline (YCbCr→BGRA `PixelBufferAdapter`, `canonicaliseToRGB8`,
   letterbox preprocess, `CoreMLSegmenter` CHW↔HWC auto-detect, `PostProcessing` argmax,

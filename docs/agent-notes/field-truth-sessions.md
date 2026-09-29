@@ -512,14 +512,24 @@ What it settles:
   sessions. That spread, not either figure, is the honest number.
 - **The two-view path produced nothing.** Six of seven captures `refused`. Four
   logged estimates each ran
-  `supportplane.end success=false failure=noLowerSilhouetteEdges candidates=0
-  inliers=0` (bbox all −1) → `estimate.degraded reason=unbounded_carve_height` →
-  `estimate.end success=false failure=noSupportPlaneWithoutDepth`. Both photos
-  were fine every time (`capture.end success=true`, 1920×1440); one separate
-  oblique failed `worldTrackingDegraded`. **`noLowerSilhouetteEdges` with zero
-  candidates is the head of that chain** — the height-bound work in
-  two-view-trust Decisions 8/11 is downstream of a plane that never gets a
-  candidate to fit.
+  `supportplane.end success=false failure=noLowerSilhouetteEdges` →
+  `estimate.end success=false failure=noSupportPlaneWithoutDepth`, with
+  `estimate.degraded reason=unbounded_carve_height` alongside. Both photos were
+  fine every time (`capture.end success=true`, 1920×1440); one separate oblique
+  failed `worldTrackingDegraded`.
+
+  **Corrected 2026-09-29, same day.** The transcript above originally carried
+  `candidates=0 inliers=0` and bbox −1, and this note read them as a detector
+  that had searched and found nothing. They were never measurements: the
+  card-only branch returns a default-constructed `SupportPlaneFitStats`, so
+  nothing had run. Nor is this a three-step cascade —
+  `unbounded_carve_height` is stamped from `twoViewSfS && depth == nil` before
+  any stage can refuse (`Pipeline.swift`), a property of the capture rather than
+  a consequence. The refusal now logs `stats=unfitted` and no numbers, so the
+  misreading is not available to the next reader. **What survives: the no-depth
+  branch refuses before any candidate collection, so the height-bound work in
+  two-view-trust Decisions 8/11 is downstream of a plane that is never
+  attempted.**
 - **One plate, two regions, one phantom.** A second region came back `coffee`
   at 59.5 cm³ / density 1.0 and had to be rejected by hand — the same
   BACKLOG 24 shape as 2026-09-24's phantom `unknown_food`.

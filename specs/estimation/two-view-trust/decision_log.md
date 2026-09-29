@@ -324,17 +324,28 @@ The same session also moved what blocks first. Seven two-view captures on build
 `2d39910`, six refused, and every logged estimate ran the same chain:
 
 ```
-supportplane.end success=false failure=noLowerSilhouetteEdges candidates=0 inliers=0
-estimate.degraded reason=unbounded_carve_height
-estimate.end      success=false failure=noSupportPlaneWithoutDepth
+supportplane.end success=false failure=noLowerSilhouetteEdges stats=unfitted
+estimate.end     success=false failure=noSupportPlaneWithoutDepth
+estimate.degraded reason=unbounded_carve_height   (stamped earlier, see below)
 ```
 
 Both photographs were good every time (`capture.end success=true`, 1920×1440), so
-this is not a capture or framing fault. **`noLowerSilhouetteEdges` with zero
-candidates is now the head of the chain**: without depth the support plane gets
-no candidate to fit, so the estimate dies before any height bound — including
-Decision 11's per-class cap and the footprint-scaled cap in progress — could
-apply. The capture-side experiment this decision asks for (oblique at 70–80°)
+this is not a capture or framing fault. **The no-depth branch refuses before any
+candidate collection**: `SupportPlaneFitter` returns `.noLowerSilhouetteEdges`
+unconditionally when `nadir.depth == nil`, so the estimate dies before any height
+bound — including Decision 11's per-class cap and the footprint-scaled cap —
+could apply.
+
+**Two readings of that transcript are wrong and were corrected the same day.**
+The lines first recorded here carried `candidates=0 inliers=0` and bbox −1, read
+as a detector that had searched and found nothing. Those are a
+default-constructed `SupportPlaneFitStats`: nothing ran, and `-1` is the
+documented sentinel for "refused before a residual was computed". The refusal now
+logs `stats=unfitted` with no numbers. Nor are the three lines a cascade —
+`unbounded_carve_height` is stamped from `twoViewSfS && depth == nil` before any
+stage can refuse, so it is a property of the capture, not a consequence of the
+plane fit. This decision's conclusion is unaffected: the plane fit is what blocks
+first, and it blocks by construction rather than by measurement. The capture-side experiment this decision asks for (oblique at 70–80°)
 therefore cannot return a number yet, and it is not the next thing to try: the
 plane fit is. The status stays **proposed** for that reason, and the ID-1 card is
 the obvious plane source, since an accepted card supplies three coplanar points

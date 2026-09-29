@@ -149,7 +149,7 @@ flowchart TD
 | `PortableContracts` | Cross-platform record types (`Vec3`, `Mat4`, `Pb*` protobuf types) | Wire format shared by all modules |
 | `CaptureKit` | AVFoundation / ARKit / Core Motion bridge | `CaptureSession` **actor**, `RawFrame` |
 | `CardDetection` | ID-1 card detection + P4P pose | `CardDetector` protocol |
-| `SupportPlane` | RANSAC plane fit (LiDAR) / iterative card-only fit | `SupportPlane`, `BinaryMask` |
+| `SupportPlane` | RANSAC plane fit (LiDAR); the iterative card-only fit is built and unit-tested but unreachable — the no-depth branch refuses (`noLowerSilhouetteEdges`) for want of the food's lower silhouette edges (pipeline Req 4.3) | `SupportPlane`, `BinaryMask` |
 | `MetricScale` | Resolve mm-per-pixel, scale uncertainty σ_s | Pure resolver function |
 | `Segmentation` | Core ML wrapper, pre/post-process, σ_seg | `SegmenterInferenceEngine` protocol |
 | `Volume` | Metal voxel-carve (two-view) / height-field (single-view) | `VoxelCarveEstimator`, `HeightFieldEstimator` |

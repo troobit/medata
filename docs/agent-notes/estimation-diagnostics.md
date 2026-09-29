@@ -298,3 +298,24 @@ Reaching for `depth.depthIntrinsics` yields a divide-by-zero and a NaN plane; pa
 `colourIntrinsics` straight through yields a 7.5× lateral error that tilts the plane. The
 half-pixel terms are not optional — dropping them shifts the principal point by ~3.75 colour
 pixels.
+
+### The card path's residual reads the opposite way (2026-09-29)
+
+Everything above is the LiDAR fitter, where the residual is an inlier RMS and is
+therefore bounded by the inlier band by construction — which is why it cannot
+discriminate. `CardOnlyPlaneFitter` has **no inlier band**: since 2026-09-29 its
+`residualMm` is the plain point-to-plane RMS of every edge projection it was given,
+so nothing bounds it and a large value there is a real signal. Do not carry the
+"bounded, cannot discriminate" reading across.
+
+Two consequences worth knowing before that path ships:
+
+- Acceptance still gates on the iteration **step** (Δd ≤ 1.5 mm, §6.3 best-of-N),
+  not on the residual. So a card plane can be accepted with an arbitrarily large
+  true RMS, and `Confidence.sigmaPlane = exp(-planeFitResidualMm / 5)` would then
+  be driven toward 0 by a plane the fitter called converged.
+- Req 4.5's "refuse above r > 20 mm" is a LiDAR-fitter gate and does not fire on
+  this path.
+
+Both are dormant while the no-depth branch refuses outright, and both become live
+the moment it is wired (pipeline Req 4.3).

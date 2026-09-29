@@ -65,7 +65,10 @@ It is first built for iPhone devices, however the am is to expand to other OS's 
 The application prefers the use of LiDAR for depth mapping of food and geometry, but deferrs to a 2 photo mechanism (using a drivers licens card) for point of reference and scale.
 
 LiDAR requirement at runtime — non-LiDAR devices fall through to the two-view + ID-1
-card path with `noLidarConfidence` set on every meal — but the calibration and
+card path, which is **retained and in MVP scope but not yet working**: the support
+plane cannot be fitted without depth, so such a capture currently refuses with
+`noSupportPlaneWithoutDepth` rather than producing a volume, and
+`noLidarConfidence` is unimplemented (BACKLOG 26) — but the calibration and
 
 ```
 photo(s) → silhouettes → visual hull → V_c (volume per class)
@@ -82,7 +85,7 @@ medata/
 │   │   ├── PortableContracts/   protobuf wire types + Vec3/Mat4 (shared by all)
 │   │   ├── CaptureKit/          AVFoundation / ARKit / Core Motion bridge
 │   │   ├── CardDetection/       ID-1 card detect + P4P pose
-│   │   ├── SupportPlane/        RANSAC plane (LiDAR) / iterative card-only fit
+│   │   ├── SupportPlane/        RANSAC plane (LiDAR); card-only fit built, not wired
 │   │   ├── MetricScale/         mm-per-pixel resolver
 │   │   ├── Segmentation/        Core ML wrapper + pre/post-process
 │   │   ├── Volume/              Metal voxel-carve / height-field integration

@@ -43,13 +43,18 @@ run end to end on a real capture, so the error had never been visible either.
 
 `noLowerSilhouetteEdges` is reused rather than a new case added: it is the honest reason
 (the fitter has card corners, not food silhouette edges), and it keeps `Pipeline`'s
-exhaustive `SupportPlaneError` switch unchanged — it already maps to
-`EstimationFailure.noScaleAvailable`. Note that mapping is now reached on a capture whose
-card scale is perfectly good; it is the plane that is missing, not the scale. If that
-label starts costing something in the field, `Pipeline.fitSupportPlane` is where to fix
-it, not here.
+exhaustive `SupportPlaneError` switch unchanged. It maps to
+`EstimationFailure.noSupportPlaneWithoutDepth` (two-view-trust task 13; it was
+`noScaleAvailable`, which mislabelled a capture whose card scale was perfectly
+good — it is the plane that is missing, not the scale). `Pipeline.fitSupportPlane`
+is where that mapping lives.
 
-`CardOnlyPlaneFitter` itself is unchanged and still covered by `CardOnlyPlaneFitterTests`.
+`CardOnlyPlaneFitter`'s selection and acceptance are unchanged and still covered by
+`CardOnlyPlaneFitterTests`. What changed on 2026-09-29 is only what it *reports*:
+`residualMm` was the iteration step `abs(dNew - dCurrent)` and is now the true
+point-to-plane RMS of the edge projections; the convergence and best-of-N measure
+is renamed `stepMm` and still drives both. A stationary fit through scattered
+points used to claim a perfect one — see `testResidualIsPointToPlaneNotIterationStep`.
 The **input** is what is missing. What would make the branch work: the food's lower
 silhouette edges taken from the nadir food mask (pipeline Req 4.3) — the mask's lowest
 food pixel per column, along the boundary where the food meets the table — back-projected
