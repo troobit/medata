@@ -4,7 +4,7 @@ Everything in this folder exists so that a change you can *feel* is one line in
 one file, rather than the same edit repeated across a dozen screens.
 
 If you are new to Swift and Xcode, start here. Each knob below is a single
-value; change it, run `make deploy-device`, and look at the phone.
+value; change it, run `make debug`, and look at the phone.
 
 ## The five knobs worth meeting first
 

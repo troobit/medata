@@ -46,13 +46,13 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
     status was tee's (always 0), so any gate that trusted the exit code alone
     proved nothing; a red test survived one such gate on 2026-08-09 and was
     caught only by reading the log's failure markers.
-- `make deploy-device` — Debug build + install + launch. Makefile DEFAULTS point at `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`), the current primary device — no override needed. To target another device, override per invocation: `make deploy-device DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>` (same overrides for `deploy-release-stub` / `logs-device`; `logs-device` needs sudo for tethered collection). UI/non-capture work only.
-- `make deploy-release-stub` — the automated Path B below (capture testing).
-- `make build-product` / `make deploy-product` — the **ProductRelease**
+- `make debug` — Debug build + install + launch. Makefile DEFAULTS point at `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`), the current primary device — no override needed. To target another device, override per invocation: `make debug DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>` (same overrides for `dev-stub` / `logs`; `logs` needs sudo for tethered collection). UI/non-capture work only.
+- `make dev-stub` — the automated Path B below (capture testing).
+- `make app CONFIG=ProductRelease` / `make product` — the **ProductRelease**
   configuration (ml-feedback-loop Req 9): Release with `FIELD_LOOP` compiled
   out, so the field-note layer is absent at compile time rather than switched
-  off at runtime. Both run the product gate (`tools/deploy_product.sh`);
-  `build-product` needs no device. Debug and Release BOTH carry `FIELD_LOOP` —
+  off at runtime. Both run the product gate (`tools/deploy.sh`); the `app`
+  form needs no device. Debug and Release BOTH carry `FIELD_LOOP` —
   field is the daily default, matching the always-on capture recorder — so
   this is the only way to build a product-profile binary.
 - `make field-notes` — reads the field notes back off the device in seconds
@@ -61,7 +61,7 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   carries the note affordance, so this is the fastest way to get a written
   observation off the phone and onto the Mac during a session — including for
   UI work unrelated to captures. See `ml-feedback-loop.md`, "Day-to-day use".
-- `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs
+- `make logs` — pulls the last `LOG_LAST` (default 10m) of device logs
   filtered to `subsystem == "ie.medata.app"`, to stdout and
   `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live
   stream for an iOS device (`log stream` is host-only, devicectl has no log
@@ -82,7 +82,7 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   same archive — they carry log configurations we do not, so their presence is
   not evidence that ours would survive.
 - Reading the archive needs no root, only the collect does: after one
-  `sudo make logs-device`, query `/tmp/medata-device.logarchive` freely with
+  `sudo make logs`, query `/tmp/medata-device.logarchive` freely with
   `/usr/bin/log show … --predicate …`. Spell out `/usr/bin/log` — `log` is a
   zsh built-in in this shell and swallows the flags with "too many arguments".
 - `make spell` — spelling lint.
@@ -229,19 +229,19 @@ replayed — without it, the attempt build has no seed button.
 ### Deploying each one
 
 ```sh
-git checkout <tag-or-branch> && make deploy-device    # UI work; Debug is fine
+git checkout <tag-or-branch> && make debug    # UI work; Debug is fine
 git checkout research                                 # back to the line
 ```
 
-`make deploy-device` prints `DEPLOYED BUILD STAMP: <sha>-<timestamp>`. Use
-`deploy-release` instead if the attempt touches the capture flow, because the
+`make debug` prints `DEPLOYED BUILD STAMP: <sha>-<timestamp>`. Use `make dev`
+instead if the attempt touches the capture flow, because the
 Debug stub cannot arm the shutter (matrix below).
 
 ### Which attempt is on the phone right now
 
 The build stamp is the version label, and `git describe` decodes it. Take the
 sha from the deploy output, or from `event=launch buildStamp=…` in
-`sudo make logs-device`:
+`sudo make logs`:
 
 ```sh
 git describe --tags 87443aa      # -> activity-sheet-attempt-1
@@ -279,10 +279,10 @@ one while it exists.
 
 | Build | Segmenter | Capture-testable? |
 |---|---|---|
-| Debug (Xcode Run / `make deploy-device`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
-| Release, plain (`make deploy-release`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; the launch log reads a bare `segmenterSource=coreml` |
-| Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
-| ProductRelease (`make deploy-product`) | real Core ML model | **Yes** — identical estimation path to Release; the only difference is the absent field-note layer |
+| Debug (Xcode Run / `make debug`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
+| Release, plain (`make dev`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; the launch log reads a bare `segmenterSource=coreml` |
+| Release + forced stub (`make dev-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
+| ProductRelease (`make product`) | real Core ML model | **Yes** — identical estimation path to Release; the only difference is the absent field-note layer |
 
 The symptom of shooting on a Debug build is silent: every shutter press does
 nothing, no error, no estimate. The launch line gives it away —
@@ -290,7 +290,7 @@ nothing, no error, no estimate. The launch line gives it away —
 (seen again 2026-09-23 on a white-plate sitting). Check the launch line before
 blaming the segmenter.
 
-`make deploy-release` used to exit 1 with no message when the bundled
+`make dev` used to exit 1 with no message when the bundled
 `.mlpackage` carried no `medata.modelVersion` stamp (an export run without
 `--checkpoint`): the `strings | grep | tail` lookup returned 1 and
 `set -eo pipefail` killed the script before its own "unstamped" fallback.
@@ -303,12 +303,12 @@ window is unhittable; details and the log tells are in the sections below.
 
 ### `#if DEBUG` symbols are invisible to the Debug loop
 
-The daily loop is `make deploy-device` (Debug), and Debug compiles every
+The daily loop is `make debug` (Debug), and Debug compiles every
 `#if DEBUG` block, so a helper declared inside one and called from code
-*outside* one builds clean all day and fails only at `make deploy-release`:
+*outside* one builds clean all day and fails only at `make dev`:
 
     error: type 'SettingsView' has no member 'minutesLabel'
-    make: *** [deploy-release] Error 65
+    make: *** [deploy] Error 65
 
 Error 65 from a deploy target is the compiler, not the device, the model or
 devicectl — read the `error:` line above it and ignore the install machinery.
@@ -318,12 +318,12 @@ helpers inside the file's `#if DEBUG` block (fixed 2026-08-28).
 
 The rule when adding to a file that has a `#if DEBUG` block: a member is
 debug-only if and only if **every** caller is. Anything reached from shipping
-code goes above the `#if`. Only `make deploy-release` and `make build-product`
+code goes above the `#if`. Only `make dev` and `make app CONFIG=ProductRelease`
 can catch a breach, so run one of them before claiming an app change is done.
 
 ## Pulling app data off the device without sudo (field triage)
 
-`make logs-device` needs sudo (tethered `log collect` requires root). The
+`make logs` needs sudo (tethered `log collect` requires root). The
 outcome store + capture bundles cover most triage WITHOUT logs, no sudo:
 
 ```
@@ -353,7 +353,7 @@ Re-derived at least four times — this is the recipe:
 3. **Action menu → Include Info Messages AND Include Debug Messages** — the
    `event=…` lines are `.info`/`.debug` level and invisible without this.
 4. Do NOT hand-paste long trails into a chat session (one paste blew the
-   context window; several were truncated). Use `make logs-device` and grep
+   context window; several were truncated). Use `make logs` and grep
    `/tmp/medata-device.log` for the relevant `event=` lines instead.
 
 ## The real model shipped (Track 3 — resolved)
@@ -361,14 +361,14 @@ Re-derived at least four times — this is the recipe:
 **The real ML segmenter shipped 2026-07-05 (`coreml_0295ea61edd9`) and was
 superseded 2026-07-06 by the letterbox retrain (`coreml_24e0b022241a`)** — see
 `model-production.md`. A plain Release build now bundles the real Core ML model
-(`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`); `make
-deploy-release` is the deploy path. That dissolved the pains this note
+(`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`); `make dev` is
+the deploy path. That dissolved the pains this note
 predicted it would:
 
 1. **Estimates are real** (uncalibrated β = 1.0, so over-estimating — see the
    model-production note), not painted by the stub's fixed food region.
 2. **Plain Release no longer crashes.** Release binds `CoreMLInferenceEngine`
-   natively; `make deploy-release-stub` remains only for stub-based capture
+   natively; `make dev-stub` remains only for stub-based capture
    testing.
 3. **Speed friction gone on the real path** — the model runs via Core ML, not
    the `-Onone` Debug stub.
@@ -403,7 +403,7 @@ lidarCoveragePercent=… ok … canShutter=false`. Everything green except
 the mask is stale. Test on Release.
 
 This means: **any device test of the capture/shutter flow has to be a Release
-build** (`make deploy-release` for the real model, `make deploy-release-stub`
+build** (`make dev` for the real model, `make dev-stub` for the stub
 for the stub). There is no quick Xcode-Run (Debug) loop for the capture flow —
 the Debug stub is still too slow.
 
@@ -414,11 +414,11 @@ Tap Run in Xcode, or `xcodebuild -configuration Debug -destination 'id=<udid>'`.
 Fine for UI/non-capture work. **Useless for capture testing** (stub too slow, per
 above). A plain Release Run from Xcode used to crash (no segmenter before
 2026-07-05); it now runs the real model, but logs `buildStamp=unstamped` —
-prefer `make deploy-release` so the stamp is checkable.
+prefer `make dev` so the stamp is checkable.
 
 ### Path B — CLI Release with the stub forced on (what we use to test capture)
 
-**Automated: `make deploy-release-stub`** (tools/deploy_release_stub.sh — does
+**Automated: `make dev-stub`** (tools/deploy.sh — does
 all five steps below, reverts Package.swift via a trap even on failure, and
 prints the build stamp). The manual recipe, for reference:
 
@@ -430,13 +430,13 @@ prints the build stamp). The manual recipe, for reference:
    cd MeData
    xcodebuild build -project MeData.xcodeproj -scheme MeData \
      -configuration Release -destination 'id=<udid>' \
-     -derivedDataPath /tmp/medata-release -allowProvisioningUpdates
+     -derivedDataPath .build/xcode/Release -allowProvisioningUpdates
    ```
 3. **Install via devicectl:**
    ```
    xcrun devicectl list devices                       # find the udid (look for "connected")
    xcrun devicectl device install app --device <udid> \
-     /tmp/medata-release/Build/Products/Release-iphoneos/MeData.app
+     .build/xcode/Release/Build/Products/Release-iphoneos/MeData.app
    ```
    (A first attempt can fail with a transient `CoreDeviceError 4000`
    device-disconnect — just retry.)
@@ -470,11 +470,18 @@ thing the gate was working around.
 
 ## Resetting the phone during the dev loop
 
-`make device-reset` = `make field-pull` (copies new bundles and notes into
-`medata-corpus`, pushes the manifest so the app prunes pulled bundles), then
+`make field-discard CONFIRM=yes` = `make field-notes` (notes and the events DB
+off the phone in seconds), then `make app` (so a missing model fails before the
+wipe, not after), then delete `medata-corpus/captures` and `pulls`, then
 `devicectl device uninstall app` (removes the data container: captures,
-`meals.sqlite`, notes, settings), then `make deploy-release`. Use it when the
-phone's history is slowing the app or muddying a session. The corpus is the
-only copy of field data (single_copy_accepted), so never uninstall without
-the pull. Ordinary pulls already prune pulled bundles from the phone; only
-the DB rows and notes accumulate between resets.
+`meals.sqlite`, notes, settings), then `make deploy` at the ambient `CONFIG` and
+`SEGMENTER`. Use it when the phone's history is slowing the app or muddying a
+session, or when the corpus has grown past what the disk can carry.
+
+It replaced `make device-reset`, whose first step was a *full* `field-pull` — so
+emptying the phone meant first spending hours receiving a backlog that was about
+to be thrown away anyway. The corpus is still the only copy of field data
+(single_copy_accepted); what changed is that discarding it is now a stated
+intention rather than the cost of a reset. Notes, the per-pull DB snapshots and
+`index.sqlite` survive on the Mac — see docs/build-and-field-loop.md,
+"Reclaiming the space", for exactly what does not.
