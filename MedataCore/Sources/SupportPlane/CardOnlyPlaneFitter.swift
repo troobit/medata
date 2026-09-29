@@ -59,7 +59,7 @@ public enum CardOnlyPlaneFitter {
         var hFood: Float = 0
         var dCurrent: Float = gravity.dot(cardCentre)
 
-        var bestResidual: Float = .infinity
+        var bestStepMm: Float = .infinity
         var bestPlane: SupportPlane?
 
         for k in 0..<inputs.maxIterations {
@@ -70,7 +70,21 @@ public enum CardOnlyPlaneFitter {
             }
             // LSQ plane with normal = gravity collapses to d = mean(gravity · edge).
             let dNew = edgeProjections.reduce(0, +) / Float(edgeProjections.count)
-            let delta = abs(dNew - dCurrent)
+            // TWO DIFFERENT QUANTITIES, and conflating them is a silent lie.
+            // `stepMm` is how far the plane MOVED this iteration — the §6.3
+            // convergence and best-of-N measure. `residualMm` is how far the edge
+            // projections LIE FROM the fitted plane, which is what
+            // `SupportPlane.residualMm` documents ("LSQ residual for card path")
+            // and what any confidence gate reading it assumes. Until 2026-09-29
+            // the step was reported as the residual, so a stationary fit through
+            // scattered points claimed a perfect one: edges at 0 and 200 mm settle
+            // at d = 100 and reported residual 0.0 on the second iteration against
+            // a true RMS of 100 mm. Convergence is not evidence of recovery.
+            let stepMm = abs(dNew - dCurrent)
+            let residualMm = (
+                edgeProjections.reduce(0) { $0 + ($1 - dNew) * ($1 - dNew) }
+                    / Float(edgeProjections.count)
+            ).squareRoot()
 
             // Update h_food = mean centroid height above π_sup_(k+1).
             let hNew: Float
@@ -83,13 +97,14 @@ public enum CardOnlyPlaneFitter {
                 hNew = heights.reduce(0, +) / Float(heights.count)
             }
 
-            // Track best Δd seen across iterations (best-of-5 fallback per §6.3).
-            if delta < bestResidual {
-                bestResidual = delta
+            // Selection and acceptance stay on Δd, unchanged: §6.3's best-of-N is
+            // a convergence criterion. Only what gets REPORTED changes.
+            if stepMm < bestStepMm {
+                bestStepMm = stepMm
                 bestPlane = SupportPlane(
                     normal: gravity,
                     distanceMm: dNew,
-                    residualMm: delta,
+                    residualMm: residualMm,
                     convergedIterations: k + 1
                 )
             }
@@ -97,12 +112,12 @@ public enum CardOnlyPlaneFitter {
             dCurrent = dNew
             hFood = hNew
 
-            if delta < inputs.convergenceMm {
+            if stepMm < inputs.convergenceMm {
                 return bestPlane!  // strict 1 mm convergence reached
             }
         }
 
-        if bestResidual <= inputs.bestOfFiveAcceptMm, let bp = bestPlane {
+        if bestStepMm <= inputs.bestOfFiveAcceptMm, let bp = bestPlane {
             return bp                  // best-of-5 fallback per §6.3
         }
         throw SupportPlaneError.iterationDiverged

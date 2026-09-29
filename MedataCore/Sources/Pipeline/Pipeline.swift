@@ -886,19 +886,40 @@ public struct Pipeline: Sendable {
         // Release too — this is the only on-device window into a
         // `lidarFitDegenerate` failure without a Debug/stub build.
         // Bug `lidar-plane-fit-degenerate-on-clean-capture`.
-        supportPlaneLog.info(
-            """
-            event=supportplane.end success=false \
-            failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
-            candidates=\(stats.candidatePointCount, privacy: .public) \
-            inliers=\(stats.inlierCount, privacy: .public) \
-            residual_mm=\(stats.residualMm, privacy: .public) \
-            bboxX=\(stats.foodBBoxX, privacy: .public) \
-            bboxY=\(stats.foodBBoxY, privacy: .public) \
-            bboxW=\(stats.foodBBoxW, privacy: .public) \
-            bboxH=\(stats.foodBBoxH, privacy: .public)
-            """
-        )
+        // A REFUSAL BEFORE ANY FIT RAN HAS NO STATS, AND MUST NOT PRINT ANY.
+        // The card-only branch returns a default-constructed `SupportPlaneFitStats`,
+        // whose zeros and -1 sentinels formerly went out on this line as
+        // `candidates=0 inliers=0 residual_mm=-1 bboxX=-1 …`. Every field reads as a
+        // measurement: zero candidates looks like a detector that searched and found
+        // nothing, and on 2026-09-29 that cost two wrong diagnoses of the two-view
+        // failure before the code was read. `residualMm < 0` is the documented
+        // sentinel for "refused before a residual was computed", so it is exactly
+        // the test for "nothing to report". The measured branch is unchanged — it is
+        // the only on-device window into `lidarFitDegenerate` (bug
+        // `lidar-plane-fit-degenerate-on-clean-capture`).
+        if stats.residualMm < 0 {
+            supportPlaneLog.info(
+                """
+                event=supportplane.end success=false \
+                failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
+                stats=unfitted
+                """
+            )
+        } else {
+            supportPlaneLog.info(
+                """
+                event=supportplane.end success=false \
+                failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
+                candidates=\(stats.candidatePointCount, privacy: .public) \
+                inliers=\(stats.inlierCount, privacy: .public) \
+                residual_mm=\(stats.residualMm, privacy: .public) \
+                bboxX=\(stats.foodBBoxX, privacy: .public) \
+                bboxY=\(stats.foodBBoxY, privacy: .public) \
+                bboxW=\(stats.foodBBoxW, privacy: .public) \
+                bboxH=\(stats.foodBBoxH, privacy: .public)
+                """
+            )
+        }
         switch error {
         case .emptyFoodMask:
             throw EstimationFailure.noFoodPixels

@@ -197,7 +197,11 @@ public enum FixtureRunner {
                 supportPlaneResidualMm = fit.plane.residualMm
                 supportPlaneReference = fit.reference
             } else {
+                // Carried into the summary so a nominal-plane replay is
+                // identifiable downstream rather than indistinguishable from a
+                // fitted one; production refuses this case outright.
                 plane = nominalPlane(gravity: gravity)
+                supportPlaneResidualMm = plane.residualMm
             }
             let t1to2 = Mat4(pb: fixture.t1To2)
             // Card exclusion in both views as on the device (Req 4.6): the
@@ -616,7 +620,14 @@ public enum FixtureRunner {
         // so the plane normal IS that vector; negating it pointed the nominal
         // plane down and put the carve grid under it.
         let normal = gravity.normalised()
-        return SupportPlane(normal: normal, distanceMm: -300, residualMm: 0, convergedIterations: nil)
+        // residualMm = -1, NOT 0: this plane was invented, not fitted, and a zero
+        // residual is the strongest possible claim of fit quality. -1 is the
+        // sentinel `SupportPlaneFitStats` already documents for "refused before a
+        // residual was computed". Production REFUSES a depth-free two-view capture
+        // (`noSupportPlaneWithoutDepth`); this nominal plane is what lets the
+        // harness carve anyway, which is legitimate for the synthetic controls and
+        // is NOT evidence of device behaviour — the sentinel is how a reader tells.
+        return SupportPlane(normal: normal, distanceMm: -300, residualMm: -1, convergedIterations: nil)
     }
 
     private static func runHeightField(

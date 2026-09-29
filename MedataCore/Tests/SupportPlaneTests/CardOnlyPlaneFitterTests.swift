@@ -66,8 +66,10 @@ final class CardOnlyPlaneFitterTests: XCTestCase {
         if let iters = plane.convergedIterations {
             XCTAssertLessThanOrEqual(iters, 5)
         }
+        // Coplanar edges, so the point-to-plane residual is ~0 independently of
+        // how far the iteration stepped. Δd is asserted by the iteration count above.
         XCTAssertLessThan(plane.residualMm, 1.0,
-                          "residual \(plane.residualMm) must be < 1 mm at convergence")
+                          "residual \(plane.residualMm) must be < 1 mm on coplanar edges")
     }
 
     // Best-of-5 fallback at residual ≤ 1.5 mm (§6.3 tail). Loosen `convergenceMm` to
@@ -86,7 +88,33 @@ final class CardOnlyPlaneFitterTests: XCTestCase {
         )
         let plane = try CardOnlyPlaneFitter.fit(inputs)
         XCTAssertLessThanOrEqual(plane.residualMm, 1.5,
-                                 "best-of-5 must return plane with residual ≤ 1.5 mm")
+                                 "best-of-5 must return a plane whose edges lie within 1.5 mm of it")
+    }
+
+    // Regression, 2026-09-29: `residualMm` used to carry the ITERATION STEP
+    // `abs(dNew - dCurrent)`, not the point-to-plane residual. A fit that has
+    // stopped moving reported zero error however far the supplied points lay from
+    // the plane, so convergence masqueraded as recovery and any confidence gate
+    // reading `SupportPlane.residualMm` was fooled. Edges at 0 and 200 mm along
+    // gravity settle at d = 100 with a step of 0 and a true RMS of 100 mm.
+    func testResidualIsPointToPlaneNotIterationStep() throws {
+        let spread: [Vec3] = [Vec3(0, 0, 0), Vec3(0, 200, 0)]
+        let inputs = CardOnlyPlaneFitter.Inputs(
+            cardCentreDepthMm: dCard,
+            scaleAtCardPlaneInitMmPerPx: sCardInit,
+            gravityCamera: Vec3(0, 1, 0),
+            edgePoints3DAtInitScale: spread,
+            foodCentroids3DAtInitScale: [],
+            convergenceMm: 1.0,
+            bestOfFiveAcceptMm: 1.5,
+            maxIterations: 5
+        )
+        let plane = try CardOnlyPlaneFitter.fit(inputs)
+        XCTAssertEqual(plane.distanceMm, 100, accuracy: 1e-3,
+                       "gravity-normal LSQ fit sits at the mean of the projections")
+        XCTAssertEqual(plane.residualMm, 100, accuracy: 1e-3,
+                       "residual must be RMS distance of the edges from the plane, "
+                       + "not the iteration step (which reaches 0 here)")
     }
 
     // iterationDiverged when best Δd across iterations stays > 1.5 mm. Construct a
