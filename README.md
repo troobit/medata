@@ -137,10 +137,17 @@ make spell     # Spelling linter
 The on-device loop drives the Xcode app target on a connected iPhone:
 
 ```sh
-make deploy-device        # Debug build → install → launch (UI / non-capture work)
-make deploy-release-stub  # Release + forced dev-stub segmenter (capture testing)
-make logs-device          # pull filtered device logs (subsystem ie.medata.app)
+make debug      # Debug + stub → install → launch (UI / non-capture work)
+make dev        # Release + the bundled model (the everyday capture build)
+make dev-stub   # Release + forced stub segmenter (capture testing, no model)
+make product    # ProductRelease + the shipping gate
+make logs       # pull filtered device logs (subsystem ie.medata.app)
 ```
+
+Both axes are overridable: `make app`/`make deploy` take
+`CONFIG=Debug|Release|ProductRelease` and `SEGMENTER=model|stub`, and the four
+targets above are those combinations named. `docs/build-and-field-loop.md` is the
+reference for both surfaces.
 
 `make build`/`make test` only cover the SwiftPM core; the iOS app builds from
 `MeData/MeData.xcodeproj`. The clone directory must be named `medata` because the project
@@ -163,7 +170,7 @@ layout that reads badly is worth taking the same way.
 **On the phone**
 
 ```sh
-make deploy-device        # any Debug or Release build carries the note layer
+make debug        # any Debug or Release build carries the note layer
 ```
 
 Tap the button → type or hit **Speak** → **Save**. The Context section of the

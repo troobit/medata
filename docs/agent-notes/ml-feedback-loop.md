@@ -17,7 +17,8 @@ feedback". What that does not say, and an agent needs:
 | Full session, bundles included | `make field-pull` | `pull copied/present/failed`, then `joins_resolved` |
 | Turn notes into tracked work | `make field-triage`, then route | every item checked with a `routed:` line |
 | Re-ingest a directory already on disk | `make field-pull PULL_DIR=<path>` | idempotent by key; safe to repeat |
-| Just the Python suite | `make field-test PYTHON=/opt/homebrew/bin/python3` | Xcode's `python3` has no pytest |
+| Reclaim the space both sides hold | `make field-discard CONFIRM=yes` | `discard done freed_bytes=…`, then the reinstall's stamp |
+| Just the Python suite | `make test-python PYTHON=/opt/homebrew/bin/python3` | Xcode's `python3` has no pytest |
 
 Read the ingest summary, not just the exit code. `db_integrity=absent`,
 `outcomes=0` or `joins_resolved=0` on a pull that carried notes means the notes
@@ -264,9 +265,9 @@ Three configurations now, not two:
 
 | Configuration | `SWIFT_ACTIVE_COMPILATION_CONDITIONS` (project level) | Built by |
 |---|---|---|
-| Debug | `DEBUG FIELD_LOOP $(inherited)` | `make build-app` / `deploy-device` |
-| Release | `FIELD_LOOP $(inherited)` | `make deploy-release` / `deploy-release-stub` |
-| ProductRelease | *(absent)* | `make build-product` / `deploy-product` |
+| Debug | `DEBUG FIELD_LOOP $(inherited)` | `make app CONFIG=Debug` / `debug` |
+| Release | `FIELD_LOOP $(inherited)` | `make dev` / `dev-stub` |
+| ProductRelease | *(absent)* | `make app CONFIG=ProductRelease` / `product` |
 
 Field is the daily default — same reasoning as the always-on capture recorder —
 so the product profile is the one you have to ask for. `ProductRelease`
@@ -280,10 +281,10 @@ widget target's list and Xcode silently falls back to that target's default.
 **Never pass `SWIFT_ACTIVE_COMPILATION_CONDITIONS` on the xcodebuild command
 line.** It replaces the whole value rather than appending, so a Debug build
 loses `DEBUG`, and it says nothing at all about the SwiftPM package graph
-(`deploy_release_stub.sh` edits `Package.swift` in place precisely because
+(`tools/deploy.sh` edits `Package.swift` in place precisely because
 xcodebuild has no lever there).
 
-The product gate (`tools/deploy_product.sh`, run by both product targets)
+The product gate (`tools/deploy.sh`, run by both product targets)
 asserts by `strings`-grep that the binary contains **no** `profile=field`, that
 it **does** contain `profile=product`, and that no `event=fieldnote.` literal
 survives. All three matter: an absence check alone passes vacuously on a binary
@@ -482,22 +483,11 @@ the attempt completed), and a `BGProcessingTask`
 
 ## The Mac-side cycle (`tools/field_loop/`)
 
-Three make targets with an agent phase between two of them, plus two that can
-run any time. The contract between the stages is files on disk — nothing is
-passed in memory, and no stage may assume the previous one ran in the same
-process:
-
-```
-make field-pull       devicectl -> pulls/<date>-<n>/ -> ingest -> index.sqlite
-make field-notes      notes + DB only -> pulls/<date>-notes-<n>/ -> ingest (seconds)
-make field-triage     corpus notes -> the rolling triage ledger (any time; routing
-  (routing phase)     the unchecked items is the agent step — see below)
-make field-diagnose   replay every annotated capture -> diagnoses -> cycles/cycle-<n>/tasks.md
-  (agent phase)       drafts.json + any notes, written INTO the cycle directory
-make field-close      six guards -> commits or proposals -> verdict.json + ledger refresh
-make field-report     alignment metrics across the whole corpus (any time)
-make field-derive     training + calibration material (launching a run stays human)
-```
+The phase order, each target's parameters and what every stage writes are in
+`docs/build-and-field-loop.md`, "The field loop". The property that matters here:
+the contract between stages is files on disk — nothing is passed in memory, and
+no stage may assume the previous one ran in the same process. What follows is the
+part that document does not carry, the gotchas of each stage.
 
 ### The rolling triage ledger (Decision 23)
 
@@ -539,9 +529,9 @@ tests only tried `\n`.
   a spec task or a backlog entry — because the routed: line alone is a
   record, not a scheduler.
 
-`make field-test` runs the Python suite for all of it. It is a separate target
-from `make food-db` because the two test directories both carry a `conftest.py`
-and pytest cannot collect them in one invocation — see the gotcha below.
+`make test-python` runs the Python suite for all of it, as two pytest
+invocations: the two test directories both carry a `conftest.py` and pytest
+cannot collect them together — see the gotcha below.
 
 ### Where the corpus lives
 
@@ -661,9 +651,8 @@ rehearsal drives. Do not "tidy" these back into defaults.
 `tools/field_loop/tests/` and `tools/food_db/tests/` both have a `conftest.py`
 and the field-loop modules import theirs by name (`from conftest import ...`),
 following the food-db suite's own precedent. `pytest tools/field_loop/tests
-tools/food_db/tests` therefore fails at collection with an `ImportError`; run
-them as `make field-test` and `make food-db`, which is why they are separate
-targets.
+tools/food_db/tests` therefore fails at collection with an `ImportError`, which
+is why `make test-python` invokes pytest twice rather than once.
 
 **`tools/field_loop` is stdlib-only and stays that way.** It is the regression
 net for the pull/ingest path, which must run on a bare interpreter — the

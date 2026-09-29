@@ -35,7 +35,7 @@ without `.library(name: "Dosing", targets: ["Dosing"])` in the `products` array.
 `GlucoseWidgetShared` is the precedent: a zero-dependency leaf that still needed
 its own library product to be linkable. The failure mode is nasty — `make test`
 passes, because SwiftPM builds targets and test targets regardless, and only
-`make build-app` fails. The product line is in `Package.swift` as of Phase 1.
+`make app CONFIG=Debug` fails. The product line is in `Package.swift` as of Phase 1.
 
 ## The ratio direction is the thing to protect
 
