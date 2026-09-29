@@ -567,8 +567,8 @@ resolution: every class above that bar has a spread of 0.097 or less over the si
 0.30. The thirteen readable classes are unknown_food, mixed_vegetables, bread_white,
 potato_boiled, beef, carrot, wine, chicken, white_rice, pork, tomato, broccoli and peas; their
 mean spans 0.4783–0.5031 across the six, so **0.025 is the smallest recipe effect one run can
-resolve**. Score verdicts on that mean and on the mask-quality block (max pairwise gap over the
-six: food IoU 0.008, region IoU 0.022, boundary F 0.016, top-3 hit 0.014). The tool's own
+resolve**. Score verdicts on that mean and on the mask-quality block (spread over the six: food IoU 0.008,
+region IoU 0.022, boundary F 0.016, top-3 hit 0.021). The tool's own
 `mean_iou` is not usable for verdicts — it includes classes with no held-out truth and classes
 present in one image, and it ranks the six runs differently from the readable thirteen.
 
