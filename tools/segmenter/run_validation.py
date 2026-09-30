@@ -142,6 +142,22 @@ def _print_mask_quality(block: dict) -> None:
           f"({block['n_regions']} regions, {block['n_images']} images)")
 
 
+def resolve_target_size(explicit: int | None, lineage_doc: dict | None) -> int:
+    """Evaluation input size: ``--target-size`` when given, else the size the
+    checkpoint TRAINED at, else the historical 513.
+
+    Scoring a checkpoint at a size it did not train at silently degrades every
+    metric — R16 (trained at 641) read 0.0132 lower on mask food IoU and 0.0330
+    lower on region IoU when scored at 513 than at its own size, a bigger swing
+    than any recipe lever in the R8–R16 series. So the size is resolved from
+    lineage for the same reason the arch already is.
+    """
+    if explicit is not None:
+        return explicit
+    recorded = (lineage_doc or {}).get("train_config", {}).get("target_size")
+    return recorded or 513
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -150,7 +166,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", default="heldout",
                         help="Split directory under --data to evaluate (default heldout).")
     parser.add_argument("--lineage", default="tools/segmenter/build/lineage.json")
-    parser.add_argument("--target-size", type=int, default=513)
+    parser.add_argument("--target-size", type=int, default=None,
+                        help="Evaluation input size. Default: the size the "
+                             "checkpoint TRAINED at, read from the lineage's "
+                             "train_config.target_size (513 when absent).")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--device", default="auto")
@@ -178,9 +197,12 @@ def main(argv: list[str] | None = None) -> int:
     # is judged under the same registry entry it trained with; a pre-registry
     # lineage (or none yet) means the historical deeplab_mnv3.
     arch = archs.DEFAULT_ARCH
+    lineage_doc = None
     lineage_path = Path(args.lineage)
     if lineage_path.is_file():
-        arch = archs.arch_from_lineage(json.loads(lineage_path.read_text()))
+        lineage_doc = json.loads(lineage_path.read_text())
+        arch = archs.arch_from_lineage(lineage_doc)
+    args.target_size = resolve_target_size(args.target_size, lineage_doc)
     # export.py resolves the arch from the checkpoint's own stamp; a stale
     # lineage beside a non-default-arch checkpoint would build the wrong model
     # and (strict=False) silently load NOTHING — fail fast when they disagree.
@@ -194,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     arch_spec = archs.get(arch)
     print(f"[validate] arch = {arch}")
+    print(f"[validate] target size = {args.target_size}")
 
     names = _channel_names()
     # The model is built at the palette's channel count regardless of --data, and
