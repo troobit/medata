@@ -522,7 +522,7 @@ A baseline anchor exists to measure uplift on unseen data; a table where the mod
 
 ### Impact
 
-`data/foodseg103_remapped` (regenerated, gitignored: `splits.json` with stratification block, `co_stats.json` schema v2), `tools/segmenter/build/lineage.json` (metrics block now carries the full-heldout re-measure + task 17b release override), task 18's launch flags (`--split-seed 20260715`), and task 19's judging procedure (pinned-model deltas anchor to the leak-free table recorded here).
+`data/foodseg103_remapped` (regenerated, gitignored: `splits.json` with stratification block, `co_stats.json` schema v2), `tools/segmenter/build/lineage.json` (metrics block now carries the full-heldout re-measure), task 18's launch flags (`--split-seed 20260715`), and task 19's judging procedure (pinned-model deltas anchor to the leak-free table recorded here).
 
 ---
 
@@ -1011,7 +1011,7 @@ MetaFood3D — the renders, and `RGBD_videos` if acquired — may be used freely
 
 This is the same posture Decision 18 took, applied to the surface Decision 18 assumed it would never reach: research is unblocked, the commercial question is deferred, and the deferral is safe *because* it is auditable rather than because someone remembers. Restating the gate for weights costs nothing now and preserves the property that made deferral defensible in the first place.
 
-Recording it in lineage rather than in prose is the whole point. The alternative is process discipline over a gitignored build directory, and that store has already proven unreliable in practice: the R1 run overwrote `lineage.json` wholesale, taking the incumbent's recorded metrics and its developer-phase release override with it, and nothing noticed until the file was read for another purpose. A licence fact held only in a decision entry and a human's memory is weaker than one held in the manifest and stamped into the artefact.
+Recording it in lineage rather than in prose is the whole point. The alternative is process discipline over a gitignored build directory, and that store has already proven unreliable in practice: the R1 run overwrote `lineage.json` wholesale, taking the incumbent's recorded metrics with it, and nothing noticed until the file was read for another purpose. A licence fact held only in a decision entry and a human's memory is weaker than one held in the manifest and stamped into the artefact.
 
 The mechanism is already half-built and idiomatic. `lineage.build_lineage` takes a `pretrained_checkpoint` `{source_url, licence, sha256}` object precisely so the published initialisation's licence travels with the checkpoint; a corpus object is the same shape for the same reason. Fixing it also repairs the existing under-description, which is worth doing regardless of whether any NC data is ever used.
 
@@ -1274,7 +1274,7 @@ The second finding is separable and is why R3 is adopted rather than merely expl
 
 - **Adopt and swap the bundled model in the same step**: The measurement supports the recipe, but the artifact swap is a `cp -R` that leaves no trace other than the model id on subsequent captures, and it wants an on-device pass behind it (model-production Req 6.3). Splitting the two keeps the shipped artifact attributable at every moment.
 - **Hold R3 unadopted pending a further ablation of loss versus augmentation**: R1's confounding is resolved for the question that was asked, and the pair is measurably better than the incumbent together. Separating the last two levers is a real question but not one blocking this verdict; it is a candidate for the queue, not a precondition.
-- **Reject on absolute mean alone**: R3 reads 0.4192 against the promoted incumbent's 0.3927, and the incumbent ships under the Decision 11 developer-phase override. Rejecting R3 on a gate the incumbent also fails would keep a worse model for a reason that does not distinguish them.
+- **Reject on absolute mean alone**: R3 reads 0.4192 against the promoted incumbent's 0.3927. Rejecting R3 on a number the incumbent reads lower on would keep a worse model for a reason that does not distinguish them.
 
 ### Consequences
 
