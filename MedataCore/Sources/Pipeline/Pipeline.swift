@@ -893,11 +893,24 @@ public struct Pipeline: Sendable {
         // measurement: zero candidates looks like a detector that searched and found
         // nothing, and on 2026-09-29 that cost two wrong diagnoses of the two-view
         // failure before the code was read. `residualMm < 0` is the documented
-        // sentinel for "refused before a residual was computed", so it is exactly
-        // the test for "nothing to report". The measured branch is unchanged — it is
-        // the only on-device window into `lidarFitDegenerate` (bug
-        // `lidar-plane-fit-degenerate-on-clean-capture`).
-        if stats.residualMm < 0 {
+        // sentinel for "refused before a residual was computed".
+        //
+        // BUT THE SENTINEL IS NOT THE TEST. `residualMm` is assigned only at the end
+        // of `LiDARPlaneFitter.fitOutcome`, so all three of its early refusals —
+        // point starvation twice and `lidarFitDegenerate` from a throwing `refine()`
+        // — return -1 with a REAL `candidatePointCount`, `inlierCount` and food
+        // bbox, all computed before the residual exists. Gating on `residualMm < 0`
+        // therefore suppressed the counters on exactly the failure this line was
+        // added for (bug `lidar-plane-fit-degenerate-on-clean-capture`); caught by
+        // review 2026-10-01, having been introduced the day before with the claim
+        // that the measured branch was unchanged. It was not.
+        //
+        // The test is the refusal CASE. `.noLowerSilhouetteEdges` has one producer,
+        // `SupportPlaneFitter`'s card-only branch, and it is the only path that
+        // returns a default-constructed `SupportPlaneFitStats`. If another path ever
+        // returns that case with real stats, widen this to a stats-provenance flag
+        // rather than re-deriving it from a value.
+        if case .noLowerSilhouetteEdges = error {
             supportPlaneLog.info(
                 """
                 event=supportplane.end success=false \

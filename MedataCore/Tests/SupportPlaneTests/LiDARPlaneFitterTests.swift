@@ -285,6 +285,19 @@ final class LiDARPlaneFitterTests: XCTestCase {
         XCTAssertEqual(starvedOutcome.refusal, .noLidarPoints)
         XCTAssertEqual(starvedOutcome.stats.residualMm, -1,
                        "a pre-residual refusal must leave the -1 sentinel")
+        // THE -1 SENTINEL IS NOT A TEST FOR "NOTHING RAN". The food bbox is resolved
+        // during candidate collection, before the confidence filter can starve the
+        // fit, so a refusal carrying the sentinel still carries real measurements.
+        // Pipeline's `supportplane.end success=false` line was briefly gated on
+        // `residualMm < 0` (2026-09-30) and so suppressed the counters on every
+        // LiDAR refusal — including `lidarFitDegenerate`, the bug the line exists to
+        // diagnose. It now gates on the refusal case instead. If this assertion ever
+        // fails, that gate's premise has moved and it must be revisited.
+        XCTAssertGreaterThanOrEqual(
+            starvedOutcome.stats.foodBBoxX, 0,
+            "food bbox is real on a sentinel-carrying refusal, so the sentinel "
+            + "cannot discriminate 'no fit attempted' from 'fit refused early'")
+        XCTAssertGreaterThan(starvedOutcome.stats.foodBBoxW, 0)
     }
 
     // Guard the lower bound: genuine LOW/zero-confidence returns must STILL be

@@ -422,10 +422,11 @@ def _missing_outcome_reason(conn, outcome_id):
 
 
 def _attribute_captures(conn):
-    """Promote each capture's scale source and model version from ITS OWN outcome.
+    """Promote each capture's scale source from ITS OWN outcome.
 
-    A capture's stem is `<timestamp_ms>-<outcome>` and an outcome carries the
-    same two fields, so every capture joins to its outcome directly. That join
+    A capture's stem is `<timestamp_ms>-<outcome>` and an outcome carries both,
+    so every capture joins to its outcome directly. Only `scale_source` is written
+    here — `model_version` already arrives with the fixture row at ingest. That join
     is what `_backfill_capture` could not use: it runs per NOTE, so a capture
     only ever gained a scale source when a human happened to annotate it. On
     2026-09-29 that left `scale_source` NULL on all 183 rows while 84 of their
