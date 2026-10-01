@@ -395,7 +395,7 @@ Recording the decision stops the drift at the source.
 ## Decision 11: Developer-phase release override for the strict export gate
 
 **Date**: 2026-07-05
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the release override is removed along with the gate it bypassed. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -595,7 +595,7 @@ the app depends on.
 ## Decision 15: run_validation.py is the developer-phase validation gate; seg-bench fixture generation deferred
 
 **Date**: 2026-07-06
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): run_validation.py reports and no longer gates. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -648,7 +648,7 @@ letterbox pre-processing is only observable in on-device behaviour (stage
 ## Decision 16: Export-eligibility bars re-pointed at the segmenter-foundation re-derivation (0.60 → 0.48 mean, 0.50 → 0.45 floors)
 
 **Date**: 2026-07-11
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the bars this re-pointed are removed. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 

@@ -136,7 +136,7 @@ recipe when you're ready to lift the bar.
 ### Held-out segmenter test set
 
 `HarnessCLI seg-bench` measures the mIoU bar from Req 8.9 as amended (mean
-food-class mIoU ≥ 0.48, re-derived by segmenter-foundation Decision 5; was 0.60
+food-class mIoU — reported only; the 0.48 bar was removed by Decision 38
 — see `specs/estimation/segmenter-foundation/`). Carve the held-out split from
 FoodSeg103: 10–15% of the remapped
 images, kept entirely separate from train + val. Use the same fixed RNG seed
@@ -149,7 +149,7 @@ fixture directory.
 
 | Bar | Source | Where it's measured |
 | --- | --- | --- |
-| Segmenter mean food-class mIoU ≥ 0.48 (segmenter-foundation Decision 5; was 0.60) | Req 8.9 as amended | `HarnessCLI seg-bench` |
+| Segmenter mean food-class mIoU — recorded, no bar (segmenter-foundation Decision 38) | Req 8.9 as amended | `HarnessCLI seg-bench` |
 | Segmenter weights ≤ 24 MiB (FP16, Decision 13) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
 | Segmenter inference ≤ 250 ms / view on iPhone 16 Pro (v1 hardware floor — segmenter-foundation Decision 22) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
@@ -614,7 +614,7 @@ values land in lineage `train_config.boundary_weight` /
 
 ### Why
 
-The bar is mean **food-class** mIoU ≥ 0.48 (Req 8.9 as amended by
+There is no longer a bar (Decision 38). The number reported is mean **food-class** mIoU (Req 8.9 as amended by
 segmenter-foundation Decision 5; was 0.60 — see
 `specs/estimation/segmenter-foundation/`). `HarnessCLI seg-bench`
 **(exists)** is the gate, but note how it works: it does **not** run the model.
@@ -625,8 +625,9 @@ segmenter-foundation Decision 5; was 0.60 — see
 > `tools/segmenter/run_validation.py` already writes: the same mean food-class
 > IoU gate quantity, recorded into `build/lineage.json`, with the
 > model-production Decision 11 developer-phase override
-> (`--allow-below-gate --reason "..."`) when the gate (0.60 at the time; since
-> re-derived to 0.48 by segmenter-foundation Decision 5) is missed. Both shipped
+> (`--allow-below-gate --reason "..."`) when the gate was missed. BOTH THE GATE
+> AND THE OVERRIDE WERE REMOVED on 2026-10-01 (segmenter-foundation Decision 38)
+> — the flag no longer exists and validation never blocks. Both shipped
 > models were gated and overridden that way (`0295ea61edd9` mean 0.4259;
 > letterbox-trained `24e0b022241a` mean 0.4054 — the letterbox recipe closes the
 > train↔runtime square-resize skew, which this offline bench cannot see).
@@ -658,7 +659,7 @@ python tools/segmenter/make_fixtures.py \
     --heldout data/foodseg103_remapped/heldout \
     --out tests/fixtures/segmenter/heldout                   # (exists)
 
-# 5b. Bench (exits non-zero if mean food-class mIoU < 0.48 — segmenter-foundation Decision 5)
+# 5b. Bench (reports mIoU; it does not gate — segmenter-foundation Decision 38)
 SHA=$(shasum -a 256 tools/segmenter/build/checkpoint.pt | cut -d' ' -f1)
 swift run HarnessCLI seg-bench \
     --fixtures-dir tests/fixtures/segmenter/heldout \
@@ -962,7 +963,7 @@ shipped app is wrong.
 
 1. Adjust the class mapping (§3b) and/or training (§4).
 2. Retrain → new `checkpoint.pt`.
-3. Regenerate fixtures and re-bench mIoU (§5). Iterate until ≥ 0.48
+3. Regenerate fixtures and re-bench mIoU (§5). Read it against the measured noise bands; there is no bar to clear
    (segmenter-foundation Decision 5).
 4. Export (§6), bundle, and validate on device (§7).
 5. When the gravimetric set exists, calibrate β_c (§9) and check end-to-end

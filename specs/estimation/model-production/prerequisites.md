@@ -6,12 +6,12 @@ These are the human/data-gated stages a coding agent cannot perform — they nee
 
 ## The only thing left for a real MVP estimate
 
-Every surrounding subsystem is code-complete: the capture → segment → volume → macros pipeline runs end-to-end against a dev-stub segmenter, and the model-production tasks (loader on `Bundle.module`, build lineage, `modelVersion` derivation, the `export.py` equivalence/parity/channel/budget/metadata gates, validation IoU + export-eligibility reporting, and the palette↔DB edition bake lock) implement everything an agent can do. What no agent can produce is the trained model itself and the on-device proof that it runs. The MVP — the app showing a **real** carbohydrate number instead of the dev-stub — is blocked on exactly the human-gated chain below.
+Every surrounding subsystem is code-complete: the capture → segment → volume → macros pipeline runs end-to-end against a dev-stub segmenter, and the model-production tasks (loader on `Bundle.module`, build lineage, `modelVersion` derivation, the `export.py` equivalence/parity/channel/budget/metadata gates, validation IoU reporting, and the palette↔DB edition bake lock) implement everything an agent can do. What no agent can produce is the trained model itself and the on-device proof that it runs. The MVP — the app showing a **real** carbohydrate number instead of the dev-stub — is blocked on exactly the human-gated chain below.
 
 **Ordered path to the MVP gate (each step gates the next):**
 
 1. **Stage 0 — Acquire FoodSeg103** (download). → unblocks the automated remap + split (Stages 1–2, already scripted).
-2. **Stage 3 — GPU training run** → `build/checkpoint.pt`. Export-eligible only if validation mIoU ≥ 0.48 mean **and** ≥ 0.45 for every carb-priority class *(re-derived bars, segmenter-foundation Decisions 5 and 14; were 0.60/0.50 — the completed stage entries below keep their recorded history)*.
+2. **Stage 3 — GPU training run** → `build/checkpoint.pt`. No IoU bar gates this: validation records mean and per-class IoU and returns no verdict *(segmenter-foundation Decision 38; the bars were 0.48 mean / 0.45 per carb-priority class, and the completed stage entries below keep their recorded history)*.
 3. **Export (automated, gated)** — run `export.py` on macOS; the task 6/7 gates (equivalence, parity, channel order, ≤ 10 MB budget, metadata stamp) run automatically and bundle `segmenter.mlpackage`. No new human judgement, but needs a Mac + the checkpoint.
 4. **Stage 7 — On-device verification** on the iPhone 13 Pro Max (ANE residency + a real capture). **This is the MVP gate (Req 6.3).** *(Superseded 2026-07-25: the verify device is now the iPhone 16 Pro on iOS 26.5 — the hardware floor moved per segmenter-foundation Decisions 22/26.)*
 
@@ -40,5 +40,5 @@ The detailed runbook for each stage (commands, flags, acceptance bars) is in [`d
 
 ## Notes
 
-- The MVP gate (**Req 6.3**) is a composite: it is met only when the export-eligibility gates (Req 3.2, 3.5, 4.2, 4.3), bundling (Req 5.2), ANE residency (Req 6.1), and the on-device run (Req 6.2) all hold. It does **not** require β_c calibration or the v1 numeric-accuracy bar.
+- The MVP gate (**Req 6.3**) is a composite: it is met only when the structural export gates (Req 4.2, 4.3), bundling (Req 5.2), ANE residency (Req 6.1), and the on-device run (Req 6.2) all hold — the IoU bars of Req 3.2/3.5 were removed by segmenter-foundation Decision 38. It does **not** require β_c calibration or the v1 numeric-accuracy bar.
 - Dataset-prep stages 1–2 (class mapping, fixed-seed splits) are automated and already scripted — they are not listed here, but they cannot run until Stage 0 provides the dataset.

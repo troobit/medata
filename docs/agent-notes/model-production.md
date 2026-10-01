@@ -42,14 +42,17 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   runtime path — see the second real model below.
 - **Validation reporting (tasks 8–9)** — `tools/segmenter/validation.py` (pure,
   torch-free). Takes a `per_class_iou` mapping, computes food-class mean IoU
-  (special channels excluded), the carb-priority subset, and the **export
-  eligibility** decision: `mean ≥ 0.48 AND every carb-priority staple ≥ 0.45`
-  (re-derived bars, segmenter-foundation Decisions 5/14; were 0.60/0.50 —
-  `HarnessCore/SegBench.swift` `passesBar` enforces the same 0.48 gate).
-  `shortfall()` lists what failed (incl. an absent staple — it cannot prove the
-  floor, Req 3.6). `record_metrics_into_lineage()` / `update_lineage_file()` write
-  the `{mean_iou, per_class_iou, carb_priority_iou, export_eligible, shortfall}`
-  block into `build/lineage.json`. Carb-priority staples: white_rice, brown_rice,
+  (special channels excluded) and the carb-priority subset. **It returns no
+  verdict** — the IoU export gate and its release override were removed by
+  segmenter-foundation Decision 38 (`MEAN_IOU_BAR`, `CARB_PRIORITY_IOU_BAR`,
+  `is_export_eligible`, `shortfall`, `record_release_override`,
+  `release_allowed` are all gone, as is `SegBench.passesBar` on the Swift side).
+  `record_metrics_into_lineage()` / `update_lineage_file()` write the
+  `{mean_iou, per_class_iou, carb_priority_iou}` block into `build/lineage.json`.
+  Lineage written before 2026-10-01 still carries `export_eligible` /
+  `shortfall` / `release_override`; `preserve_metrics` copies the block
+  wholesale, so those keys ride along as history — do not read an old
+  `export_eligible: false` as a current verdict. Carb-priority staples: white_rice, brown_rice,
   pasta, bread_white, bread_wholemeal, potato_boiled, potato_mashed, chips_fries.
 - **Held-out validation runner** — `tools/segmenter/run_validation.py` (torch).
   Runs a checkpoint over a remapped split (default `heldout`), computes per-class
@@ -95,12 +98,14 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   the same food-class-mIoU gate quantity into lineage, and the full held-out
   fixture bundle would be ~16 GB for no new information — same
   developer-phase precedent as the first model.
-- **Developer-phase release override (Decision 11)** — the strict gate advises,
-  not blocks, during the developer phase. `run_validation.py --allow-below-gate
-  --reason "..."` records an attributable `metrics.release_override` block and
-  exits 0; `validation.record_release_override()` / `release_allowed()` are the
-  pure primitives. `export_eligible` stays truthful; re-running validation drops
-  a stale override. Returns to hard-blocking before any non-developer release.
+- **No IoU gate, and no override (Decision 38, 2026-10-01)** — there is no
+  `--allow-below-gate`. `run_validation.py` reports and exits 0 on any completed
+  run; non-zero means the run could not be done (unreadable checkpoint, arch
+  mismatch, wrong label space). The gate read `mean_iou` over 33 food classes of
+  the 182-image leak-free anchor, which resolves 13 of them, so its input was
+  noise — and because nothing passed it, the override was taken every time. The
+  checks that still block an export are structural and live in `export.py`:
+  weight budget, output channel count, Core ML vs PyTorch oracle parity.
 - **Training recipe (Decision 12)** — train split gets hflip + random scale-up
   crop (`--no-augment` to disable; augmentation is resume-drift-gated) and the lr
   follows per-epoch poly-0.9 decay (`train.LR_SCHEDULE`), recorded in checkpoint +

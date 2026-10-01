@@ -1,10 +1,10 @@
-"""Validation reporting + export-eligibility tests (model-production task 8).
+"""Validation reporting tests (model-production task 8).
 
-Pure decision logic over synthetic per-class IoU inputs (Req 3.2 / 3.5 / 3.6):
-a checkpoint is export-eligible only when mean food-class IoU >= 0.48 AND every
-carb-priority staple >= 0.45 (re-derived bars, segmenter-foundation Decisions 5
-and 14; were 0.60/0.50). Independent of the gated GPU run that produces the
-real IoUs — these tests feed fixed synthetic IoUs.
+Pure reporting logic over synthetic per-class IoU inputs. There is no
+export-eligibility gate and no release override to test any more - both were
+removed by segmenter-foundation Decision 38, because the bar read a mean over 33
+classes of an anchor that resolves 13, and nothing ever passed it. What is left
+is the contract that the reporter computes and records the right numbers.
 """
 
 import json
@@ -29,10 +29,16 @@ _COMMITTED_MAPPING_IS_V2 = (
 
 # ── Bars / set contract ─────────────────────────────────────────────────────────
 
-def test_bars_and_carb_priority_set_match_spec():
-    # Re-derived bars: segmenter-foundation Decision 5 (gate) and Decision 14 (floors).
-    assert validation.MEAN_IOU_BAR == 0.48
-    assert validation.CARB_PRIORITY_IOU_BAR == 0.45
+def test_no_gate_survives_anywhere_in_the_reporter():
+    """Decision 38. A re-introduced bar would silently start blocking exports."""
+    for gone in ("MEAN_IOU_BAR", "CARB_PRIORITY_IOU_BAR", "is_export_eligible",
+                 "shortfall", "record_release_override", "release_allowed"):
+        assert not hasattr(validation, gone), f"{gone} is back"
+    assert set(validation.evaluate({"pasta": 0.5})) == {
+        "mean_iou", "per_class_iou", "carb_priority_iou"}
+
+
+def test_carb_priority_set_matches_spec():
     assert validation.CARB_PRIORITY_CLASSES == (
         "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
         "potato_boiled", "potato_mashed", "chips_fries",
@@ -57,44 +63,6 @@ def test_v2_palette_has_cereal_and_three_sentinels():
 
 
 # ── Export-eligibility decision (Req 3.2 / 3.5) ─────────────────────────────────
-
-def test_eligible_when_mean_and_carb_priority_pass():
-    report = validation.evaluate(_food_iou(0.70))
-    assert report["export_eligible"] is True
-    assert report["mean_iou"] >= validation.MEAN_IOU_BAR
-    assert report["shortfall"] == []
-    assert set(report["carb_priority_iou"]) == set(validation.CARB_PRIORITY_CLASSES)
-
-
-def test_not_eligible_when_mean_below_bar():
-    # Mean 0.46 < 0.48, even though each carb-priority staple clears its 0.45 floor.
-    report = validation.evaluate(_food_iou(0.46))
-    assert report["export_eligible"] is False
-    assert any(s["class"] == "mean" for s in report["shortfall"])
-
-
-def test_not_eligible_when_a_carb_priority_class_below_floor():
-    # Mean is high, but one staple dips under the 0.45 per-class floor (Req 3.5):
-    # a mean alone would hide it (Decision 6).
-    iou = _food_iou(0.90)
-    iou["white_rice"] = 0.40
-    report = validation.evaluate(iou)
-    assert report["mean_iou"] >= validation.MEAN_IOU_BAR
-    assert report["export_eligible"] is False
-    failing = {s["class"] for s in report["shortfall"]}
-    assert "white_rice" in failing
-
-
-def test_missing_carb_priority_class_is_a_shortfall():
-    # A staple absent from the held-out IoU report cannot prove the floor (Req 3.6).
-    iou = _food_iou(0.90)
-    del iou["pasta"]
-    report = validation.evaluate(iou)
-    assert report["export_eligible"] is False
-    assert "pasta" in {s["class"] for s in report["shortfall"]}
-
-
-# ── Reporting (Req 3.3) ─────────────────────────────────────────────────────────
 
 def test_reports_mean_per_class_and_carb_priority():
     iou = _food_iou(0.65)
@@ -123,54 +91,11 @@ def test_records_metrics_into_lineage():
     assert metrics["mean_iou"] is not None
     assert metrics["per_class_iou"] == _food_iou(0.70)
     assert set(metrics["carb_priority_iou"]) == set(validation.CARB_PRIORITY_CLASSES)
-    assert metrics["export_eligible"] is True
-    assert metrics["shortfall"] == []
 
 
-def test_records_shortfall_into_lineage_when_sub_bar():
-    lineage = {"metrics": validation.empty_metrics() if hasattr(validation, "empty_metrics") else {}}
-    out = validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
-    metrics = out["metrics"]
-    assert metrics["export_eligible"] is False
-    assert metrics["shortfall"]  # non-empty: records what fell short
-
-
-# ── Developer-phase release override (Decision 11) ──────────────────────────────
-
-def test_release_override_is_attributable_and_keeps_gate_truthful():
-    lineage = {"metrics": {}}
-    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
-    validation.record_release_override(lineage, "  dev-phase normal-use testing ")
-    metrics = lineage["metrics"]
-    assert metrics["export_eligible"] is False  # gate verdict untouched
-    assert metrics["release_override"] == {
-        "allowed": True,
-        "reason": "dev-phase normal-use testing",
-        "authorised_by": "developer",
-    }
-
-
-def test_release_override_requires_a_reason():
-    with pytest.raises(ValueError):
-        validation.record_release_override({"metrics": {}}, "   ")
-
-
-def test_release_allowed_truth_table():
-    eligible = validation.evaluate(_food_iou(0.70))
-    below = validation.evaluate(_food_iou(0.30))
-    overridden = {"metrics": dict(below)}
-    validation.record_release_override(overridden, "dev-phase")
-
-    assert validation.release_allowed(eligible) is True
-    assert validation.release_allowed(below) is False
-    assert validation.release_allowed(overridden["metrics"]) is True
-
-
-def test_revalidation_drops_a_stale_override():
-    # A new metrics outcome must need a fresh, deliberate override.
-    lineage = {"metrics": {}}
-    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
-    validation.record_release_override(lineage, "dev-phase")
-    validation.record_metrics_into_lineage(lineage, _food_iou(0.35))
-    assert "release_override" not in lineage["metrics"]
-    assert validation.release_allowed(lineage["metrics"]) is False
+def test_a_poor_run_records_the_same_shape_as_a_good_one():
+    """No verdict key appears or disappears with the numbers (Decision 38)."""
+    good = validation.evaluate(_food_iou(0.70))
+    poor = validation.evaluate(_food_iou(0.05))
+    assert set(good) == set(poor)
+    assert poor["mean_iou"] < good["mean_iou"]

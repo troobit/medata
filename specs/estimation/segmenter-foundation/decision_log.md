@@ -36,7 +36,7 @@ Create a new spec at `specs/estimation/segmenter-foundation/`, referencing `mode
 ## Decision 2: Gate derivation method fixed in requirements, number fixed in design
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the gate this derivation method produced no longer exists. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -102,7 +102,7 @@ Compute realism for a solo project: the research shows the lever is *heavy pretr
 ## Decision 4: Developer override stays available under the re-derived gate
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the override it preserved is removed along with the gate. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -134,7 +134,7 @@ User call (2026-07-10): MVP flexibility outweighs gate strictness at this stage 
 ## Decision 5: Re-derived gate fixed at 0.48 mean IoU, superseding pipeline Decision 14
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the 0.48 gate is removed. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -402,7 +402,7 @@ User call (2026-07-10): log-and-degrade beats treating checkpoint absence as tra
 ## Decision 13: Recipe-track success and gate compliance are allowed to diverge
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): there is no gate left to diverge from. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -434,7 +434,7 @@ User call (2026-07-10): raising the recipe target to the gate would define a lik
 ## Decision 14: Carb-priority per-class floors fixed at 0.45 uniform
 
 **Date**: 2026-07-10
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the 0.45 carb-priority floors are removed. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -470,7 +470,7 @@ Under the 0.45 floors only `bread_white` (0.4315) is currently below floor; `pot
 ## Decision 18: Req 2.3's uplift set anchors to the gate, not the floors
 
 **Date**: 2026-07-11
-**Status**: accepted
+**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the uplift set no longer anchors to a gate. The reasoning below is kept as history; it governs nothing.
 
 ### Context
 
@@ -1565,5 +1565,56 @@ The user's tap is a correct prompt, and that is a review-screen feature, not a s
 ### Impact
 
 `tools/segmenter/spike_masks/` (committed, venv and weights ignored). No pipeline change.
+
+---
+
+## Decision 38: The export-eligibility IoU gate and its release override are removed
+
+**Date**: 2026-10-01
+**Status**: accepted
+
+### Context
+
+`validation.py` carried an export-eligibility gate — mean food-class IoU >= 0.48 (Decision 5) and every carb-priority staple >= 0.45 (Decision 14) — and `run_validation.py` exited non-zero when a checkpoint missed it. Because no checkpoint ever met it, Decision 4 and model-production Decision 11 added `--allow-below-gate --reason "..."`, an attributable override recorded in lineage, so a below-gate model could still ship for developer-phase testing.
+
+Two things have since become clear. First, the gate's input is not a measurement. The gate reads `mean_iou`, a mean over all 33 food classes of the 182-image leak-free anchor; that anchor resolves only 13 of them, because the other 20 appear in fewer than 20 held-out images, and there the same recipe and the same seed swing by up to 0.78 between runs (estimation-quality task 14, the ten-run R8–R16 series). A bar applied to a number dominated by sampling noise produces a verdict that is also noise — and it moved: R3 crossed `bread_white`'s 0.45 floor on one run and missed it on an identical repeat.
+
+Second, the override was taken every time. Every release in the developer phase went through it, so it never withheld anything. A control that always says yes is not a control; it is a required prose field in front of an unconditional pass, and the reason strings it collected are post-hoc restatements of "the gate does not work yet".
+
+### Decision
+
+Remove the IoU gate and the release override entirely. `validation.py` computes and records `mean_iou`, `per_class_iou` and `carb_priority_iou`; it returns no verdict. `run_validation.py` reports those numbers and the mask-quality block, and exits 0 on any completed run — non-zero only when the run could not be done (unreadable checkpoint, arch mismatch, wrong label space). `MEAN_IOU_BAR`, `CARB_PRIORITY_IOU_BAR`, `is_export_eligible`, `shortfall`, `record_release_override` and `release_allowed` are deleted, along with the `export_eligible`, `shortfall` and `release_override` keys in new lineage. `CARB_PRIORITY_CLASSES` survives as a reporting subset with no floor attached.
+
+The structural export gates in `export.py` — weight budget, output channel count, Core ML vs PyTorch oracle parity — are untouched. Those catch a broken artefact rather than an underperforming one, which is a different question and one that can actually be answered on this evidence.
+
+### Rationale
+
+A quality bar is only worth having when it can distinguish a good model from a bad one on the data available. This one could not: its instrument resolves a third of the palette, and the measurement it gated on is dominated by the two-thirds it cannot see. Keeping it meant every run ended with a false negative that a human then had to type a sentence to dismiss, which trains everyone to ignore the one place a real failure would surface.
+
+Removing it loses nothing real, because nothing real was being blocked. What takes its place is the recorded metrics themselves plus the mask-quality block, read by a person against the measured noise bands (readable-13 mean 0.4783–0.5031 over six identical runs; food IoU 0.8792–0.8873). A gate can return when there is an instrument that can support one — the leak-free anchor enlarged past the 20-image readability bar for most of the palette (backlog 35). That is a prerequisite for a bar, not a consequence of having one.
+
+### Alternatives Considered
+
+- **Re-point the gate at the readable 13 and the mask block**: keep a bar, but read it off the metrics that are actually stable. Rejected for now because the readable-13 band is 0.025 wide and the mask bands 0.008–0.022; any bar inside those is a coin toss, and any bar outside them is slack enough that it would never fire. The instrument has to improve before a threshold on it means anything.
+- **Keep the gate, delete only the override**: the strictest reading, and it fails immediately — no checkpoint passes, so this blocks all developer-phase work on a number known to be noise.
+- **Keep the override, drop the `--reason` requirement**: cosmetic. It leaves the always-failing gate and the always-taken bypass in place and only removes the evidence of what was waved through.
+- **Warn without failing**: print the shortfall, exit 0. Rejected because the warning is still derived from the unresolvable mean, so it is a line of noise printed on every run — and warnings that always fire are read as decoration.
+
+### Consequences
+
+**Positive:**
+- One fewer false verdict per run, and no ceremony in front of an export.
+- The lineage `metrics` block states what was measured and nothing it cannot support.
+- The queue's exit codes become meaningful: non-zero now means a run genuinely failed, where previously every entry recorded `exit=1` as the expected outcome.
+- The remaining export gates are all structural, so a gate failure is now unambiguously a broken artefact.
+
+**Negative:**
+- No automated check stands between a bad checkpoint and a bundle swap; the judgement moves to a person reading the metrics, which depends on them actually reading them.
+- Lineage files written before this change still carry `export_eligible`, `shortfall` and `release_override`. They are preserved on re-export (`lineage.preserve_metrics` copies the block wholesale) and are now historical, so any reader must not treat an old `export_eligible: false` as a current verdict.
+- Decisions 2, 4, 5, 13, 14 and 18 here, and model-production Decisions 11, 15 and 16, are deprecated by this entry; the gate derivation work they record no longer governs anything.
+
+### Impact
+
+`tools/segmenter/validation.py`, `tools/segmenter/run_validation.py`, `tools/segmenter/queue/lib.sh`, `tools/segmenter/tests/test_validation.py`. Requirements 3.2, 3.4, 3.5 and 3.6 in model-production no longer describe the code. No Swift code reads the gate (one stale comment in `HarnessCore/SegBench.swift`).
 
 ---

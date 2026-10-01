@@ -59,6 +59,26 @@ def content_shape(w: int, h: int, target: int = SCORE_SIZE) -> tuple[int, int]:
     return max(1, min(target, round(w * s))), max(1, min(target, round(h * s)))
 
 
+def resample_nearest(a: np.ndarray, sw: int, sh: int) -> np.ndarray:
+    """Nearest-neighbour resample the last two axes of ``a`` to (sh, sw).
+
+    Label maps and probability planes alike, so every run is scored in the one
+    SCORE_SIZE space this module's metrics are defined in no matter what input
+    size the model ran at. That matters for ``boundary_f`` above all: its
+    tolerance is in PIXELS OF THE SCORED GRID, so scoring a 641-input model on a
+    641 grid marks it against a ruler ~0.8x the physical length of the 513 one
+    every other run was marked with, and the numbers are not comparable. Runs at
+    SCORE_SIZE hit the identity path and are untouched.
+    """
+    h, w = a.shape[-2:]
+    if (h, w) == (sh, sw):
+        return a
+    # Pixel centres, so the mapping is symmetric and has no half-pixel drift.
+    yi = np.clip(((np.arange(sh) + 0.5) * h / sh).astype(np.intp), 0, h - 1)
+    xi = np.clip(((np.arange(sw) + 0.5) * w / sw).astype(np.intp), 0, w - 1)
+    return a[..., yi[:, None], xi[None, :]]
+
+
 # ── binary morphology ───────────────────────────────────────────────────────────
 
 def _shifted(mask: np.ndarray, dy: int, dx: int) -> np.ndarray:
