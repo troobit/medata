@@ -6,19 +6,13 @@ per-class IoU by palette name, and records the metrics into
 ``build/lineage.json`` via ``validation.update_lineage_file``.
 
 A second pass over the same split records the class-agnostic mask-quality
-numbers (MD-29, segmenter-foundation Decision 37; ``mask_quality.py``) under
-``metrics.mask_quality`` - food IoU, region IoU, boundary F at 2 px, top-3
-shortlist hit. ``--mask-quality-only`` re-scores an existing checkpoint into its
-lineage file without touching the class metrics (for re-validating old runs).
+numbers (MD-29; ``mask_quality.py``) under ``metrics.mask_quality`` - food IoU,
+region IoU, boundary F at 2 px, top-3 shortlist hit. ``--mask-quality-only``
+re-scores an existing checkpoint into its lineage file without touching the
+class metrics (for re-validating old runs).
 
-**This runner reports; it does not gate** (segmenter-foundation Decision 38).
-There was an export-eligibility bar here, and an ``--allow-below-gate --reason``
-override to step around it; both are gone. The bar read a mean over 33 food
-classes of a 182-image anchor that resolves only 13 of them, so its input was
-noise; and nothing ever passed it, so the override was taken every time. Exit
-status is now 0 on a completed run and non-zero only when the run could not be
-done (bad checkpoint, arch mismatch, wrong label space). The checks that still
-block an export are structural and live in ``export.py``.
+Exits 0 on a completed run; non-zero when the run could not be done (unreadable
+checkpoint, arch mismatch, wrong label space).
 
 Usage::
 
@@ -60,9 +54,8 @@ def _channel_names() -> list[str]:
 def per_class_iou_by_name(model, loader, device, names: list[str],
                           forward_logits=None) -> dict[str, float]:
     """IoU per palette class over a split, keyed by name. Classes with no GT and
-    no prediction are OMITTED (validation.shortfall treats an absent staple as
-    unprovable, which is the intended semantics). ``forward_logits`` is the arch
-    registry's output normaliser (default: torchvision ``["out"]``)."""
+    no prediction are OMITTED. ``forward_logits`` is the arch registry's output
+    normaliser (default: torchvision ``["out"]``)."""
     import torch
 
     if forward_logits is None:
@@ -254,8 +247,6 @@ def main(argv: list[str] | None = None) -> int:
         lineage = validation.update_lineage_file(iou, args.lineage)
         metrics = lineage["metrics"]
 
-        # Reported, not judged: on the leak-free anchor this mean is dominated by
-        # the 20 classes it cannot resolve (validation.food_mean_iou).
         print(f"[validate] mean food-class IoU = {metrics['mean_iou']:.4f}")
         for name in validation.CARB_PRIORITY_CLASSES:
             value = metrics["carb_priority_iou"].get(name)
@@ -263,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[validate]   staple {name} = {got}")
 
     # Class-agnostic mask quality (MD-29): a second pass, recorded beside the
-    # class metrics. Record only — the gate below does not read it.
+    # class metrics.
     model_shapes, score_shapes = _score_shapes(dataset, args.target_size)
     per_image = mask_quality_over_loader(
         model, loader, device, model_shapes,

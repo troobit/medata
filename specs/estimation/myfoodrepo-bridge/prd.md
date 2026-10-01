@@ -73,7 +73,6 @@ Covers `tools/segmenter/train.py`, `export.py`, `validation.py`, `lineage.py`, a
    - Acceptance: launched per `docs/ml-training.md` §4 (`nohup caffeinate -is`, resume sidecar active, log file retained); `train.py` and its imports are not edited while the run is live (`docs/agent-notes/model-production.md` gotcha); the completed checkpoint and its lineage entry exist.
 3. The run MUST be validated with an honest before/after against the preserved leak-free anchor, and the promotion decision recorded: swap the bundled model only if leak-free mean food-class IoU beats the 0.3776 anchor of `24e0b022241a` AND no existing carb-priority staple regresses materially; otherwise record the rejection in the ledger exactly as Decisions 24/25 did.
    - Acceptance: `run_validation.py` output recorded in `tools/segmenter/build/lineage.json`, including per-staple and cereal IoU; the promotion or rejection verdict, with numbers, lands in the segmenter-foundation decision log.
-   - Acceptance: if promoted while still below the 0.48/0.45 gates, the developer-phase override is used with an attributable reason and `export_eligible` stays truthful.
 4. On promotion, the model MUST be exported and swapped through the existing gates and deployed for verification: `export.py` (24 MiB weight budget, 36 channels in palette order, oracle parity), then `make deploy-release`.
    - Acceptance: export gates pass; the device launch log shows the new `segmenterSource=coreml_<12-hex>` with a matching `buildStamp` via `make logs-device`.
 

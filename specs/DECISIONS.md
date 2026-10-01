@@ -1255,7 +1255,7 @@ non-defects and builds throwaway crutches that hide the real bug.
 ### Context
 
 Through September the estimation work concentrated on the segmenter's class accuracy: five
-training runs (R3–R9) moved the leak-free anchor mean between 0.40 and 0.43 against a 0.48 bar,
+training runs (R3–R9) moved the leak-free anchor mean between 0.40 and 0.43,
 and the R7/R9 repeats showed single-class scores swinging by up to 0.45 between identical
 runs. Meanwhile the two-view carve reads two to three times the single-view volume, the corpus
 holds three weighed plates, and the review screen already lets the user pick the food from a

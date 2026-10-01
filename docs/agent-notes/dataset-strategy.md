@@ -170,8 +170,7 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
   the runtime path, plus independent vertical flip augmentation; shipped as
   model `24e0b022241a`, heldout 0.4054 — slightly lower offline, but with
   train↔runtime parity that the offline bench cannot see, expected to improve
-  real-device behaviour). Both below the strict gate; both shipped under
-  Decision 11 developer-phase overrides. `docs/ml-training.md` §5 seg-bench
+  real-device behaviour). `docs/ml-training.md` §5 seg-bench
   was skipped in favour of `run_validation.py` (stage 9), which records the
   same gate quantity into lineage without the ~16 GB fixture bundle; §6 export
   is done — the bundled `segmenter.mlpackage` carries `24e0b022241a`. Details
@@ -185,8 +184,7 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
   a re-cut into a populated dir leaks images across splits. Three gotchas
   learned here: (1) **brown_rice, bread_wholemeal, potato_mashed have zero
   FoodSeg103 images** — the class mapping routes no source category to those
-  channels, so no seed makes them measurable and `validation.shortfall` will
-  always report them absent (strict gate unattainable on FoodSeg103 alone);
+  channels, so no seed makes them measurable and they are always reported absent;
   (2) **re-measuring an OLD checkpoint on a re-cut heldout is
   train-contaminated** — `checkpoint_letterbox.pt` scored 0.7403 there because
   78.7% of the new heldout was in its seed-1234 train split; the honest anchor

@@ -40,7 +40,7 @@ references:
   - run_validation.py output into tools/segmenter/build/lineage.json including per-staple and cereal IoU
   - Promotion criterion: leak-free mean food-class IoU beats the 0.3776 anchor of 24e0b022241a AND no existing carb-priority staple regresses materially; otherwise record the rejection like Decisions 24/25
   - Verdict entry (promotion or rejection, with numbers) in specs/estimation/segmenter-foundation/decision_log.md, Enhanced Nygard format; outcome note in docs/agent-notes/model-production.md
-  - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
+  - Promotion reason recorded in lineage
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
 - [x] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->

@@ -94,7 +94,7 @@ swift build -c release --product HarnessCLI
 needs `protobuf` at least as new as the system `protoc` (a stale runtime fails with
 `VersionError: Detected incompatible Protobuf Gencode/Runtime versions`).
 
-`seg-bench` exits 1 whenever mIoU is under the 0.48 bar, which the current checkpoint
+`seg-bench` reports mIoU, which the current checkpoint
 is — write the report with `--output` and read the file, do not rely on the exit code.
 
 **Read the mean with the denominator.** `SegBench` drops a class whose IoU

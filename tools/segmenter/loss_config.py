@@ -531,7 +531,7 @@ def food_channel_indices(co_stats: Mapping[str, Any]) -> list[int]:
 
     Every channel minus the ``special_channel_indices`` recorded by
     ``prepare_dataset.py`` — the same special-channel exclusion
-    ``validation.special_channel_names`` applies to the IoU gate. "Background
+    ``validation.special_channel_names`` applies to the IoU report. "Background
     present" is trivially true of every plate and carries no signal, and
     special-channel pixels are already supervised by the CE base, so the
     presence-BCE vectors, the ground-truth compat set, and the priors are all

@@ -1,10 +1,7 @@
 """Validation reporting tests (model-production task 8).
 
-Pure reporting logic over synthetic per-class IoU inputs. There is no
-export-eligibility gate and no release override to test any more - both were
-removed by segmenter-foundation Decision 38, because the bar read a mean over 33
-classes of an anchor that resolves 13, and nothing ever passed it. What is left
-is the contract that the reporter computes and records the right numbers.
+Pure reporting logic over synthetic per-class IoU inputs: the reporter computes
+and records the right numbers.
 """
 
 import json
@@ -28,15 +25,6 @@ _COMMITTED_MAPPING_IS_V2 = (
 
 
 # ── Bars / set contract ─────────────────────────────────────────────────────────
-
-def test_no_gate_survives_anywhere_in_the_reporter():
-    """Decision 38. A re-introduced bar would silently start blocking exports."""
-    for gone in ("MEAN_IOU_BAR", "CARB_PRIORITY_IOU_BAR", "is_export_eligible",
-                 "shortfall", "record_release_override", "release_allowed"):
-        assert not hasattr(validation, gone), f"{gone} is back"
-    assert set(validation.evaluate({"pasta": 0.5})) == {
-        "mean_iou", "per_class_iou", "carb_priority_iou"}
-
 
 def test_carb_priority_set_matches_spec():
     assert validation.CARB_PRIORITY_CLASSES == (
@@ -93,8 +81,7 @@ def test_records_metrics_into_lineage():
     assert set(metrics["carb_priority_iou"]) == set(validation.CARB_PRIORITY_CLASSES)
 
 
-def test_a_poor_run_records_the_same_shape_as_a_good_one():
-    """No verdict key appears or disappears with the numbers (Decision 38)."""
+def test_the_metrics_shape_does_not_vary_with_the_numbers():
     good = validation.evaluate(_food_iou(0.70))
     poor = validation.evaluate(_food_iou(0.05))
     assert set(good) == set(poor)

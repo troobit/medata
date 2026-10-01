@@ -240,7 +240,7 @@ consequences).
 ## 10. Why this is the priority
 
 Top MVP accuracy blocker. A 2–3.75× volume error dominates the carb number and
-cannot be repaid by segmenter IoU work (currently 0.3927 against a 0.48 gate).
+cannot be repaid by segmenter IoU work (currently 0.3927).
 Per-meal carb MAE has **never** been measured end-to-end, so this defect is
 uncharacterised in aggregate — the only weighed truth is two captures, both far
 outside the ≤~13 g SNAQ target.

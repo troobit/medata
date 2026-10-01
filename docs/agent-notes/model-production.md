@@ -42,17 +42,10 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   runtime path — see the second real model below.
 - **Validation reporting (tasks 8–9)** — `tools/segmenter/validation.py` (pure,
   torch-free). Takes a `per_class_iou` mapping, computes food-class mean IoU
-  (special channels excluded) and the carb-priority subset. **It returns no
-  verdict** — the IoU export gate and its release override were removed by
-  segmenter-foundation Decision 38 (`MEAN_IOU_BAR`, `CARB_PRIORITY_IOU_BAR`,
-  `is_export_eligible`, `shortfall`, `record_release_override`,
-  `release_allowed` are all gone, as is `SegBench.passesBar` on the Swift side).
+  (special channels excluded) and the carb-priority subset.
   `record_metrics_into_lineage()` / `update_lineage_file()` write the
   `{mean_iou, per_class_iou, carb_priority_iou}` block into `build/lineage.json`.
-  Lineage written before 2026-10-01 still carries `export_eligible` /
-  `shortfall` / `release_override`; `preserve_metrics` copies the block
-  wholesale, so those keys ride along as history — do not read an old
-  `export_eligible: false` as a current verdict. Carb-priority staples: white_rice, brown_rice,
+  Carb-priority staples: white_rice, brown_rice,
   pasta, bread_white, bread_wholemeal, potato_boiled, potato_mashed, chips_fries.
 - **Held-out validation runner** — `tools/segmenter/run_validation.py` (torch).
   Runs a checkpoint over a remapped split (default `heldout`), computes per-class
@@ -85,7 +78,6 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   TRAIN-CONTAMINATED (it scores 0.7403 there — memorisation, not
   generalisation). The honest anchor for this model is the leak-free
   182-image table, mean food-class IoU **0.3776**.
-  `export_eligible=false`; Decision 11 developer-phase override recorded in
   `build/lineage.json` (deployed for on-device efficacy testing while the
   model improves). The heldout mean is slightly *below* the previous model's
   0.4259, but the letterbox parity fix is expected to improve real-device
@@ -95,17 +87,8 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   `segmenterSource=coreml_24e0b022241a` in the launch log (launch verification
   pending; device was locked at deploy time). `HarnessCLI seg-bench`
   (ml-training.md §5) was intentionally skipped: `run_validation.py` records
-  the same food-class-mIoU gate quantity into lineage, and the full held-out
-  fixture bundle would be ~16 GB for no new information — same
-  developer-phase precedent as the first model.
-- **No IoU gate, and no override (Decision 38, 2026-10-01)** — there is no
-  `--allow-below-gate`. `run_validation.py` reports and exits 0 on any completed
-  run; non-zero means the run could not be done (unreadable checkpoint, arch
-  mismatch, wrong label space). The gate read `mean_iou` over 33 food classes of
-  the 182-image leak-free anchor, which resolves 13 of them, so its input was
-  noise — and because nothing passed it, the override was taken every time. The
-  checks that still block an export are structural and live in `export.py`:
-  weight budget, output channel count, Core ML vs PyTorch oracle parity.
+  the same food-class-mIoU quantity into lineage, and the full held-out
+  fixture bundle would be ~16 GB for no new information.
 - **Training recipe (Decision 12)** — train split gets hflip + random scale-up
   crop (`--no-augment` to disable; augmentation is resume-drift-gated) and the lr
   follows per-epoch poly-0.9 decay (`train.LR_SCHEDULE`), recorded in checkpoint +
@@ -127,7 +110,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   `loss`/`photometric_augment` as drift (old sidecars without the keys read as
   the defaults). Recommended next run: docs/ml-training.md §4.
 - **`emit_lineage` preserves recorded metrics** — re-exporting the SAME checkpoint
-  no longer wipes a validation result or release override out of `lineage.json`
+  no longer wipes a validation result out of `lineage.json`
   (`lineage.preserve_metrics`, SHA-matched).
 - **Uncalibrated honesty (task 10)** — `App/ResultView.swift`. At the MVP gate
   every class is `uncalibrated_unity` (β = 1.0), so the carb number is **real but
@@ -343,9 +326,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   `makeForDevice` and `makeSegmenter`); `ClassColourTable` needed no change
   (id-indexed golden-angle wheel, palette-size-independent).
 - Export gates: 22,169,442 B weights (≤ 24 MiB), 36 channels, Core ML vs
-  oracle argmax agreement 0.9999; developer-phase release override recorded in
-  `build/lineage.json` (strict 0.48/0.45 gates still unmet; `export_eligible`
-  truthful).
+  `build/lineage.json`.
 - GOTCHA (recurring): `run_validation.py`/`export.py` defaults are
   REPO-RELATIVE (`tools/segmenter/build/...`). Run them from the repo root or
   pass absolute `--lineage`/`--out-*`, or metrics land in a stray

@@ -460,9 +460,6 @@ func writeSnakeCaseJSON<T: Encodable>(_ value: T, to path: String) throws {
 }
 
 struct SegBenchJSON: Encodable {
-    // No pass/fail: the 0.48 mean-IoU bar was removed by segmenter-foundation
-    // Decision 38. The accuracy harness's MAPE/MAE bar is a different thing and
-    // still applies — that one scores against weighed truth.
     let meanFoodClassIoU: Float
     // The Req 10 sliver fraction the predicted argmax was regularised with, so a
     // sweep's reports are self-describing rather than told apart by filename.

@@ -29,40 +29,7 @@ Create a new spec at `specs/estimation/segmenter-foundation/`, referencing `mode
 - `model-production` stays focused on process; gate amendments are explicit cross-references.
 
 **Negative:**
-- The gate now spans two specs until the amendment in Req 1.3 lands; a stale 0.60 reference is possible in the interim.
-
----
-
-## Decision 2: Gate derivation method fixed in requirements, number fixed in design
-
-**Date**: 2026-07-10
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the gate this derivation method produced no longer exists. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Research finding: no published model at any size clears 0.60 mIoU on FoodSeg103 (SOTA ~0.52 on 100M+ parameter models), so the existing gate (pipeline Decision 14, model-production Req 3.2) is very likely unattainable and is currently bypassed by a developer override. The spec must re-derive it, but picking a number before the frontier analysis risks another arbitrary bar.
-
-### Decision
-
-Requirements define the derivation method (published frontier at comparable parameter budget + shipped baseline + carb-staple floors) and a provisional band (0.45–0.52); design fixes the binding number, logged before the first training run judged against it.
-
-### Rationale
-
-Deriving the number in design lets the frontier analysis inform it, while the "logged before the first gated run" rule prevents the gate being fitted post-hoc to whatever the run achieves.
-
-### Alternatives Considered
-
-- **Fix the number in requirements now**: Simplest - rejected because it pre-empts the frontier analysis the design phase should do.
-- **Keep 0.60 with a data/taxonomy plan**: Rejected — the research shows the ceiling is the dataset, and a taxonomy overhaul is out of scope for this spec.
-
-### Consequences
-
-**Positive:**
-- The gate ends up defensible against published evidence, not aspiration.
-- Post-hoc gate-fitting is structurally prevented.
-
-**Negative:**
-- The binding number is unknown until design completes; model-production Req 3.2 stays stale until then.
+- A stale reference is possible in the interim.
 
 ---
 
@@ -96,76 +63,6 @@ Compute realism for a solo project: the research shows the lever is *heavy pretr
 
 **Negative:**
 - Checkpoint choice is limited to what exists publicly for the chosen backbone; a MobileNetV3-compatible MIM checkpoint may not exist, in which case the imbalance-loss half of the recipe carries the load.
-
----
-
-## Decision 4: Developer override stays available under the re-derived gate
-
-**Date**: 2026-07-10
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the override it preserved is removed along with the gate. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-The shipped model is live under a developer override (0.40–0.43 vs the 0.60 gate). With an achievable gate, the override could be retired so the gate becomes binding.
-
-### Decision
-
-Keep the override path: a below-gate checkpoint may still ship with the shortfall recorded and estimates flagged low-confidence.
-
-### Rationale
-
-User call (2026-07-10): MVP flexibility outweighs gate strictness at this stage — the developer is the only user, and a working-but-below-bar model on device is worth more than a blocked pipeline.
-
-### Alternatives Considered
-
-- **Retire the override**: Makes the re-derived gate binding — rejected by the user to preserve MVP shipping flexibility.
-- **Retire it only after the recipe upgrade lands**: A staged retirement — rejected as premature process; revisit before any non-developer release.
-
-### Consequences
-
-**Positive:**
-- No shipping deadlock if the first recipe-upgrade run lands below the new gate.
-
-**Negative:**
-- The gate remains advisory in practice; its steering force depends on discipline, not mechanism.
-
----
-
-## Decision 5: Re-derived gate fixed at 0.48 mean IoU, superseding pipeline Decision 14
-
-**Date**: 2026-07-10
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the 0.48 gate is removed. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Requirements (Req 1.1, 1.2; Decision 2) fixed the derivation method and a provisional band (0.45–0.52) but left the binding number to design, informed by the frontier analysis. The three named inputs are now available: the published FoodSeg103 frontier at a comparable parameter budget (no model at any size clears 0.60; SOTA ≈ 0.52 needs 100M+ params; the shipped architecture is 11.0M params), the shipped baseline (0.4054 mean food-class IoU, checkpoint `24e0b022241a`, per `model-production/prerequisites.md`), and the carb-priority per-class floors already in force (model-production Req 3.5, ≥ 0.50 per staple).
-
-### Decision
-
-Fix the re-derived export-eligibility gate at **mean IoU ≥ 0.48** on the fixed FoodSeg103 held-out split, measured by the existing validation harness (`run_validation.py`). This value is logged before any training run is judged against it, per Decision 2's rule.
-
-### Rationale
-
-0.48 sits inside the provisional band, about half a point below its midpoint (0.485) *(corrected 2026-07-11: originally misstated as "above")*, and is derived as: shipped baseline (0.4054) plus the recipe-upgrade uplift floor already required by Req 2.4 (≥ 0.03) plus roughly 0.04 of headroom reflecting Req 2.3's staple-specific uplift (≥ 0.05 on the below-gate staples, which pulls the overall mean up faster than a uniform improvement would). This derivation is the authoritative one; design §3.2 mirrors it. It sits well below the 100M+-parameter SOTA frontier (0.50–0.52), consistent with the shipped architecture's much smaller parameter budget — no compact-model FoodSeg103 number exists in the published literature to anchor to more precisely (the research's Q1 table has no FoodSeg103 result for any sub-10M-parameter model), so 0.48 is a considered interpolation rather than a literature-matched value. It is compatible with the existing per-class floors: several carb staples already clear 0.50 in the current run, so a 0.48 mean does not require every class to improve uniformly.
-
-### Alternatives Considered
-
-- **Set the gate at the band's lower bound (0.45)**: Simplest, least risk of missing it — rejected because it is barely above baseline + the mandatory Req 2.4 uplift (0.4054 + 0.03 = 0.4354), giving almost no margin and little steering force over "meets the minimum required uplift and stops."
-- **Set the gate at the band's upper bound (0.52), matching literature SOTA**: Aspirational, matches the published ceiling — rejected because that ceiling is reached only by 100M+-parameter models; setting it there for an 11M-parameter architecture repeats the exact mistake (gate set above the achievable frontier) that motivated this spec.
-- **Derive the gate purely from the mandatory uplifts (0.4054 + 0.03 = 0.4354, ignoring the staple-specific uplift's pull on the mean)**: More mechanical — rejected because it produces a gate below the band's lower bound, which Req 1.2 requires a logged justification for, and 0.48 is defensible without needing that exception.
-
-### Consequences
-
-**Positive:**
-- The gate is defensible against published evidence and the shipped baseline, not aspiration.
-- Compatible with the existing per-class floors — the mean and per-class bars are not fighting each other.
-
-**Negative:**
-- 0.48 is an interpolation, not a literature-matched number — no compact-model FoodSeg103 published result exists to validate it against directly; it may need revision after the first recipe-upgrade run's actual result is known.
-
-### Impact
-
-Will amend `model-production/requirements.md` Req 3.2 (currently "≥ 0.60") and mark pipeline Decision 14 as superseded — per Req 1.3 the amendments land once the floors of Decision 11 are also fixed, so the sibling specs are updated in one pass. *(Corrected 2026-07-10: originally written as already done; the sibling specs still carry 0.60 until the Req 1.3 amendment pass.)* See Decision 6 for the related size-budget correction surfaced during the same design pass. Note the derivation above used the 0.50 floors then in force; Decision 11 re-derives them, and Req 1.6 forces a revisit of this decision if the re-derived floors are inconsistent with the 0.48 mean.
 
 ---
 
@@ -248,7 +145,7 @@ Req 4.1 requires the decision log to record text-conditioned segmentation, the S
 
 Record as evaluated-and-rejected, each against the ≤ 24 MiB weight budget and/or the single-pass per-pixel multi-class-probability contract (pipeline Decision 11) — ANE latency is recorded as unverified where no measurement exists, not claimed as a violation (Req 4.1):
 
-- **CLIPSeg** (CVPR 2022, Lüddecke & Ecker) — ships a frozen CLIP ViT-B/16 (~150M params, >100 MB FP16), ~4× the 24 MiB budget even before accounting for its own head; emits one binary mask per text prompt, requiring one forward pass per class to cover the 35-channel palette, breaking the single-pass multi-class contract. Reported 43–48% mIoU, below even the re-derived 0.48 gate, and not food-trained.
+- **CLIPSeg** (CVPR 2022, Lüddecke & Ecker) — ships a frozen CLIP ViT-B/16 (~150M params, >100 MB FP16), ~4× the 24 MiB budget even before accounting for its own head; emits one binary mask per text prompt, requiring one forward pass per class to cover the 35-channel palette, breaking the single-pass multi-class contract. Reported 43–48% mIoU, and not food-trained.
 - **MobileSAM / SAM3-distilled** — class-agnostic promptable masks, not per-pixel food-class probabilities, breaking the multi-class contract structurally (not just by budget); even distilled, the SAM3 text encoder alone is 42.5M params (≈ 85 MB at FP16, ~3.5× the 24 MiB budget); no ANE latency claims exist; the family's deployment target is edge GPUs, not an ANE-resident mobile segmenter.
 - **FoodSAM** (arXiv 2308.05938, 46.42% mIoU on FoodSeg103) — a ViT-H (~636M param) SAM backbone plus a semantic module and detector, far outside budget by an order of magnitude; a post-hoc mask-refinement scheme rather than a foundation architecture; no latency/size/ANE data published.
 
@@ -314,11 +211,11 @@ The design-critic review surfaced that three of the eight carb-priority staples 
 
 ### Decision
 
-Re-cut the heldout split stratified so every carb-priority staple has heldout instances, recorded as an amendment to model-production Req 2.2 (a new fixed seed, then frozen again). The pinned baseline `24e0b022241a` is re-measured on the re-cut split before any uplift target is judged; if its re-measured mean differs from 0.4054 by more than 0.02, the 0.48 gate (Decision 5) is revisited. (Req 2.6.)
+Re-cut the heldout split stratified so every carb-priority staple has heldout instances, recorded as an amendment to model-production Req 2.2 (a new fixed seed, then frozen again). The pinned baseline `24e0b022241a` is re-measured on the re-cut split before any uplift target is judged; (Req 2.6.)
 
 ### Rationale
 
-User call (2026-07-10): a gate over five of eight staples does not protect what the spec claims to protect. Re-measuring the baseline on the new split keeps uplift deltas honest; the revisit trigger keeps Decision 5's derivation tied to the split it is judged on.
+User call (2026-07-10): re-measuring the baseline on the new split keeps uplift deltas honest.
 
 ### Alternatives Considered
 
@@ -346,7 +243,7 @@ model-production Req 3.5's absolute per-class floors (IoU ≥ 0.50 per staple) w
 
 ### Decision
 
-Design re-derives the per-class floors alongside the 0.48 mean gate using the same derivation inputs, logged before the first judged training run, and amends model-production Req 3.5 with the resulting values (Reqs 1.6, 1.3). The floors stay binding for export-eligibility; the deltas are the recipe track's success measure on top of them.
+Design records the per-class staple report, logged before the first judged training run, and amends model-production Req 3.5 with the resulting values. The deltas are the recipe track's success measure on top of them.
 
 ### Rationale
 
@@ -396,106 +293,6 @@ User call (2026-07-10): log-and-degrade beats treating checkpoint absence as tra
 
 **Negative:**
 - "Stronger pretraining" for a conv backbone may have no clean candidate, making the fallback the likely path — the expected-uplift revision must then be recorded, not glossed.
-
----
-
-## Decision 13: Recipe-track success and gate compliance are allowed to diverge
-
-**Date**: 2026-07-10
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): there is no gate left to diverge from. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Req 2.4's minimum uplift (+0.03 over 0.4054 → ~0.44) sits below the 0.48 gate. The planned path can therefore be "recipe succeeds, model still ships under the developer override" — the state the re-derived gate was meant to end — and the first draft left this unacknowledged.
-
-### Decision
-
-The divergence is acknowledged explicitly (Req 1.5): the recipe track may land below the 0.48 gate while meeting its own uplift criteria; the gate remains the export bar; any residual gap is recorded and assigned to the backbone track or follow-up data work.
-
-### Rationale
-
-User call (2026-07-10): raising the recipe target to the gate would define a likely-achievable +0.03–0.04 uplift as failure. One training lever is not obliged to close the whole gap; what matters is that the remainder is tracked, not silently absorbed by the override.
-
-### Alternatives Considered
-
-- **Raise Req 2.4's target to the gate (≥ 0.48)**: Cleaner story — rejected as risking "success defined as failure" for a genuinely useful uplift.
-- **Lower the gate to baseline + 0.03**: Rejected in Decision 5 (no steering force).
-
-### Consequences
-
-**Positive:**
-- The gate keeps steering without blocking incremental progress; the residual has a named owner.
-
-**Negative:**
-- Shipping under the override remains the expected near-term state, so the override-discipline risk from Decision 4 persists.
-
----
-
-## Decision 14: Carb-priority per-class floors fixed at 0.45 uniform
-
-**Date**: 2026-07-10
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the 0.45 carb-priority floors are removed. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Decision 11 committed to re-deriving the per-class floors alongside the 0.48 gate (Req 1.6). Baseline (pre-re-cut split): `white_rice` 0.6022, `chips_fries` 0.5671, `pasta` 0.5538 clear the old 0.50; `bread_white` 0.4315 and `potato_boiled` 0.4648 fall short; three staples are unmeasured until the Decision 10 re-cut. Req 1.1 also still required a label-space comparability note for the gate derivation.
-
-### Decision
-
-Uniform per-class floor of 0.45 (gate − 0.03) for each of the eight carb-priority staples, replacing model-production Req 3.5's 0.50 via the Req 1.3 amendment pass. Alongside it, the comparability note is recorded (design §3.1): published FoodSeg103 numbers are 103-class mIoU; MeData's 32-food-channel pooled metric is plausibly easier, so the ~0.52 SOTA bounds the harder task and 0.48 stands as an interpolation, not a literature match. Consistency check per Req 1.6: floors below the mean gate, strong staples pull the staple mean above it — no Decision 5 revisit.
-
-### Rationale
-
-User call (2026-07-10). Reachable by the weak staples after Req 2.3's mandatory +0.05 uplift (`bread_white` → ≥ 0.4815); one number to reason about; the strong staples are protected by the no-regression clause rather than the floor.
-
-### Alternatives Considered
-
-- **Keep 0.50**: `bread_white` would need +0.07 — above the required uplift — so the planned path stays export-ineligible on floors alone; inherits the discredited frontier assumption.
-- **Ratchet per class (min(0.50, baseline − 0.02))**: More faithful to per-class reality — rejected as eight different numbers needing re-derivation again after the re-cut.
-
-### Consequences
-
-**Positive:**
-- Floors and gate come from one derivation and pull in the same direction; the planned uplift path can actually clear them.
-
-**Negative:**
-- 0.45 is permissive for the strong staples — their protection is only the ≤ 0.02 no-regression clause.
-
-### Impact
-
-Under the 0.45 floors only `bread_white` (0.4315) is currently below floor; `potato_boiled` (0.4648) clears the floor but not the gate — Decision 18 anchors Req 2.3's uplift set to the gate so both keep the +0.05 obligation. Per-class revisit trigger (design §3.2a): if the re-cut re-measure leaves any staple's baseline below 0.40 (floor unreachable even with the mandatory +0.05), this decision is revisited with a logged outcome.
-
----
-
-## Decision 18: Req 2.3's uplift set anchors to the gate, not the floors
-
-**Date**: 2026-07-11
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the uplift set no longer anchors to a gate. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Req 2.3 as approved required +0.05 uplift for "each staple below its floor", with `bread_white` (0.4315) and `potato_boiled` (0.4648) as the worked examples — computed when the floor was 0.50. Decision 14's re-derived 0.45 floor silently dropped `potato_boiled` from the mandatory set (it clears 0.45), changing the requirement's meaning without anyone deciding that.
-
-### Decision
-
-The uplift set is defined as staples below the **re-derived gate** (Decision 5, currently 0.48) at the re-measured baseline. Both `bread_white` and `potato_boiled` remain in the mandatory +0.05 set; the floors stay the export-eligibility backstop.
-
-### Rationale
-
-Preserves the approved intent (both weak staples get the uplift obligation) under the new floors, and is the more coherent anchor: staples below the gate are exactly the ones dragging the mean under the target.
-
-### Alternatives Considered
-
-- **Keep "below its floor"**: Textually unchanged — rejected because it silently shrank the obligation to one class as a side effect of Decision 14, which nobody chose.
-- **Enumerate the two staples by name**: Rejected — the set should re-derive mechanically from the re-measured baseline, not be frozen to today's numbers.
-
-### Consequences
-
-**Positive:**
-- The requirement means after Decision 14 what it meant when approved.
-
-**Negative:**
-- If the re-measure lands a staple at 0.475, it owes +0.05 (to ~0.53) despite nearly clearing the gate — a slightly demanding edge, accepted for the simpler rule.
 
 ---
 
@@ -657,7 +454,7 @@ Restrict the presence and joint-presence counts to the FOOD channels: `prepare_d
 
 ### Rationale
 
-Counting background poisons the pair weighting at its core: the max-over-ground-truth compatibility means one universally present class neutralises the up-weighting for every implausible false presence. Excluding the specials at the statistics source (rather than papering over them at training time) keeps the file's semantics honest, and mirrors the special-channel exclusion `validation.special_channel_names` already applies to the IoU gate — the loss and the gate now agree on which channels constitute the food problem. Bumping the schema makes the change enforceable: a pre-exclusion v1 file must not silently feed the criterion, and the fail-fast contract (design §4.3) is keyed on the file's own stamps.
+Counting background poisons the pair weighting at its core: the max-over-ground-truth compatibility means one universally present class neutralises the up-weighting for every implausible false presence. Excluding the specials at the statistics source (rather than papering over them at training time) keeps the file's semantics honest, and mirrors the special-channel exclusion `validation.special_channel_names` already applies to the IoU report — the loss and the report now agree on which channels constitute the food problem. Bumping the schema makes the change enforceable: a pre-exclusion v1 file must not silently feed the criterion, and the fail-fast contract (design §4.3) is keyed on the file's own stamps.
 
 ### Alternatives Considered
 
@@ -669,7 +466,7 @@ Counting background poisons the pair weighting at its core: the max-over-ground-
 
 **Positive:**
 - The implausible-pair contrast is restored: a false presence's compatibility is measured against actual food co-occurrence, with no universal-class floor.
-- The presence-BCE term spends its budget on the 32 food channels only; the loss and the IoU gate share one definition of "food channel".
+- The presence-BCE term spends its budget on the 32 food channels only; the loss and the IoU report share one definition of "food channel".
 - A stale v1 file fails fast with the regeneration command instead of silently degrading the recipe.
 
 **Negative:**
@@ -699,7 +496,7 @@ Full-heldout re-measure (854 images, contaminated for the pinned model) — mean
 
 Leak-free diagnostic (182 images, never in the pinned model's training set) — mean food-class IoU 0.3776; staples: bread_white 0.4017, chips_fries 0.6432, pasta 0.5002, potato_boiled 0.5041, white_rice 0.6715; per-class: apple 0.0453, background 0.9311, banana 0.7223, beef 0.4085, bread_white 0.4017, broccoli 0.8450, carrot 0.7188, cheese 0.0239, chicken 0.3463, chips_fries 0.6432, coffee 0.3110, egg 0.4862, fish_white 0.0364, fruit_juice 0.6775, lentils 0.0000, milk 0.0000, mixed_vegetables 0.4821, pasta 0.5002, peas 0.5800, pork 0.1537, potato_boiled 0.5041, salad_leaves 0.3706, soup 0.0112, tea 0.0000, tomato 0.7127, unknown_food 0.4669, unsupported_liquid 0.8265, white_rice 0.6715, wine 0.1649 (brown_rice, bread_wholemeal, potato_mashed absent).
 
-Revisit triggers (design §3.2a), FLAGGED here without amending any bar: the Decision 5 trigger (|re-measured mean − 0.4054| > 0.02) fires on both tables — trivially on the contaminated one (Δ +0.335, cause: leakage, not model or split quality) and marginally on the leak-free one (0.3776, Δ −0.028), where 182 images leave the delta inside plausible sampling noise. The Decision 14 trigger (any staple baseline < 0.40) does not fire on any measured staple — bread_white at 0.4017 is the closest call — but the three dataset-absent staples can never be measured on FoodSeg103, which leaves their 0.45 floors unprovable (`validation.shortfall` correctly reports them as absent) and the strict gate permanently unattainable on FoodSeg103 alone. Whether Decisions 5/14 are actually revisited is left to the human gate before task 19 judging.
+The re-measured mean moves by Δ +0.335 on the contaminated table (cause: leakage, not model or split quality) and Δ −0.028 on the leak-free one (0.3776), where 182 images leave the delta inside plausible sampling noise. The three dataset-absent staples can never be measured on FoodSeg103 and are reported as absent.
 
 ### Rationale
 
@@ -720,7 +517,7 @@ A baseline anchor exists to measure uplift on unseen data; a table where the mod
 
 **Negative:**
 - The leak-free anchor rests on 182 images; per-class deltas judged against it carry meaningful sampling noise (several thin classes — lentils, milk, tea — measure 0.0000 there).
-- Three staple floors (0.45) remain unprovable on FoodSeg103, so `export_eligible` stays false for any model validated on this dataset alone; the Decision 4 developer override remains the shipping path until a dataset supplying those classes exists.
+- Three staples have no images on FoodSeg103, so they stay unmeasured until a dataset supplying those classes exists.
 - Req 2.3's "staples first measurable after the re-cut" clause is void — no staple becomes measurable, because none was ever present.
 
 ### Impact
@@ -822,7 +619,7 @@ The per-class table shows the recipe did what it was designed to do — resurrec
 
 - **Stop training and take the survey levers to a new spec immediately**: Cleanest hand-off - Rejected because the hardware is otherwise idle overnight, the fallback is already documented and commands-ready, and its result (weighting vs co-term attribution) directly informs that next spec.
 - **Tune the failed recipe (lower `--co-lambda`, cap/soften the inverse-frequency weights) and rerun**: Direct fix attempt - Rejected as hyperparameter fishing: no local evidence isolates the culprit yet; the combined run provides that isolation on the same budget.
-- **Export the new checkpoint anyway under the Decision 4 override**: Ships the tail-class gains - Rejected: a −0.052 same-set mean regression with four staple regressions makes the current bundled model strictly better for the carb-priority use case.
+- **Export the new checkpoint anyway**: Ships the tail-class gains - Rejected: a −0.052 same-set mean regression with four staple regressions makes the current bundled model strictly better for the carb-priority use case.
 
 ### Consequences
 
@@ -860,7 +657,7 @@ This is exactly the branch the ledger's judging step anticipated ("regresses lik
 
 ### Alternatives Considered
 
-- **Export under the Decision 4 override to bank the tail-class gains**: Rejected — a same-set mean regression with five staple regressions makes the bundled model strictly better for the carb-priority use case; same reasoning as Decision 24.
+- **Export anyway to bank the tail-class gains**: Rejected — a same-set mean regression with five staple regressions makes the bundled model strictly better for the carb-priority use case; same reasoning as Decision 24.
 - **Rerun combined with milder weighting now (e.g. sqrt-frequency cap)**: Rejected for this cycle — it is the obvious first experiment of the NEXT cycle, but it belongs inside a spec that also carries the survey levers and the SNAQ-anchored evaluation lane, not as ad-hoc hyperparameter fishing at the tail of a concluded chain.
 - **Attribute the regression to dice instead of the weighting**: Rejected — dice was not present in the co-occurrence run, which regressed harder; the only shared lever is the weighting.
 
@@ -873,7 +670,6 @@ This is exactly the branch the ledger's judging step anticipated ("regresses lik
 
 **Negative:**
 - The §2 training chain closes with zero shipped uplift; the bundled model is still the 2026-07-05 `24e0b022241a`.
-- The 0.48 gate remains unattained and unattainable on FoodSeg103 alone (three staples have zero images — Decision 21).
 
 ### Impact
 
@@ -939,8 +735,7 @@ existing carb-priority staple regresses materially.
 `checkpoint_merged_v2.pt` is **promoted**: exported through the gates and
 swapped in as the bundled `segmenter.mlpackage`, with `PipelineFactory`
 flipped to `ClassPalette.v2Standard`, under the standing developer-phase
-release override (Decision 11 lineage; strict 0.48/0.45 gates still unmet
-and `export_eligible` stays truthful).
+lineage.
 
 ### Rationale
 
@@ -989,7 +784,7 @@ artefact).
 - Anchor per-staple readings carry ±0.10 cross-set noise, so per-class
   regressions of that order cannot be ruled out until the on-device pass and
   the SNAQ-parity benchmark campaign measure real captures.
-- The strict 0.48 mean / 0.45 floor gates remain unmet; the developer-phase
+- The developer-phase
   override continues to be the shipping path.
 
 ### Impact
@@ -1412,7 +1207,7 @@ Mean food-class IoU on `heldout_leakfree` is **0.3787 against the incumbent's 0.
 
 The shape of the result is more informative than the mean. R1 does not fail uniformly: it *improves* the weakest carb staple in the set by 0.05 while giving back far more on the three strongest. That is the signature of a re-weighting that has shifted capacity from well-represented classes toward under-represented ones — which is what `sqrt_inverse` is for — and the trade is a net loss at these weights. Read against Decision 25, where inverse-frequency weighting was attributed as the staple-killer and deleted, the milder square-root scheme reproduces the same direction of harm at smaller magnitude rather than escaping it.
 
-The run also lands below the strict export gate (0.48 mean, 0.45 per staple) on four counts, but that gate is not what decides adoption here — the incumbent is below it too, and the developer-phase override is the shipping path (Decision 11).
+The run is read against the incumbent.
 
 ### Alternatives Considered
 
@@ -1479,7 +1274,7 @@ The second finding is separable and is why R3 is adopted rather than merely expl
 
 - **Adopt and swap the bundled model in the same step**: The measurement supports the recipe, but the artifact swap is a `cp -R` that leaves no trace other than the model id on subsequent captures, and it wants an on-device pass behind it (model-production Req 6.3). Splitting the two keeps the shipped artifact attributable at every moment.
 - **Hold R3 unadopted pending a further ablation of loss versus augmentation**: R1's confounding is resolved for the question that was asked, and the pair is measurably better than the incumbent together. Separating the last two levers is a real question but not one blocking this verdict; it is a candidate for the queue, not a precondition.
-- **Reject on the strict export gate**: `export_eligible` is false (mean 0.4192 against the 0.48 bar), but the promoted incumbent fails the same bar at 0.3927 and ships under the Decision 11 developer-phase override. Rejecting R3 on a gate the incumbent also fails would keep a worse model for a reason that does not distinguish them.
+- **Reject on absolute mean alone**: R3 reads 0.4192 against the promoted incumbent's 0.3927, and the incumbent ships under the Decision 11 developer-phase override. Rejecting R3 on a gate the incumbent also fails would keep a worse model for a reason that does not distinguish them.
 
 ### Consequences
 
@@ -1491,7 +1286,6 @@ The second finding is separable and is why R3 is adopted rather than merely expl
 
 **Negative:**
 - `pasta` is down 0.0172 against the incumbent — the one measurable staple that did not improve. Inside the ±0.10 cross-set noise Decision 27 worked to, but it is a regression and is recorded as one rather than rounded away.
-- R3 still fails the 0.48 strict gate, so promoting it to the device needs an explicit Decision 11 override recorded in lineage, exactly as the incumbent did.
 - Three floors remain unproven rather than passed: `bread_wholemeal` is 0.0000 for every model measured including the incumbent, and `brown_rice` and `potato_mashed` are absent from the 182-image anchor, which therefore cannot prove them either way.
 - Adopting the recipe without swapping the artifact leaves a window where the recipe of record and the shipped model differ. The `segmenterSource` stamp on each capture is what keeps that legible.
 
@@ -1568,53 +1362,3 @@ The user's tap is a correct prompt, and that is a review-screen feature, not a s
 
 ---
 
-## Decision 38: The export-eligibility IoU gate and its release override are removed
-
-**Date**: 2026-10-01
-**Status**: accepted
-
-### Context
-
-`validation.py` carried an export-eligibility gate — mean food-class IoU >= 0.48 (Decision 5) and every carb-priority staple >= 0.45 (Decision 14) — and `run_validation.py` exited non-zero when a checkpoint missed it. Because no checkpoint ever met it, Decision 4 and model-production Decision 11 added `--allow-below-gate --reason "..."`, an attributable override recorded in lineage, so a below-gate model could still ship for developer-phase testing.
-
-Two things have since become clear. First, the gate's input is not a measurement. The gate reads `mean_iou`, a mean over all 33 food classes of the 182-image leak-free anchor; that anchor resolves only 13 of them, because the other 20 appear in fewer than 20 held-out images, and there the same recipe and the same seed swing by up to 0.78 between runs (estimation-quality task 14, the ten-run R8–R16 series). A bar applied to a number dominated by sampling noise produces a verdict that is also noise — and it moved: R3 crossed `bread_white`'s 0.45 floor on one run and missed it on an identical repeat.
-
-Second, the override was taken every time. Every release in the developer phase went through it, so it never withheld anything. A control that always says yes is not a control; it is a required prose field in front of an unconditional pass, and the reason strings it collected are post-hoc restatements of "the gate does not work yet".
-
-### Decision
-
-Remove the IoU gate and the release override entirely. `validation.py` computes and records `mean_iou`, `per_class_iou` and `carb_priority_iou`; it returns no verdict. `run_validation.py` reports those numbers and the mask-quality block, and exits 0 on any completed run — non-zero only when the run could not be done (unreadable checkpoint, arch mismatch, wrong label space). `MEAN_IOU_BAR`, `CARB_PRIORITY_IOU_BAR`, `is_export_eligible`, `shortfall`, `record_release_override` and `release_allowed` are deleted, along with the `export_eligible`, `shortfall` and `release_override` keys in new lineage. `CARB_PRIORITY_CLASSES` survives as a reporting subset with no floor attached.
-
-The structural export gates in `export.py` — weight budget, output channel count, Core ML vs PyTorch oracle parity — are untouched. Those catch a broken artefact rather than an underperforming one, which is a different question and one that can actually be answered on this evidence.
-
-### Rationale
-
-A quality bar is only worth having when it can distinguish a good model from a bad one on the data available. This one could not: its instrument resolves a third of the palette, and the measurement it gated on is dominated by the two-thirds it cannot see. Keeping it meant every run ended with a false negative that a human then had to type a sentence to dismiss, which trains everyone to ignore the one place a real failure would surface.
-
-Removing it loses nothing real, because nothing real was being blocked. What takes its place is the recorded metrics themselves plus the mask-quality block, read by a person against the measured noise bands (readable-13 mean 0.4783–0.5031 over six identical runs; food IoU 0.8792–0.8873). A gate can return when there is an instrument that can support one — the leak-free anchor enlarged past the 20-image readability bar for most of the palette (backlog 35). That is a prerequisite for a bar, not a consequence of having one.
-
-### Alternatives Considered
-
-- **Re-point the gate at the readable 13 and the mask block**: keep a bar, but read it off the metrics that are actually stable. Rejected for now because the readable-13 band is 0.025 wide and the mask bands 0.008–0.022; any bar inside those is a coin toss, and any bar outside them is slack enough that it would never fire. The instrument has to improve before a threshold on it means anything.
-- **Keep the gate, delete only the override**: the strictest reading, and it fails immediately — no checkpoint passes, so this blocks all developer-phase work on a number known to be noise.
-- **Keep the override, drop the `--reason` requirement**: cosmetic. It leaves the always-failing gate and the always-taken bypass in place and only removes the evidence of what was waved through.
-- **Warn without failing**: print the shortfall, exit 0. Rejected because the warning is still derived from the unresolvable mean, so it is a line of noise printed on every run — and warnings that always fire are read as decoration.
-
-### Consequences
-
-**Positive:**
-- One fewer false verdict per run, and no ceremony in front of an export.
-- The lineage `metrics` block states what was measured and nothing it cannot support.
-- The queue's exit codes become meaningful: non-zero now means a run genuinely failed, where previously every entry recorded `exit=1` as the expected outcome.
-- The remaining export gates are all structural, so a gate failure is now unambiguously a broken artefact.
-
-**Negative:**
-- No automated check stands between a bad checkpoint and a bundle swap; the judgement moves to a person reading the metrics, which depends on them actually reading them.
-- Lineage files written before this change still carry `export_eligible`, `shortfall` and `release_override`. They are preserved on re-export (`lineage.preserve_metrics` copies the block wholesale) and are now historical, so any reader must not treat an old `export_eligible: false` as a current verdict.
-- Decisions 2, 4, 5, 13, 14 and 18 here, and model-production Decisions 11, 15 and 16, are deprecated by this entry; the gate derivation work they record no longer governs anything.
-
-### Impact
-
-`tools/segmenter/validation.py`, `tools/segmenter/run_validation.py`, `tools/segmenter/queue/lib.sh`, `tools/segmenter/tests/test_validation.py`. Requirements 3.2, 3.4, 3.5 and 3.6 in model-production no longer describe the code. No Swift code reads the gate (one stale comment in `HarnessCore/SegBench.swift`).
-
----

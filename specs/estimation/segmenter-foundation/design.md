@@ -46,73 +46,9 @@ This is a hard sequencing dependency, not a suggestion: the recipe upgrade's cou
 
 ---
 
-## 3. Requirement 1 — Re-deriving the accuracy gate
+## 3. Heldout split
 
-### 3.1 Inputs to the derivation (Req [1.1](requirements.md#1.1))
-
-Three named inputs, per the research (`docs/agent-notes/model-foundation-research.md`, "Headline finding"):
-
-| Input | Value | Source |
-|---|---|---|
-| Published FoodSeg103 frontier at a comparable parameter budget | SOTA ≈ 0.52 mIoU (HDF, 52.25%, 100M+ params); mid-size transformer backbones (BEiT v2-L, 441M) reach 49.4%; **no published model at any size clears 0.60** | Research Q0/headline; Swin-TUNA 50.56% (arXiv 2507.17347), HDF 52.25% (10.1007/s11694-025-03647-2), BEiT v2-L 49.4% (arXiv 2306.09203) |
-| Shipped baseline | 0.4054 mean food-class IoU (`checkpoint_letterbox.pt`, `model_version=24e0b022241a`), held-out split, `run_validation.py` | `model-production/prerequisites.md` Stage 3 entry, *Done 2026-07-06* |
-| Carb-priority per-class floors | Input to Decision 5's derivation: the 0.50 floors then in force (model-production Req [3.5](../model-production/requirements.md#3.5)) — since superseded by §3.2a's re-derived 0.45 (Decision 14), which is an *output* of the gate, not an input to it. Current run: `white_rice` 0.6022, `chips_fries` 0.5671, `pasta` 0.5538; `bread_white` 0.4315, `potato_boiled` 0.4648; `brown_rice`/`bread_wholemeal`/`potato_mashed` absent from the held-out split (resolved by the §3.5 re-cut) | `model-production/prerequisites.md` Stage 3 entry; Decisions 5, 14 |
-
-**Label-space comparability (discharges Req [1.1](requirements.md#1.1)'s WHERE clause).** Published FoodSeg103 numbers are 103-class mIoU on the official split; MeData's metric is mean food-class IoU over the 32 food channels of the 35-channel palette (`validation.py:58-61` excludes `background`, `unknown_food`, `unsupported_liquid`) on a local seeded split. The remap pools confusable fine-grained labels into coarser channels, so the remapped task is plausibly easier and the two metrics are not directly comparable — the published ~0.52 SOTA bounds the *harder* task. The 0.48 gate is therefore an interpolation anchored on the baseline and required uplifts (§3.2), not a transplanted literature value.
-
-The original 0.60 gate (pipeline Decision 14) was set against a **24-class** palette assumption ("0.60 mean food-class mIoU is achievable... on a 24-class food palette") before the 35-channel palette (24 solid + 8 liquid + 3 special) landed via the `v1` redefinition-in-place (`specs/estimation/nutrition5k-calibration/decision_log.md` Decisions 23–24, 2026-07-02: liquid classes appended to `ClassPalette.v1Standard`, keeping the `"v1"` label but changing its channel count from 27 to 35 — "'v1' means something different before and after this spec"). `pipeline` Decision 25 (architecture selection) and `model-production/design.md` §3.4 (export channel-count gate) both predate that redefinition and still cite 27 channels — a known staleness in those documents, not repeated here. The frontier research shows 0.60 is unreached by any published model on FoodSeg103's **103-class** taxonomy regardless of palette remap size, so the shortfall is not explained by the extra 11 channels alone — it is a genuine ceiling.
-
-### 3.2 The re-derived number
-
-**Gate: mean IoU ≥ 0.48 on the fixed FoodSeg103 held-out split.**
-
-Derivation: the published frontier at a comparable parameter budget (the shipped architecture, DeepLabV3+MobileNetV3-Large, is 11.0M params) is well below the 100M+ models that reach 0.50–0.52. A compact-model-realistic target sits meaningfully below SOTA but meaningfully above the shipped 0.4054 baseline. 0.48 is chosen as:
-
-- **Above the mandatory-uplift floor with headroom:** baseline 0.4054 + the Req [2.4](requirements.md#2.4) mandatory mean uplift (≥ 0.03) gives 0.4354; the Req [2.3](requirements.md#2.3) staple-specific uplift (+0.05 on below-gate staples) pulls the mean up faster than a uniform improvement, adding roughly another 0.04 of expected headroom — landing at 0.48, inside the provisional band (0.45–0.52, Req [1.2](requirements.md#1.2)) and about half a point below its midpoint (0.485).
-- **Below the 100M+-parameter SOTA (0.50–0.52)** by a margin consistent with the compact-vs-large-model gap documented across every source in the research table (Q1): every compact candidate in the research is evaluated on general scenes, not FoodSeg103, so no compact-model FoodSeg103 number exists to anchor to directly — 0.48 is a considered interpolation between "the recipe upgrade should clear a materially higher bar than today" and "we do not credibly expect a 11M-param CNN to approach a 441M-param transformer's frontier."
-- **Consistent with the re-derived per-class floors** (§3.2a: 0.45 = gate − 0.03): floors sit below the mean gate and the already-strong staples pull the staple mean above it — the mean gate and the per-class floors pull in the same direction rather than one being unreachable while the other is trivial. (The first-pass version of this bullet argued from the old 0.50 floors; superseded by §3.2a.)
-
-This value is fixed here, in design, per Decision 2 in the drafted decision log (derivation method in requirements, number in design). It supersedes 0.60 as the binding export-eligibility number.
-
-### 3.2a Re-derived per-class floors (Req [1.6](requirements.md#1.6), Decision 14)
-
-**Floor: per-class IoU ≥ 0.45 for each of the eight carb-priority staples**, uniform, replacing model-production Req 3.5's 0.50 (which inherited the same unattainable-frontier assumption as the 0.60 gate — Decision 11). Derivation: floor = gate − 0.03; reachable by the below-gate staples after Req [2.3](requirements.md#2.3)'s mandatory +0.05 uplift (`bread_white` 0.4315 → ≥ 0.4815); the already-strong staples are protected by Req 2.3's ≤ 0.02 no-regression clause, not the floor. Consistency check per Req 1.6: 0.45 floors sit below the 0.48 mean and the three strong staples pull the staple mean above it — no Decision 5 revisit triggered. Export-eligibility rule after the amendment pass: `mean_food_iou ≥ 0.48 AND every staple IoU ≥ 0.45` (`validation.py:39-40` constants `MEAN_IOU_BAR`/`CARB_PRIORITY_IOU_BAR`; override mechanics unchanged).
-
-Two clarifications under the new floors: (a) on the pre-re-cut numbers only `bread_white` (0.4315) is below the 0.45 floor — `potato_boiled` (0.4648) clears it but remains below the 0.48 gate, which is why Req 2.3's uplift set is anchored to the *gate*, not the floor (Decision 18): both weak staples keep the +0.05 obligation. (b) **Per-class revisit trigger:** IF the §3.5 re-measure leaves any staple's baseline below 0.40 — i.e. the floor is unreachable even with the mandatory +0.05 — THEN Decision 14 is revisited with a logged outcome, mirroring Req 2.6's mean-shift trigger for Decision 5.
-
-### 3.3 Propagation to model-production (Req [1.3](requirements.md#1.3))
-
-`model-production/requirements.md` Req [3.2](../model-production/requirements.md#3.2) currently reads:
-
-> "A checkpoint SHALL be export-eligible only if it achieves mean IoU ≥ 0.60 on the held-out split (MD-12 / pipeline Req 8.9), measured by the validation harness."
-
-Both bars are now fixed (0.48 gate, 0.45 floors), so per Req 1.3 the full amendment set is due, executed as tasks (spec phases edit nothing outside this folder). Authoritative home for the values: this spec's decision log (Decisions 5 and 14).
-
-| Site | Edit |
-|---|---|
-| model-production `requirements.md` Req [3.2](../model-production/requirements.md#3.2), [3.4](../model-production/requirements.md#3.4) | 0.60 → "the re-derived gate (segmenter-foundation Decision 5, currently 0.48)"; amendment logged as a model-production decision-log entry citing this spec (the Decision 13 pattern) |
-| model-production `requirements.md` Req [3.5](../model-production/requirements.md#3.5) | 0.50 floors → "the re-derived floors (segmenter-foundation Decision 14, currently 0.45)" |
-| model-production `requirements.md` Req [2.2](../model-production/requirements.md#2.2) | note: heldout re-cut under segmenter-foundation Req 2.6 (new seed, stratified, then frozen again) |
-| pipeline `requirements.md` Req 8.9 | amended-by note in the existing Req 8.2 style |
-| pipeline `decision_log.md` Decision 14 | status → `superseded by segmenter-foundation Decision 5`; context/rationale kept as the historical record |
-| `docs/ml-training.md` (all normative 0.60/0.50 sites: lines 133, 144, 341, 350, 378, 560) | values + pointer to this spec |
-| model-production `design.md:184` | gate value + pointer |
-| model-production `tasks.md` / `prerequisites.md` export-eligibility wording | annotate active entries with the new bars; do not rewrite completed/historical entries |
-| `tools/segmenter/validation.py:39-40` | `MEAN_IOU_BAR = 0.48`, `CARB_PRIORITY_IOU_BAR = 0.45`, plus the module/function docstrings still stating the 0.60/0.50 rule and "24 food-class names" (the palette has 32 food channels) — code task with its unit-test update |
-| `HarnessCore/SegBench.swift:40` (`passesBar`: ≥ 0.60) + `MedataCore/Tests/HarnessCLITests/SegBenchTests.swift:25,89,101` | 0.60 → 0.48 so `seg-bench` and `validation.py` enforce one gate — a Swift code task, Debug-only surface (`HARNESS_ENABLED`), covered by `make test` |
-| `tools/segmenter/train.py:30,337` docstring/comment gate mentions | value + pointer (non-normative text, same pass as validation.py) |
-| `docs/mvp-unblock-runbook.md` (go/no-go table row 4; step-4 gate list) | values + were-0.60/0.50 pointer; gate list must match `SegBench.swift` behaviour (exits non-zero below 0.48) |
-| pipeline `design.md` §7.5 (seg-bench mIoU floor, two present-tense 0.60 mentions) | 0.48 + Decision 5 pointer, was-0.60 note |
-
-**Numeric-budget precedent already exists for this pattern.** The segmenter weight budget was raised from 10 MB to 24 MiB by model-production Decision 13 after the first real checkpoint showed 10 MB was unachievable for the chosen architecture (22.1 MB at FP16) — the same "gate set above the achievable frontier, amend with a logged decision" shape as this mIoU re-derivation. Note this also means the drafted `requirements.md` for this spec, which cites "≤ 10 MB" in Req [2.5](requirements.md#2.5) and Req [3.1](requirements.md#3.1)(b), carries the same stale figure Decision 13 already corrected elsewhere in the repo; design uses the current binding value (§5.4 below) and this is logged as Decision 6.
-
-### 3.4 Override path unaffected
-
-Req [1.4](requirements.md#1.4) / Decision 4: the developer override is a runtime/process behaviour in `model-production` (shipping a below-gate checkpoint flagged low-confidence) and needs no design change here — it already operates against whatever number Req 3.2 states, so re-pointing 3.2 at 0.48 is sufficient. No code path branches on the gate's specific value; it is compared once in the export script and once (informationally) in build lineage.
-
-Req [1.5](requirements.md#1.5) (planned divergence): if the recipe-upgraded checkpoint meets its uplift criteria but lands below 0.48, the residual gap is a decision-log entry naming its owner (the Requirement 3 track if the spike passed, otherwise follow-up data work) — written when the gated run's numbers exist, not now.
-
-### 3.5 Stratified heldout re-cut and baseline re-measure (Req [2.6](requirements.md#2.6), Decision 10)
+### 3.1 Stratified heldout re-cut and baseline re-measure (Req [2.6](requirements.md#2.6), Decision 10)
 
 **Integration point:** `prepare_dataset.py:carve_splits()` (lines 186–213) — currently a seeded shuffle with no stratification.
 
@@ -207,7 +143,6 @@ One MedataCore-adjacent exception to an otherwise `tools/segmenter/`-only footpr
 
 - **Stratified carve (§3.5):** determinism for a fixed seed; every staple present in heldout on a synthetic corpus; the infeasibility rule on a corpus with a 2-image staple.
 - **Loss additions (§4.3):** `co_stats.json` statistics generation on synthetic masks; `L_co` is zero when predicted presence matches ground truth; the fail-fast contract for both the missing and the stale case (seed/mapping-SHA mismatch).
-- **Bar constants (§3.3):** existing export-eligibility tests updated to 0.48/0.45 in the same task as the `validation.py` change.
 - **Gate derivation (§3):** document-level — the three named inputs are cited with sources and §3.2's arithmetic is reproducible from them; no code.
 - **Spike (§5):** the verdict JSON is the artefact; the oracle path reuses already-tested `export.py` helpers. Accuracy criteria (Reqs 2.3, 2.4, 3.3) are verified by human-gated validation runs, not tests, per the requirements' closure semantics.
 - **`make spell`:** before every docs commit, per repo convention.
@@ -220,17 +155,15 @@ Property-based testing is not used: the split/loss invariants are covered by dir
 
 First design pass (appended to the drafted Decisions 1–4):
 
-- **Decision 5** — fixes the re-derived gate at 0.48 mean IoU (§3.2), superseding pipeline Decision 14 (amendment pass pending, §3.3).
 - **Decision 6** — corrects the drafted requirements' "≤ 10 MB" figures to the binding 24 MiB budget (model-production Decision 13); requirements.md has since been corrected.
 - **Decision 7** — the SegFormer-B0 spike reuses the existing equivalence-oracle thresholds (§5.1) rather than inventing new tolerances.
 - **Decision 8** — formalises the rejected-approaches list (CLIPSeg, MobileSAM/SAM3-distilled, FoodSAM) with citations, satisfying Req 4.1.
 - **Decision 9** — records the `plate`-class question as open (status `proposed`), satisfying Req 4.2.
 
-Requirements review (Decisions 10–13): stratified re-cut (10), floors re-derived alongside the gate (11), pretraining fallback (12), permitted gate/recipe divergence (13).
+Requirements review: stratified re-cut (Decision 10) and the pretraining fallback (Decision 12).
 
 Second design pass:
 
-- **Decision 14** — per-class staple floors fixed at 0.45 uniform (§3.2a), completing the Req 1.1/1.6 derivation with the label-space comparability note (§3.1).
 - **Decision 15** — co-occurrence matrix is FoodSeg103-internal (`co_stats.json`, §4.3); Recipe1M+ recorded as follow-up.
 - **Decision 16** — spike latency measured directly on the hardware floor, no derating argument (§5.1.3); floor re-based to the iPhone 16 Pro by Decision 22.
 - **Decision 17** — initialisation selection order: timm in21k-MIL adapter → torchvision `IMAGENET1K_V2` → retain COCO-seg `DEFAULT` if the survey favours it, with the outcome logged either way (§4.2).

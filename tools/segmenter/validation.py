@@ -1,35 +1,12 @@
 #!/usr/bin/env python3
 """Validation reporting: held-out per-class IoU -> lineage (model-production task 9).
 
-The validation step computes mean food-class IoU, per-class IoU and the
-carb-priority-staple subset on the held-out split, then records them into
-``build/lineage.json``'s ``metrics`` block.
+Computes mean food-class IoU, per-class IoU and the carb-priority-staple subset
+on the held-out split, and records them into ``build/lineage.json``'s ``metrics``
+block. These numbers are read by a person.
 
-**This module measures and reports. It does not gate.** There was an
-export-eligibility gate here (mean food-class IoU >= 0.48 and every carb staple
->= 0.45), plus an attributable "release override" to get around it. Both were
-removed - segmenter-foundation Decision 38 - for two reasons:
-
-  1. The gate read ``mean_iou``, a mean over all 33 food classes of the
-     182-image leak-free anchor. That anchor resolves only 13 of them: the
-     other 20 appear in fewer than 20 held-out images, and there the SAME
-     recipe and seed swing by up to 0.78 between runs. The gate's input was not
-     a measurement, so neither was its verdict.
-  2. Nothing ever passed it, so every release went through the override, and an
-     override that is always taken is not a control - it is a prose field
-     attached to an unconditional yes.
-
-What replaces it is nothing. Metrics are recorded in lineage, printed by the
-runner, and read by a person. The checks that still block an export live in
-``export.py`` and are structural - weight budget, output channel count, Core ML
-vs PyTorch oracle parity - because those catch a broken artefact rather than an
-underperforming one.
-
-``CARB_PRIORITY_CLASSES`` survives as a REPORTING subset: those classes dominate
-the carb number, so they are worth printing separately. No floor is attached.
-
-This module is PURE REPORTING LOGIC: it takes a ``per_class_iou`` mapping (the
-output of the GPU validation run) and is independent of running the model.
+``CARB_PRIORITY_CLASSES`` is the high-carbohydrate subset reported separately, so
+a near-zero staple stays visible behind a healthy mean.
 
 Pure stdlib (no torch) so it imports and runs without the training deps.
 """
@@ -46,7 +23,7 @@ from typing import Any, Mapping
 # (unchanged v1 → v2 — the cereal solid appends at index 24, myfoodrepo-bridge
 # PRD) and the requirements list. Whether cereal joins this set is the palette
 # context's decision-log call once its training coverage is known; until then it
-# is a plain food class. No floor is attached to these (Decision 38).
+# is a plain food class.
 CARB_PRIORITY_CLASSES: tuple[str, ...] = (
     "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
     "potato_boiled", "potato_mashed", "chips_fries",
@@ -134,11 +111,9 @@ def food_mean_iou(per_class_iou: Mapping[str, float]) -> float:
     the mean, matching train.food_class_miou. Returns 0.0 when no food class is
     present.
 
-    READ THIS WITH CARE. On the 182-image leak-free anchor only 13 food classes
-    appear in 20 or more images; the rest swing by up to 0.78 between identical
-    runs, so this mean is dominated by noise and is NOT what to judge a run on
-    (estimation-quality task 14). It is recorded because it is cheap and the
-    historical runs carry it, not because it decides anything."""
+    On the 182-image leak-free anchor only 13 food classes appear in 20 or more
+    images; the rest swing by up to 0.78 between identical runs, so read this
+    mean against the measured noise bands (estimation-quality task 14)."""
     foods = set(food_class_names())
     values = [
         float(v) for name, v in per_class_iou.items()

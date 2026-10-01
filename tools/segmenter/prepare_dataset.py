@@ -97,7 +97,7 @@ def _import_pillow():
 
 
 # Pure stdlib sibling: the carb-priority staple names (single source of truth,
-# shared with the validation gate). Imported via sys.path like train.py does
+# shared with the validation reporter). Imported via sys.path like train.py does
 # with loss_config so the script runs standalone from any cwd.
 _TOOLS_DIR = str(Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:

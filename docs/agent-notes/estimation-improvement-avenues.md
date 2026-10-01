@@ -4,7 +4,7 @@ Deep-research sweep commissioned by the user ("research ALL avenues to improve; 
 enough isn't good enough"), run 2026-07-15 against the **iPhone 16 Pro hardware floor**
 (segmenter-foundation Decision 22: A18 Pro ANE, budgets ≤ 24 MiB FP16 / ≤ 250 ms —
 the 13 Pro Max is out of scope). Baseline context: honest leak-free heldout mean
-food-class IoU ≈ 0.3776 (Decision 21) against the 0.48 gate / 0.45 staple floors;
+food-class IoU ≈ 0.3776 (Decision 21);
 three staples (brown_rice, bread_wholemeal, potato_mashed) have zero FoodSeg103 images.
 
 **Method**: 5 search angles → 23 sources fetched → 108 claims extracted → every claim

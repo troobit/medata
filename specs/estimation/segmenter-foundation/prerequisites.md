@@ -15,7 +15,7 @@ These are the human/compute-gated stages a coding agent cannot perform — a dat
 ## Training (Requirement 2 — Phase 3, tasks 18–19)
 
 - [ ] **Run the recipe-upgraded training job** (`tools/segmenter/train.py`, multi-hour local MPS/GPU): chosen init (Decision 17 survey), co-occurrence loss via the landed `--loss` plumbing, re-cut splits, lineage additions.
-- [ ] **Validate against the bars as written**: mean uplift ≥ 0.03 over the re-measured baseline (Req 2.4); +0.05 for staples below the 0.48 gate at baseline, 0.45 floors for newly measurable staples, ≤ 0.02 regression elsewhere (Req 2.3 / Decision 18); the 0.48 gate reported separately as export-eligibility — a criteria-met-but-below-gate run triggers Req 1.5's residual-gap entry and may still ship under the Decision 4 override; budgets ≤ 24 MiB FP16 and ≤ 250 ms on the v1 hardware floor (Req 2.5).
+- [ ] **Validate the recipe-upgrade track**: mean uplift ≥ 0.03 over the re-measured baseline (Req 2.4), read against the measured identical-recipe noise bands.
 
 ## Backbone-swap spike (Requirement 3 — Phase 4)
 

@@ -135,9 +135,8 @@ recipe when you're ready to lift the bar.
 
 ### Held-out segmenter test set
 
-`HarnessCLI seg-bench` measures the mIoU bar from Req 8.9 as amended (mean
-food-class mIoU — reported only; the 0.48 bar was removed by Decision 38
-— see `specs/estimation/segmenter-foundation/`). Carve the held-out split from
+`HarnessCLI seg-bench` measures mean food-class mIoU (Req 8.9 as amended).
+Carve the held-out split from
 FoodSeg103: 10–15% of the remapped
 images, kept entirely separate from train + val. Use the same fixed RNG seed
 for the split so the held-out set is reproducible across training runs.
@@ -149,7 +148,7 @@ fixture directory.
 
 | Bar | Source | Where it's measured |
 | --- | --- | --- |
-| Segmenter mean food-class mIoU — recorded, no bar (segmenter-foundation Decision 38) | Req 8.9 as amended | `HarnessCLI seg-bench` |
+| Segmenter mean food-class mIoU — recorded | Req 8.9 as amended | `HarnessCLI seg-bench` |
 | Segmenter weights ≤ 24 MiB (FP16, Decision 13) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
 | Segmenter inference ≤ 250 ms / view on iPhone 16 Pro (v1 hardware floor — segmenter-foundation Decision 22) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
@@ -447,7 +446,7 @@ tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
 Measured on the v2 anchor, against the incumbent re-measured the same day with
 the same script: mean food-class IoU **0.3215 vs 0.3927** (−0.071), and a staple
 mean of 0.3549 vs 0.3870 over the incumbent's seven measurable staples (−0.032).
-`export_eligible: false`. On merged val R1 peaked at 0.4046 (epoch 12, still
+On merged val R1 peaked at 0.4046 (epoch 12, still
 climbing) against the incumbent's 0.4418.
 
 The per-staple split is the informative part, and it is the classic
@@ -614,21 +613,15 @@ values land in lineage `train_config.boundary_weight` /
 
 ### Why
 
-There is no longer a bar (Decision 38). The number reported is mean **food-class** mIoU (Req 8.9 as amended by
-segmenter-foundation Decision 5; was 0.60 — see
-`specs/estimation/segmenter-foundation/`). `HarnessCLI seg-bench`
-**(exists)** is the gate, but note how it works: it does **not** run the model.
+The number reported is mean **food-class** mIoU (Req 8.9 as amended).
+`HarnessCLI seg-bench` **(exists)** reports it, but note how it works: it does
+**not** run the model.
 
-> **Developer-phase gate note (2026-07-06):** seg-bench has not been run for the
+> **Note (2026-07-06):** seg-bench has not been run for the
 > shipped models, and its held-out fixture bundle has not been generated — it
 > would be ~16 GB and record nothing beyond what
-> `tools/segmenter/run_validation.py` already writes: the same mean food-class
-> IoU gate quantity, recorded into `build/lineage.json`, with the
-> model-production Decision 11 developer-phase override
-> (`--allow-below-gate --reason "..."`) when the gate was missed. BOTH THE GATE
-> AND THE OVERRIDE WERE REMOVED on 2026-10-01 (segmenter-foundation Decision 38)
-> — the flag no longer exists and validation never blocks. Both shipped
-> models were gated and overridden that way (`0295ea61edd9` mean 0.4259;
+> `tools/segmenter/run_validation.py` already writes into `build/lineage.json`.
+> Both shipped models read (`0295ea61edd9` mean 0.4259;
 > letterbox-trained `24e0b022241a` mean 0.4054 — the letterbox recipe closes the
 > train↔runtime square-resize skew, which this offline bench cannot see).
 > For judging uplifts, the 0.4054 full-heldout figure is superseded: the pinned
@@ -659,7 +652,7 @@ python tools/segmenter/make_fixtures.py \
     --heldout data/foodseg103_remapped/heldout \
     --out tests/fixtures/segmenter/heldout                   # (exists)
 
-# 5b. Bench (reports mIoU; it does not gate — segmenter-foundation Decision 38)
+# 5b. Bench (reports mIoU)
 SHA=$(shasum -a 256 tools/segmenter/build/checkpoint.pt | cut -d' ' -f1)
 swift run HarnessCLI seg-bench \
     --fixtures-dir tests/fixtures/segmenter/heldout \

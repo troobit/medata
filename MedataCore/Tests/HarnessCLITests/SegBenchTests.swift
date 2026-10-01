@@ -86,9 +86,8 @@ final class SegBenchTests: XCTestCase {
         XCTAssertEqual(report.perClassIoU[0]!, 0.5, accuracy: 1e-5)
     }
 
-    // A poor prediction reports a low mean and no verdict: the 0.48 bar this
-    // asserted was removed with segmenter-foundation Decision 38.
-    func testPoorPredictionReportsALowMeanAndNoVerdict() {
+    // A poor prediction reports a correspondingly low mean.
+    func testPoorPredictionReportsALowMean() {
         let palette = makeTestPalette()
         // Class 0 IoU 0.5, class 1 IoU 0 → mean food-class IoU 0.25.
         let predicted: [UInt8] = [0, 0, 1, 1]

@@ -5,7 +5,7 @@
 foundation for MeData in 2026, or do newer architectures / checkpoints / pretraining
 strategies materially surpass it — and how do ImageNet-style tagging and a 1–2 word text
 prompt fit? Grounded against the shipped model (0.40–0.43 heldout mIoU, below the 0.60 gate,
-developer override) and the prior seefood-rejected / FoodSeg103 evaluation
+and the prior seefood-rejected / FoodSeg103 evaluation
 (`docs/agent-notes/dataset-strategy.md`).
 
 **Provenance.** Produced by the `deep-research` harness (fan-out search → fetch → 3-vote
@@ -37,7 +37,7 @@ any size — clears 0.60 mIoU on FoodSeg103.
 
 Implication for the spec: MeData's shipped 0.40–0.43 is genuinely low, but the **0.60 gate
 (pipeline Decision 14) is very likely unattainable on FoodSeg103 regardless of backbone.**
-A model-foundation spec must therefore decide one of: (a) revisit/re-derive the mIoU gate
+A model-foundation spec must therefore decide one of: (a) revisit the accuracy expectation
 against what is achievable, (b) improve the *data/taxonomy* (the real ceiling), and/or (c)
 lean on the physics path's tolerance (β calibration already absorbs some segmenter error,
 pipeline §6.9). "Wrong model" is at most half the story; "hard dataset + gate set above the

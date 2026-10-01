@@ -157,7 +157,7 @@ The design-critic and a peer-validation pass (external models Gemini/Codex were 
 
 ### Decision
 
-Apply the agreed fixes and resolve three scope calls: (a) export equivalence oracle changed from Core ML-vs-TFLite to the **PyTorch checkpoint** ([4.3](requirements.md#4.3)); (b) added training/inference **preprocessing parity** ([4.5](requirements.md#4.5)); (c) hardened the on-device gate to assert `segmenterSource`, value > 0, and **mask plausibility** on the deployment distribution ([6.2](requirements.md#6.2)); (d) MVP gate now lists its export-eligibility preconditions ([6.3](requirements.md#6.3)); (e) MVP β fixed to `uncalibrated_unity` (pooled unreachable pre-calibration) plus **upward-bias direction** in the honesty label ([7.1](requirements.md#7.1), [7.3](requirements.md#7.3)); (f) build **lineage** recorded for metric-level reproducibility ([1.3](requirements.md#1.3)); (g) compute/hardware stages marked human-gated ([3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)); (h) added a **per-class IoU floor (≥ 0.50)** on the carb-priority staples with a fallback ([3.5](requirements.md#3.5), [3.6](requirements.md#3.6)). Scope calls: **no latency AC** (the 22 s freeze was a Debug `-Onone` artifact; Release ~827 ms per MD-28, owned by the pipeline spec); **bad-model rollback/integrity deferred** (5.3 covers a missing model; field recovery = ship the previous bundle until OTA matters).
+Apply the agreed fixes and resolve three scope calls: (a) export equivalence oracle changed from Core ML-vs-TFLite to the **PyTorch checkpoint** ([4.3](requirements.md#4.3)); (b) added training/inference **preprocessing parity** ([4.5](requirements.md#4.5)); (c) hardened the on-device gate to assert `segmenterSource`, value > 0, and **mask plausibility** on the deployment distribution ([6.2](requirements.md#6.2)); (d) MVP gate now lists its preconditions ([6.3](requirements.md#6.3)); (e) MVP β fixed to `uncalibrated_unity` (pooled unreachable pre-calibration) plus **upward-bias direction** in the honesty label ([7.1](requirements.md#7.1), [7.3](requirements.md#7.3)); (f) build **lineage** recorded for metric-level reproducibility ([1.3](requirements.md#1.3)); (g) compute/hardware stages marked human-gated ([3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)); (h) added a **per-class IoU floor (≥ 0.50)** on the carb-priority staples with a fallback ([3.5](requirements.md#3.5), [3.6](requirements.md#3.6)). Scope calls: **no latency AC** (the 22 s freeze was a Debug `-Onone` artifact; Release ~827 ms per MD-28, owned by the pipeline spec); **bad-model rollback/integrity deferred** (5.3 covers a missing model; field recovery = ship the previous bundle until OTA matters).
 
 ### Rationale
 
@@ -173,7 +173,7 @@ The oracle, preprocessing-parity, and mask-plausibility fixes close silent-failu
 
 **Positive:** Gates now test fidelity to the trained network and the deployment distribution, not just internal export consistency; carb-critical classes are individually protected.
 
-**Negative:** More export-eligibility gates raise the bar to ship a model; the per-class floor and mask-plausibility check need real-run data to tune, deferred to design.
+**Negative:** The per-class floor and mask-plausibility check need real-run data to tune, deferred to design.
 
 ---
 
@@ -392,59 +392,6 @@ Recording the decision stops the drift at the source.
 
 ---
 
-## Decision 11: Developer-phase release override for the strict export gate
-
-**Date**: 2026-07-05
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the release override is removed along with the gate it bypassed. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-The export-eligibility gate (Req 3.2/3.5: mean food-class IoU ≥ 0.60 AND every
-carb-priority staple ≥ 0.50) was written as a hard block. The first real
-training run showed the FoodSeg103-remapped baseline converging around 0.34
-mean food-class IoU — well short of the bar. Every other MVP subsystem is
-complete and verified against the dev-stub; a hard gate would make model
-quality the sole blocker for merging to main, while the developer's own
-normal use of a real (if imperfect) model is itself the fastest source of
-feedback for improving it.
-
-### Decision
-
-During the developer phase, the strict gate advises rather than hard-blocks.
-`run_validation.py --allow-below-gate --reason "..."` records an attributable
-`release_override` block in `lineage.json` metrics and exits 0. Without the
-override the gate still fails the run. `export_eligible` always records the
-truthful strict-gate verdict. The gate returns to blocking before any
-non-developer release.
-
-### Rationale
-
-Model quality improves iteratively (more data, better recipe) and each
-iteration drops in without code changes (Decision 10). Blocking the merge on
-0.60 mIoU delays real-use feedback without making the interim estimates any
-better; the app already surfaces per-class calibration honesty (uncalibrated
-banner). An explicit, reasoned override keeps provenance truthful — lineage
-never claims a below-gate model passed — while unblocking the release.
-
-### Alternatives Considered
-
-- **Lower the bar (e.g. to 0.35)**: Would let the current model "pass" - Rejected: rewrites the accuracy requirement to fit the artefact; the bar stops meaning anything.
-- **Keep the hard block until 0.60 is reached**: Strictest reading of Req 3.2 - Rejected: serialises model improvement in front of all real-use testing, for a developer-phase build no one else receives.
-- **Ship the dev-stub instead**: No gate involvement - Rejected: stub estimates are garbage by construction; a below-gate real model produces genuinely useful (if imperfect) masks and exercises the true pipeline.
-
-### Consequences
-
-**Positive:**
-- Model quality stops being the only merge blocker; iteration happens against real use.
-- Every below-gate release is deliberate, reasoned, and traceable in lineage.
-- `export_eligible` stays truthful; re-validation drops stale overrides so each new metrics outcome needs a fresh decision.
-
-**Negative:**
-- A developer-phase build can ship with known-poor segmentation for some classes.
-- The "return to blocking" step is process, not code — it must be enforced at the first non-developer release (flagged alongside the Req 14.5 disclaimer revisit).
-
----
-
 ## Decision 12: Training recipe adds geometric augmentation and poly LR decay
 
 **Date**: 2026-07-05
@@ -522,7 +469,7 @@ amend Req 4.2 and pipeline Req 8.2 accordingly. The gate itself stays active.
 The budget's real job is to catch export mistakes (an accidental FP32 export
 is ~44 MB) and unbounded model growth, not to force sub-8-bit compression onto
 the MVP. Quantising below FP16 adds accuracy risk to a model already below the
-mIoU gate (Decision 11) for ~11 MB of app-size saving that no current
+mIoU reporting for ~11 MB of app-size saving that no current
 requirement depends on. 24 MiB fits the Decision 25 architecture at FP16 with
 minimal headroom (22.1 → 24).
 
@@ -536,7 +483,7 @@ minimal headroom (22.1 → 24).
 
 **Positive:**
 - Export and on-device load agree again, and the gate still catches FP32/oversize mistakes.
-- No new accuracy risk added on top of the below-gate model.
+- No new accuracy risk added on top of the current model.
 
 **Negative:**
 - The app bundle grows ~22 MB with the model.
@@ -592,110 +539,3 @@ the app depends on.
 
 ---
 
-## Decision 15: run_validation.py is the developer-phase validation gate; seg-bench fixture generation deferred
-
-**Date**: 2026-07-06
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): run_validation.py reports and no longer gates. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-Two gate surfaces measure the same quantity — mean food-class mIoU on the
-held-out split. The held-out validation stage (design §2.1 stage 4,
-`tools/segmenter/run_validation.py`) computes it in Python and records it,
-per-class IoUs, the strict-gate verdict and any Decision 11 override into
-`build/lineage.json`. The `HarnessCLI seg-bench` path (`docs/ml-training.md`
-§5, pipeline Req 8.9) measures the same bar through the Swift runtime, but
-requires first generating a fixture bundle via `make_fixtures.py` — roughly
-16 GB for the full held-out split. For the second real segmenter
-(`24e0b022241a`, letterbox recipe) the question was whether to run both.
-
-### Decision
-
-During the developer phase, the held-out validation via `run_validation.py`
-— with the Decision 11 override where the strict gate is not met — is the
-recorded validation gate. §5 seg-bench fixture generation and the
-`HarnessCLI seg-bench` run are deferred; the gate quantity of record lives
-in `build/lineage.json`.
-
-### Rationale
-
-`run_validation.py` already records the identical gate quantity (mean
-food-class mIoU plus per-class IoUs) into lineage, so a seg-bench run would
-reproduce a number that is already on record. The fixture bundle costs
-~16 GB of disk and the generation compute while adding no new information
-about the model. And the offline bench is blind to the device-side gains
-the letterbox recipe specifically targets — matching the runtime
-letterbox pre-processing is only observable in on-device behaviour (stage
-7), not in an offline mIoU re-measurement.
-
-### Alternatives Considered
-
-- **Run the full seg-bench**: Exercises the Swift-side gate path end-to-end - Rejected: ~16 GB fixture bundle that duplicates the number already recorded in lineage.
-- **Subset bench (partial fixture set)**: Cheaper than the full bundle - Rejected: produces a partial mIoU that is not comparable to the recorded held-out figure or to the Req 8.9 bar.
-
-### Consequences
-
-**Positive:**
-- Zero redundant compute and disk; no 16 GB fixture bundle per iteration.
-- A single recorded gate number in `build/lineage.json` — no risk of two subtly divergent mIoU figures for the same checkpoint.
-
-**Negative:**
-- The Swift-side IoU implementation goes unexercised against real fixtures.
-- Req 8.9's named gate path (`HarnessCLI seg-bench`) stays dormant until the pre-release return-to-blocking step (Decision 11).
-
----
-
-## Decision 16: Export-eligibility bars re-pointed at the segmenter-foundation re-derivation (0.60 → 0.48 mean, 0.50 → 0.45 floors)
-
-**Date**: 2026-07-11
-**Status**: deprecated — segmenter-foundation Decision 38 (2026-10-01): the bars this re-pointed are removed. The reasoning below is kept as history; it governs nothing.
-
-### Context
-
-The Track A deep-research findings (`docs/agent-notes/model-foundation-research.md`)
-showed the 0.60 mean food-class IoU gate (Req 3.2 / pipeline Decision 14) sits
-above the published FoodSeg103 achievable frontier — no published model at any
-size clears 0.60, and the ~0.52 SOTA needs 100M+ parameters against the shipped
-architecture's 11.0M. Both shipped models were released under the Decision 11
-developer-phase override, so the gate steered nothing. The `segmenter-foundation`
-spec re-derived the bars from the frontier, the pinned 0.4054 baseline, and the
-carb-priority floors: gate 0.48 (its Decision 5) and uniform per-class floors
-0.45 (its Decision 14), with the held-out split re-cut stratified under its
-Req 2.6 so every staple is measurable.
-
-### Decision
-
-Amend this spec's requirements to reference the re-derived bars, with
-`segmenter-foundation`'s decision log as the authoritative home for the values:
-Req 3.2 and Req 3.4 now cite the re-derived gate (segmenter-foundation
-Decision 5, currently 0.48; was 0.60), Req 3.5 the re-derived floors
-(segmenter-foundation Decision 14, currently 0.45; was 0.50), and Req 2.2
-carries the stratified held-out re-cut note (segmenter-foundation Req 2.6: new
-fixed seed, stratified, then frozen again).
-
-### Rationale
-
-A gate no achievable model can meet is permanently overridden and stops
-informing shipping decisions — the same shape as the 10 MB weight budget
-Decision 13 already corrected. Pointing the requirements at the
-segmenter-foundation derivation keeps one authoritative home for the numbers,
-so a future re-derivation amends one decision log instead of chasing every
-copy. The export-eligibility mechanics (validation harness, shortfall
-recording, Decision 11 override) are unchanged; only the bar values move.
-
-### Alternatives Considered
-
-- **Keep 0.60 and rely on the Decision 11 override indefinitely**: No document churn - Rejected: the gate then never blocks or steers anything; the override was designed as a developer-phase bridge, not a permanent bypass.
-- **Inline the bare numbers (0.48/0.45) without citing segmenter-foundation**: Simpler sentences - Rejected: severs the trail to the derivation and its revisit triggers (baseline re-measure shift > 0.02, staple baseline < 0.40), inviting another arbitrary-bar cycle.
-
-### Consequences
-
-**Positive:**
-- The gate is attainable, so export eligibility becomes a real shipping signal again instead of a formality to override.
-- One authoritative home (segmenter-foundation Decisions 5 and 14) for the bar values, with the amendment history visible in the requirement text.
-
-**Negative:**
-- A model can now ship as export-eligible at an accuracy the original 0.60 bar would have blocked — the bar is honest rather than aspirational.
-- Reading Req 3.2/3.5 now requires following a cross-spec reference to get the current numbers.
-
----

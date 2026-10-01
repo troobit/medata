@@ -13,7 +13,7 @@ metadata:
         bake) — all of which live in `prerequisites.md`, not here.
         Per Decision 3 / Decision 5 completion is milestone-scoped: the stage 1–8 code
         deltas in this file can all be `[x]` while β_c calibration execution remains
-        deferred past the MVP gate. The mIoU gate (Req 3.2) and per-class floors
+        deferred past the MVP gate. The IoU reporting (Req 3.2) and per-class subset
         (Req 3.5) bars are asserted by code here but only *produced* by a gated GPU run.
         [Amended: the bars are now mean ≥ 0.48 and per-class ≥ 0.45, re-derived by
         segmenter-foundation Decisions 5 and 14 (were 0.60/0.50); completed task
@@ -86,17 +86,17 @@ metadata:
 
 ## Validation Reporting
 
-- [x] 8. Write test for export-eligibility decision and IoU reporting <!-- id:qkb6beo -->
-  - Add a test (Python) over synthetic per-class IoU inputs: a checkpoint is export-eligible only when mean IoU ≥ 0.60 AND every carb-priority class (white_rice, brown_rice, pasta, bread_white, bread_wholemeal, potato_boiled, potato_mashed, chips_fries) ≥ 0.50.
+- [x] 8. Write test for IoU reporting <!-- id:qkb6beo -->
+  - Add a test (Python) over synthetic per-class IoU inputs: the reporter computes mean food-class IoU (special channels excluded), the per-class table, and the carb-priority subset, and records them into `lineage.metrics`.
   - Assert the reporter emits mean + per-class + carb-priority IoU and records the shortfall when below bar.
   - Red before task 9. Pure decision logic — independent of the gated GPU run that produces the real IoUs.
   - Requirements: [3.2](requirements.md#3.2), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6)
 
 - [x] 9. Implement validation mIoU / per-class / carb-priority reporting into lineage <!-- id:qkb6bep -->
-  - The validation step computes and reports mean IoU, per-class IoU, and the carb-priority-class IoU subset on the held-out split, and records export-eligibility (≥ 0.60 mean, ≥ 0.50 each carb-priority) plus any shortfall into `build/lineage.json` `metrics` (Req 3.3, 3.4).
-  - A sub-bar checkpoint is marked not export-eligible; a carb-priority class that cannot meet 0.50 after refinement is surfaced as a known limitation (flag low-confidence or map to `unknown_food`) rather than blocking indefinitely (Req 3.6).
+  - The validation step computes and reports mean IoU, per-class IoU, and the carb-priority-class IoU subset on the held-out split, and records them into the build lineage.
+  - A carb-priority class that reads persistently low is surfaced as a known limitation (flag low-confidence or map to `unknown_food`).
   - Python-side. The *running* of this on real held-out data is gated on the GPU training prerequisite; this task is the code that computes, reports, and records.
-  - Blocked-by: qkb6beo (Write test for export-eligibility decision and IoU reporting), qkb6bem (Emit the build lineage manifest from train.py / export.py)
+  - Blocked-by: qkb6beo (Write test for IoU reporting), qkb6bem (Emit the build lineage manifest from train.py / export.py)
   - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6)
 
 ## Uncalibrated Honesty

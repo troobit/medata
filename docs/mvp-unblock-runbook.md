@@ -21,7 +21,7 @@ the pipeline produces a real number — **nothing else is on the critical path.*
   [`agent-notes/pipeline-wiring-status.md`](agent-notes/pipeline-wiring-status.md) (what the checkpoint
   unblocks — only Blocker 1 remains).
 - **What "done" means:** the composite **MVP gate** — model-production **Req 6.3** — is met only when the
-  export-eligibility gates, bundling, ANE residency, and a real on-device capture all hold. It does
+  structural export gates, bundling, ANE residency, and a real on-device capture all hold. It does
   **not** require β_c calibration or the numeric-accuracy bar (both deferred; see step 7).
 - **Authoritative human checklist** this runbook operationalises:
   [`specs/estimation/model-production/prerequisites.md`](../specs/estimation/model-production/prerequisites.md).
@@ -44,7 +44,7 @@ the pipeline produces a real number — **nothing else is on the critical path.*
 budget. On a CUDA box (RTX 3060 12 GB or better) 60 epochs is a few hours; on a Mac (MPS) it is
 **5–10× slower** and 60 epochs may exceed 36 h. So: **measure one epoch first** (step 3), extrapolate,
 then decide — use a CUDA box if you have one; on Mac, wrap in `caffeinate -is`, use `train.py --resume`,
-and if needed reduce epochs and re-bench (the mIoU gate is what matters, not epoch count). Everything
+and if needed reduce epochs and re-bench (the measured mIoU is what matters, not epoch count). Everything
 else in the table is minutes-to-an-hour.
 
 ---
@@ -94,7 +94,7 @@ python tools/segmenter/prepare_dataset.py \
 ```
 
 **Review the routing summary** `build_class_mapping.py` prints before training — over-dropping classes
-shrinks the set the mIoU gate can measure. FoodSeg103 has no liquid supervision, so channels 24–31 get
+shrinks the set the mIoU report can measure. FoodSeg103 has no liquid supervision, so channels 24–31 get
 little-to-no data; that is expected and deferred (not an MVP blocker). Detail:
 [`ml-training.md` §3](ml-training.md#3-dataset-preparation).
 

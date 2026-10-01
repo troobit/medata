@@ -7,9 +7,8 @@
 # Trains into build/checkpoint_<name>.pt with the train log at
 # build/train_<name>_<YYYYMMDD>.log, keeps the lineage as build/lineage-<name>.json,
 # then validates on the leak-free anchor into build/validate_<name>_leakfree_v2anchor.log.
-# Exit code is the validation's (0 on any completed run since Decision 38 removed
-# the IoU gate; non-zero means the run could not be done) or the trainer's when
-# training fails. Never edit this file while the queue is live.
+# Exit code is the validation's, or the trainer's when training fails. Never edit
+# this file while the queue is live.
 set -uo pipefail
 
 MEDATA_ROOT="${MEDATA_ROOT:-/Users/r/repos/medata}"
@@ -78,7 +77,7 @@ run_variant() {
         --split heldout_leakfree \
         --lineage "$B/lineage-${name}.json" > "$vlog" 2>&1
     rc=$?
-    echo "[queue] $name: validation exit=$rc (non-zero means the run could not be done) $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "[queue] $name: validation exit=$rc $(date '+%Y-%m-%d %H:%M:%S')"
     grep -E "mean food-class IoU|staple |mask " "$vlog"
     return $rc
 }

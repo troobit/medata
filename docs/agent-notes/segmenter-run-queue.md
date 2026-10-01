@@ -20,7 +20,7 @@ this note is the mechanics and the reading rules.
   `run_variant <name> [--epochs N] -- <recipe flags>`. `lib.sh` supplies the
   fixed envelope (merged corpus, 36 classes, 513, batch 16, lr 1e-3) and runs
   the leak-free anchor validation after training. Its exit code is the
-  validation's; 1 means below the 0.48 gate and is expected today. It echoes
+  validation's. It echoes
   the validation's `mean food-class IoU`, `staple` and `mask ` lines into
   `runner.log`.
 - `PAUSE` in the state dir holds the runner between entries; `STOP` makes it

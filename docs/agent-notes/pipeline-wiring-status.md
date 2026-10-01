@@ -4,7 +4,7 @@
 the real factory, the RGB conversion, and `VisionCardDetector` have all since
 shipped, and **Blocker 1 closed too**: real checkpoints were trained and
 exported 2026-07-05/06; the bundled model is `24e0b022241a` under a
-developer-phase override (see `model-production.md`). Historical references
+(see `model-production.md`). Historical references
 below to the iPhone 13 Pro Max as the hardware floor are also stale — the
 floor is the iPhone 16 Pro since 2026-07-15 (segmenter-foundation Decision 22).
 The rest of this note is kept as historical context; see the

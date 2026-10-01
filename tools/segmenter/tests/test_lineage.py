@@ -62,9 +62,8 @@ def test_preserve_metrics_carries_recorded_metrics_for_same_checkpoint(tmp_path)
     ckpt = tmp_path / "checkpoint.pt"
     ckpt.write_bytes(b"same-model")
     recorded = lineage.build_lineage(ckpt, train_config={})
-    recorded["metrics"] = {"mean_iou": 0.42, "export_eligible": False,
-                           "release_override": {"allowed": True, "reason": "dev-phase",
-                                                "authorised_by": "developer"}}
+    recorded["metrics"] = {"mean_iou": 0.42,
+                           "carb_priority_iou": {"white_rice": 0.61}}
     path = tmp_path / "lineage.json"
     lineage.write_lineage(recorded, path)
 

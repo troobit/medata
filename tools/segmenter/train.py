@@ -754,9 +754,8 @@ def food_class_miou(model, loader, device, num_classes: int,
                     forward_logits=None) -> float:
     """Mean IoU over FOOD classes only (excludes 24/25/26 per §4/§5).
 
-    Background dominates pixels; food-class mIoU is the §5 gate (>= 0.48,
-    segmenter-foundation Decision 5). Classes
-    absent from the val split (no GT and no prediction) are skipped from the mean.
+    Background dominates pixels, so the mean is taken over food classes only.
+    Classes absent from the val split (no GT and no prediction) are skipped from the mean.
     ``forward_logits`` is the arch registry's output normaliser (default: the
     torchvision ``["out"]`` dict convention).
     """

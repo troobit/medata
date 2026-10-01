@@ -304,8 +304,6 @@ def test_update_lineage_mask_quality_leaves_class_metrics_alone(tmp_path):
     path = tmp_path / "lineage.json"
     before = {"model_version": "abc", "metrics": {
         "mean_iou": 0.42, "per_class_iou": {"pasta": 0.6}, "carb_priority_iou": {"pasta": 0.6},
-        "export_eligible": False, "shortfall": [{"class": "mean", "iou": 0.42, "bar": 0.48}],
-        "release_override": {"allowed": True, "reason": "dev", "authorised_by": "developer"},
     }}
     path.write_text(json.dumps(before))
     block = {"food_iou": 0.88, "region_iou": 0.49, "boundary_f2": 0.46,

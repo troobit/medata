@@ -22,7 +22,7 @@
 
 ## 1. Where the model stands (evidence)
 
-Two real models have shipped, both under Decision 11 developer-phase overrides
+Two real models have shipped
 (`docs/agent-notes/model-production.md`):
 
 | Checkpoint | Recipe | Held-out mean food-class IoU |
@@ -31,7 +31,7 @@ Two real models have shipped, both under Decision 11 developer-phase overrides
 | `24e0b022241a` (2026-07-06, shipped) | letterbox parity + independent v-flip added | 0.4054 |
 
 The strict export gate is mean ≥ 0.60 AND every carb-priority staple ≥ 0.50
-(`tools/segmenter/validation.py`, `MEAN_IOU_BAR` / `CARB_PRIORITY_IOU_BAR`).
+(`tools/segmenter/validation.py`).
 (Bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14.)
 The earlier fixed-lr, no-augmentation baseline plateaued at ~0.34 by epoch 22/60;
 the recipe improvements since have moved the number to 0.40–0.43 and stalled.
@@ -337,7 +337,7 @@ Photometric-augmentation caveat: the offline bench under-reports device gains
 robustness may still justify a deploy — record that reasoning in the Decision
 11 override if used.
 
-The strict gate is unchanged: `export_eligible` remains mean ≥ 0.60 AND every
+At the time of writing the bar was mean ≥ 0.60 AND every
 staple ≥ 0.50; the threshold above only governs which developer-phase
 iterations are worth the export/deploy cycle under a Decision 11 override.
 (Bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14.)
