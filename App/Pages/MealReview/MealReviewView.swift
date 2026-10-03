@@ -133,8 +133,15 @@ struct MealReviewView: View {
     // every correction — tapping 1/2 on the plate scale rolls the carb total,
     // the plate mass and the dose figure together, which teaches the divisor
     // better than a caption could.
+    //
+    // A superseded run does not write: `.task(id:)` cancels it when the total
+    // moves again, and the cancellation is checked after the store reads, so
+    // a slower computation for an earlier total cannot land last and leave the
+    // pill disagreeing with the figure beside it.
     private func refreshDose() async {
-        doseReadout = await DoseComputation.readout(for: doseSubject, store: store)
+        let readout = await DoseComputation.readout(for: doseSubject, store: store)
+        guard !Task.isCancelled else { return }
+        doseReadout = readout
     }
 
     #if FIELD_LOOP
@@ -203,11 +210,9 @@ struct MealReviewView: View {
             estimate: fieldEstimateSnapshot
         )
         #endif
-        // On appearance and on every correction — see `refreshDose()`.
-        .task { await refreshDose() }
-        .onChange(of: model.pendingTotalCarbsG) {
-            Task { await refreshDose() }
-        }
+        // On appearance and on every correction — see `refreshDose()`. The
+        // same `.task(id:)` shape ResultView uses for its own readout.
+        .task(id: model.pendingTotalCarbsG) { await refreshDose() }
         .quickAddNamePrompt(
             draft: $presetDraft,
             name: $presetName,
