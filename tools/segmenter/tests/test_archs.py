@@ -351,3 +351,113 @@ def test_legacy_sidecar_without_arch_means_deeplab(tmp_path):
     )
     state = train._load_resume_state(args)
     assert state["epoch"] == 1  # drift check passed; legacy default applied
+
+
+# ── deeplabv3plus_mnv3 (research note 4.6; queued as R19) ───────────────────────
+
+DLV3PLUS = "deeplabv3plus_mnv3"
+
+
+def test_deeplabv3plus_is_registered_with_the_dict_out_contract():
+    # Torch-free: registration and the spec surface never import torch.
+    spec = archs.get(DLV3PLUS)
+    assert DLV3PLUS in archs.ARCH_CHOICES
+    assert spec.output == "dict_out"
+    assert spec.forward_logits is archs.dict_out_logits
+
+
+def test_deeplabv3plus_emits_logits_at_the_input_size():
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
+
+    # 65 = 1 + 2·32, the shape family of 513 and 641: the stride-4 grid is 17
+    # and the stride-16 grid is 5, so neither upsample is an integer factor.
+    spec = archs.get(DLV3PLUS)
+    model = spec.build(36, pretrained=False).eval()
+    images = torch.zeros(1, 3, 65, 65)
+    with torch.no_grad():
+        logits = spec.forward_logits(model, images)
+    assert logits.shape == (1, 36, 65, 65)
+
+
+def test_deeplabv3plus_keeps_the_shipping_backbone_and_adds_only_a_head():
+    pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
+
+    # Same backbone keys and shapes as deeplab_mnv3, so both start from the
+    # same COCO-seg weights and the decoder is the only difference.
+    shipping = archs.get("deeplab_mnv3").build(36, pretrained=False).state_dict()
+    plus = archs.get(DLV3PLUS).build(36, pretrained=False).state_dict()
+
+    def backbone(state):
+        return {k: v.shape for k, v in state.items() if k.startswith("backbone.")}
+
+    assert backbone(plus) == backbone(shipping)
+    assert {k.split(".")[0] for k in plus} == {"backbone", "aspp", "low_proj", "decoder"}
+
+
+def test_deeplabv3plus_provenance_round_trips_from_train_to_export(tmp_path):
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(seed=0)
+    split = tmp_path / "data" / "train"
+    (split / "images").mkdir(parents=True)
+    (split / "masks").mkdir(parents=True)
+    for i in range(2):
+        rgb = rng.integers(0, 256, (TARGET_SIZE, TARGET_SIZE, 3), dtype=np.uint8)
+        Image.fromarray(rgb, "RGB").save(split / "images" / f"img{i}.png")
+        ids = rng.integers(0, NUM_CLASSES, (TARGET_SIZE, TARGET_SIZE), dtype=np.uint8)
+        Image.fromarray(ids, "L").save(split / "masks" / f"img{i}.png")
+
+    out = tmp_path / "run" / "checkpoint.pt"
+    assert train.main(_argv(tmp_path, out, **{"--epochs": "1", "--arch": DLV3PLUS})) == 0
+
+    # train.py stamps a non-default arch in the checkpoint and the lineage, so
+    # export.py (checkpoint) and run_validation.py (lineage) resolve it with
+    # no flag — snaq-parity Decision 14.
+    lineage = json.loads((out.parent / "lineage.json").read_text())
+    assert archs.arch_from_checkpoint(out) == DLV3PLUS
+    assert archs.arch_from_lineage(lineage) == DLV3PLUS
+
+    loaded = export.load_checkpoint(NUM_CLASSES, str(out))  # arch from the stamp
+    assert not loaded.training
+    saved = torch.load(out, map_location="cpu")["model"]
+    assert torch.equal(loaded.state_dict()["decoder.0.weight"], saved["decoder.0.weight"])
+
+
+def test_deeplabv3plus_loader_refuses_a_deeplab_checkpoint(tmp_path):
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
+
+    # Strict load: a wrong-arch state dict must fail, not export a model whose
+    # decoder is still at its random initialisation.
+    shipping = archs.get("deeplab_mnv3").build(36, pretrained=False)
+    path = tmp_path / "deeplab.pt"
+    torch.save({"model": shipping.state_dict()}, path)
+    with pytest.raises(RuntimeError, match="decoder"):
+        archs.get(DLV3PLUS).load_checkpoint(36, path)
+
+
+def test_deeplabv3plus_passes_the_export_gates(tmp_path):
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
+    pytest.importorskip("coremltools")
+
+    # The weight bytes do not depend on the input size, so a 65-pixel export
+    # measures the same 24 MiB budget a 641 export does, in a fraction of the
+    # time. Random weights: this checks the graph converts and stays inside
+    # the gates, not what a trained model predicts.
+    torch.manual_seed(0)
+    model = archs.get(DLV3PLUS).build(36, pretrained=False).eval()
+    pkg = tmp_path / "segmenter.mlpackage"
+    export.export_coreml(model, 65, 36, str(pkg), forward_logits=archs.dict_out_logits)
+
+    export.validate_weight_budget(str(pkg))
+    export.validate_channel_count(export.read_coreml_output_channels(str(pkg)))
+    x = export.build_reference_chw(65, None)
+    oracle = export.run_pytorch(model, x, forward_logits=archs.dict_out_logits)
+    _err, _agreement, ok = export.oracle_agreement(oracle, export.run_coreml(str(pkg), x))
+    assert ok
