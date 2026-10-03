@@ -244,6 +244,13 @@ struct ResultView: View {
     // (meal-review Req 8.7): every surface that names a relabelled food names
     // the corrected one, not the predicted one.
     @State private var correctedClassIds: [String: String] = [:]
+    // Foods the review added (`added_<n>`, review-swap-loop): never in
+    // `record.macros.perClass`, so they are listed from the corrections.
+    @State private var addedRowKeys: [String] = []
+    // The amount the review recorded for each relabelled or added row, read
+    // from the correction that first named its food — the base its fraction
+    // stops scale, since no estimate exists for that food.
+    @State private var reviewedGrams: [String: Double] = [:]
     // Serving-row state (serving-adjust PRD). `pendingGrams` holds the rows'
     // pending amounts (absent key = the original estimate); `recordedGrams`
     // mirrors the state the latest persisted correction implies. The log pill
@@ -298,37 +305,81 @@ struct ResultView: View {
 
     // MARK: - Row model
 
-    // One adjustable per-food row. Scaling ALWAYS derives from the original
-    // estimate held here, so repeated adjustments never compound (iOS Req 4).
+    // One adjustable per-food row. Scaling ALWAYS derives from the base held
+    // here, so repeated adjustments never compound (iOS Req 4).
+    //
+    // A row the review relabelled or added (meal-review, review-swap-loop,
+    // unknown-food-nameable) is not described by `record.macros.perClass`: its
+    // food, serving unit and carbohydrate per gram are the corrected class's.
+    // Reading the predicted figures there showed a renamed Unknown food at
+    // 0 g and 0 g carbs, priced a relabelled row at the predicted food's
+    // coefficient, and decoded its serving count in the wrong unit — and the
+    // first stepper tap then re-totalled the meal on those figures, dropping
+    // the relabel and every added food from the logged total and the dose.
     private struct FoodRow: Identifiable {
-        let id: String          // class id, e.g. "potato_boiled"
+        let id: String          // the record's class id, or a review `added_<n>` key
+        let classId: String     // the food the row stands for now
         let displayName: String
+        // The base the fraction stops scale: the estimate, or for a relabelled
+        // or added row the amount the review recorded (no estimate exists for
+        // the food it now names).
         let originalGrams: Double
+        // The row's share of the STORED total; zero for an added row, which
+        // the record's total never included.
         let originalCarbsG: Double
+        // The current food's carbohydrate per gram where the row was relabelled
+        // or added; nil scales the estimate's own carbs, as before.
+        let carbsPerGram: Double?
         let isLiquid: Bool
     }
 
     // Sorted by carbs descending (name tie-break) for a stable, meaningful order.
     private var foodRows: [FoodRow] {
-        record.macros.perClass
-            .map { name, macro in
-                FoodRow(
-                    id: name,
-                    displayName: MedataFormat.prettify(correctedClassIds[name] ?? name),
-                    originalGrams: Double(macro.massG),
-                    originalCarbsG: Double(macro.carbsG),
-                    isLiquid: macro.isLiquid
-                )
-            }
-            .sorted {
-                ($0.originalCarbsG, $1.id) > ($1.originalCarbsG, $0.id)
-            }
+        let estimated = record.macros.perClass.map { name, macro -> FoodRow in
+            let current = correctedClassIds[name] ?? name
+            let relabelled = current != name
+            return FoodRow(
+                id: name,
+                classId: current,
+                displayName: MedataFormat.prettify(current),
+                originalGrams: relabelled
+                    ? (reviewedGrams[name] ?? Double(macro.massG)) : Double(macro.massG),
+                originalCarbsG: Double(macro.carbsG),
+                carbsPerGram: relabelled ? carbsPerGram(for: current) : nil,
+                isLiquid: macro.isLiquid
+            )
+        }
+        let added = addedRowKeys.compactMap { key -> FoodRow? in
+            guard let classId = correctedClassIds[key] else { return nil }
+            return FoodRow(
+                id: key,
+                classId: classId,
+                displayName: MedataFormat.prettify(classId),
+                originalGrams: reviewedGrams[key] ?? 0,
+                originalCarbsG: 0,
+                carbsPerGram: carbsPerGram(for: classId),
+                isLiquid: false
+            )
+        }
+        return (estimated + added).sorted {
+            ($0.originalCarbsG, $1.id) > ($1.originalCarbsG, $0.id)
+        }
+    }
+
+    // The coefficient a relabel derives with (MealReviewModel: the database
+    // entry's `carbsMonoG` for the record's edition), per gram.
+    private func carbsPerGram(for classId: String) -> Double? {
+        Self.foodDatabase?
+            .entry(for: classId, edition: record.databaseEdition)
+            .map { Double($0.carbsMonoG) / 100 }
     }
 
     // A liquid class or one without a solid_servings row falls back to a gram
-    // stepper on the same row — never a dead row (iOS Req 1).
+    // stepper on the same row — never a dead row (iOS Req 1). Keyed by the
+    // CURRENT food: the review writes a relabelled row's serving count in the
+    // corrected food's unit.
     private func serving(for row: FoodRow) -> SolidServing? {
-        row.isLiquid ? nil : servings[row.id]
+        row.isLiquid ? nil : servings[row.classId]
     }
 
     private func pendingGramsFor(_ row: FoodRow) -> Double {
@@ -341,8 +392,11 @@ struct ResultView: View {
 
     // Per-row carbs scale linearly with mass off the ORIGINAL estimate. A
     // zero-mass row cannot scale (nothing to derive a ratio from), so its
-    // carbs hold still.
+    // carbs hold still. A relabelled or added row prices its mass at the
+    // current food's coefficient — the review's own arithmetic, so at rest the
+    // rows sum to the corrected total the hero shows.
     private func pendingCarbs(_ row: FoodRow) -> Double {
+        if let perGram = row.carbsPerGram { return pendingGramsFor(row) * perGram }
         guard row.originalGrams > 0 else { return row.originalCarbsG }
         return row.originalCarbsG * pendingGramsFor(row) / row.originalGrams
     }
@@ -475,7 +529,7 @@ struct ResultView: View {
         EstimateSnapshot(
             foods: foodRows.map { row in
                 EstimateSnapshotFood(
-                    classID: row.id,
+                    classID: row.classId,
                     displayName: row.displayName,
                     massG: pendingGramsFor(row),
                     carbsG: pendingCarbs(row)
@@ -773,8 +827,7 @@ struct ResultView: View {
         guard let database = Self.foodDatabase else { return nil }
         var massGByClassID: [String: Double] = [:]
         for row in foodRows {
-            let classID = correctedClassIds[row.id] ?? row.id
-            massGByClassID[classID, default: 0] += pendingGramsFor(row)
+            massGByClassID[row.classId, default: 0] += pendingGramsFor(row)
         }
         return Macros.correctedFatAndProtein(
             massGByClassID: massGByClassID,
@@ -1024,17 +1077,18 @@ struct ResultView: View {
         self.photo = await MealPhotoLoader.loadImage(assetID: record.photoAssetID)
     }
 
-    // Serving definitions for this record's solid classes, one lookup each —
-    // synchronous reads on the shared bundled handle.
+    // Serving definitions for the foods the rows currently stand for, one
+    // lookup each — synchronous reads on the shared bundled handle. Re-run
+    // whenever the corrections name a food not yet looked up.
     private func loadServings() {
-        guard servings.isEmpty, let database = Self.foodDatabase else { return }
-        var resolved: [String: SolidServing] = [:]
-        for row in foodRows where !row.isLiquid {
-            if let serving = database.solidServing(for: row.id) {
-                resolved[row.id] = serving
+        guard let database = Self.foodDatabase else { return }
+        var resolved = servings
+        for row in foodRows where !row.isLiquid && resolved[row.classId] == nil {
+            if let serving = database.solidServing(for: row.classId) {
+                resolved[row.classId] = serving
             }
         }
-        servings = resolved
+        if resolved.count != servings.count { servings = resolved }
     }
 
     // Mirror of MealOverviewView.observeCorrections (Decision 18): refresh once
@@ -1063,6 +1117,13 @@ struct ResultView: View {
         correctedClassIds = corrections.reduce(into: [:]) { acc, correction in
             acc.merge(correction.correctedClassIds) { _, newer in newer }
         }
+        addedRowKeys = correctedClassIds.keys
+            .filter { $0.hasPrefix(ReviewFood.addedPrefix) }
+            .sorted()
+        // Servings for the corrected foods before any amount is decoded: the
+        // review writes a relabelled row's count in that food's unit.
+        loadServings()
+        reviewedGrams = reviewedGramsState(from: corrections)
         recordedGrams = recordedGramsState(from: latest)
         // Seed the rows once per push (iOS Req 4: history re-entry resumes
         // from the latest correction); later refreshes only update the
@@ -1086,7 +1147,7 @@ struct ResultView: View {
             return Dictionary(uniqueKeysWithValues: foodRows.map { row in
                 switch amounts[row.id] {
                 case .servings(let count)?:
-                    if let serving = servings[row.id] {
+                    if let serving = servings[row.classId] {
                         return (row.id, ServingMath.grams(servings: count, gramsPerUnit: serving.gramsPerUnit))
                     }
                     return (row.id, row.originalGrams)
@@ -1115,5 +1176,29 @@ struct ResultView: View {
             return Dictionary(uniqueKeysWithValues: foodRows.map { ($0.id, $0.originalGrams * factor) })
         }
         return [:]
+    }
+
+    // The amount the review recorded for each relabelled or added row: read
+    // from the first correction that names the row's food, which is the
+    // review's own (history corrections append after it and name nothing).
+    private func reviewedGramsState(from corrections: [PbUserCorrection]) -> [String: Double] {
+        var reviewed: [String: Double] = [:]
+        for correction in corrections {
+            guard let amounts = ServingNote.parse(correction.note) else { continue }
+            for (key, classId) in correction.correctedClassIds where reviewed[key] == nil {
+                switch amounts[key] {
+                case .servings(let count)?:
+                    if let serving = servings[classId] {
+                        reviewed[key] = ServingMath.grams(
+                            servings: count, gramsPerUnit: serving.gramsPerUnit)
+                    }
+                case .grams(let grams)?:
+                    reviewed[key] = grams
+                case nil:
+                    break
+                }
+            }
+        }
+        return reviewed
     }
 }
