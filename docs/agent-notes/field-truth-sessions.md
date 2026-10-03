@@ -232,21 +232,24 @@ Nothing shipped. The full grid is in Decision 6.
   an `edgeBand` fit (`support-plane-reference`). A ring median would not do:
   it reads the rim (11.4 mm), not the 1–4 mm under the toast.
 
-### One-command run: `make field-score` (harness at `2a6f2b8` plus the field-score change)
+### One-command run: `make field-score` (harness at `7a5e44e` plus the segmenter and prediction-ms columns)
 
 The same five captures, scored with no hand step. The derivation found the
 104 g roll's bundle under `reports/` by its SHA-256, so nothing was skipped.
-Output as printed, with the checkout path shortened:
+Re-run after the segmenter and prediction-ms columns landed; every accuracy
+figure is unchanged from the first one-command run. Output as printed, with the
+checkout path shortened:
 
 ```
 field-score: 5 weighed capture(s) in 2 checkpoint group(s), out=<checkout>/.build/field-score
 
-capture                checkpoint    path    plane        vol cm3   mass g / truth      err  carbs g / truth      err     as labelled  classes after review (cm3)
-1790655022746-success  ab812dc3aa9d  1-view  foodSupport    226.3     90.5 / 104.0   -13.0%      34.4 / 39.5   -13.0%      0.2 -99.5%  bread_wholemeal 226.3 (was unknown_food); coffee 59.5 rejected
-1790748465041-success  ab812dc3aa9d  1-view  edgeBand       426.0     170.4 / 83.0  +105.3%      64.7 / 31.5  +105.3%     45.7 +45.0%  bread_wholemeal 426.0 (was unknown_food)
-1790989654696-success  88d34e27e8bf  1-view  foodSupport    201.6      76.6 / 80.0    -4.3%      36.8 / 30.4   +20.9%     40.6 +33.5%  bread_white 201.6; white_rice 16.3 rejected
-1790989735795-success  88d34e27e8bf  1-view  edgeBand       236.8      94.7 / 80.0   +18.4%      36.0 / 30.4   +18.4%     43.2 +42.1%  bread_wholemeal 236.8 (was bread_white)
-1790989787903-success  88d34e27e8bf  2-view  edgeBand       224.2      85.2 / 80.0    +6.5%      40.9 / 30.4   +34.5%     40.9 +34.5%  bread_white 224.2
+capture                checkpoint    segmenter            predict ms  path    plane        vol cm3   mass g / truth      err  carbs g / truth      err     as labelled  classes after review (cm3)
+1790655022746-success  ab812dc3aa9d  coreml_ab812dc3aa9d          53  1-view  foodSupport    226.3     90.5 / 104.0   -13.0%      34.4 / 39.5   -13.0%      0.2 -99.5%  bread_wholemeal 226.3 (was unknown_food); coffee 59.5 rejected
+1790748465041-success  ab812dc3aa9d  coreml_ab812dc3aa9d          52  1-view  edgeBand       426.0     170.4 / 83.0  +105.3%      64.7 / 31.5  +105.3%     45.7 +45.0%  bread_wholemeal 426.0 (was unknown_food)
+1790989654696-success  88d34e27e8bf  coreml_88d34e27e8bf          97  1-view  foodSupport    201.6      76.6 / 80.0    -4.3%      36.8 / 30.4   +20.9%     40.6 +33.5%  bread_white 201.6; white_rice 16.3 rejected
+1790989735795-success  88d34e27e8bf  coreml_88d34e27e8bf          60  1-view  edgeBand       236.8      94.7 / 80.0   +18.4%      36.0 / 30.4   +18.4%     43.2 +42.1%  bread_wholemeal 236.8 (was bread_white)
+1790989787903-success  88d34e27e8bf  coreml_88d34e27e8bf     61 (59)  2-view  edgeBand       224.2      85.2 / 80.0    +6.5%      40.9 / 30.4   +34.5%     40.9 +34.5%  bread_white 224.2
+predict ms median (nadir): coreml_88d34e27e8bf 61 over 3 capture(s); coreml_ab812dc3aa9d 52.5 over 2 capture(s)
 
 set carbs as reviewed (n=5): MAPE 38.4%  MAE 12.2 g
 set mass as reviewed (n=5): MAPE 29.5%  MAE 24.8 g
@@ -273,6 +276,16 @@ beta ab812dc3aa9d: none baked — bread_wholemeal has 1 admitted plate(s), the f
   `foodSupport` only (Req 5.4). The back-filled truth says bread_wholemeal
   where two reviews kept bread_white. One admitted plate is 29 short of the
   30-plate floor.
+- **Prediction cost, R16 against the incumbent.** Median nadir prediction
+  61 ms over three R16 captures (`88d34e27e8bf`) against 52.5 ms over two on
+  `ab812dc3aa9d`, about 16 % more. Five captures is a reading, not a
+  measurement. The 97 ms on `…654696`, the only capture on build `a179e0b`,
+  is the outlier the median sets aside. The two-view's oblique took 59 ms
+  against its nadir's 61.
+- **The field lineage now names the field camera.** Both groups'
+  `calibrate.json` record `pinned_intrinsics_model = arkit_per_capture`, read
+  from the run summary's `render_config`. Before this fix they recorded
+  `realsense_d435_factory`, the CLI default.
 
 ## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
 

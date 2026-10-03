@@ -274,9 +274,13 @@ the calibration derivation into `OUT` (default `.build/field-score/`), then
 `accuracy` and `calibrate` over each checkpoint group with that group's run
 summary, and prints:
 
-- one line per capture: path, support plane, scored volume, mass and carbs
-  against the weighed truth with their errors, the same meal priced at the
-  segmenter's own labels, and the classes after review;
+- one line per capture: the segmenter the phone ran (the outcome's
+  `modelVersion`) and its prediction time in ms (`segmentationNadir`, with the
+  oblique's in brackets on a two-view capture), path, support plane, scored
+  volume, mass and carbs against the weighed truth with their errors, the same
+  meal priced at the segmenter's own labels, and the classes after review;
+- under the table, each segmenter's median nadir prediction ms, so a new
+  model's on-device cost reads off the same table as its accuracy;
 - the set's MAPE and MAE for carbs as reviewed, mass as reviewed, and carbs as
   labelled;
 - per checkpoint, the β `calibrate` baked or why it baked none — the 30-plate
@@ -288,7 +292,11 @@ rejected region is dropped, and the meal is re-priced at β = 1. In `calibrate`
 this happens before the τ_purity gate, which would otherwise drop every plate
 whose segmenter label differs from the truth's class. Amount corrections are not
 applied. A Nutrition5k or MetaFood3D summary has no review, so those runs are
-unchanged. Each group's harness JSON and stderr stay beside its bundles
+unchanged. A field summary also sets the artifact's
+`lineage.pinned_intrinsics_model` to its own `render_config.intrinsics_model`
+(`arkit_per_capture`); every other run keeps the CLI's Nutrition5k default.
+The segmenter and prediction ms reach the printer through the run summary's
+per-fixture `model_version` and `prediction_ms`. Each group's harness JSON and stderr stay beside its bundles
 (`accuracy.json`, `accuracy.log`, `calibrate.json`, `calibrate.log`). The
 replays use the debug HarnessCLI and take about four minutes for five captures.
 

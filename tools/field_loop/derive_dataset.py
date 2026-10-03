@@ -579,6 +579,26 @@ def review_for(conn, outcome_id: str, meal_id) -> dict:
     return {"relabelled": relabelled, "rejected": rejected}
 
 
+def device_cost(measurements_json, model_version) -> dict:
+    """The segmenter the phone ran and its prediction time per frame.
+
+    `prediction_ms` holds `nadir`, and `oblique` on a two-view capture; a
+    frame the outcome row did not time is left out rather than written 0.
+    """
+    try:
+        measurements = json.loads(measurements_json or "{}")
+    except ValueError:
+        measurements = {}
+    prediction = {}
+    for view, key in (("nadir", "segmentationNadir"),
+                      ("oblique", "segmentationOblique")):
+        ms = (measurements.get(key) or {}).get("predictionMs")
+        if ms is not None:
+            prediction[view] = ms
+    return {"model_version": measurements.get("modelVersion") or model_version,
+            "prediction_ms": prediction}
+
+
 def _clear_previous(out: Path) -> None:
     """Remove the groups an earlier derivation wrote into `out`.
 
@@ -630,8 +650,9 @@ def _summary_document(group: dict) -> dict:
         },
         "truth_source": "benchmark_meals, weighed (SNAQ Parity); developer-"
                         "stated figures are deliberately not calibration input",
-        # Per fixture id: the truth written into the bundle (fields 17/18) and
-        # the review `accuracy` and `calibrate` apply before scoring.
+        # Per fixture id: the truth written into the bundle (fields 17/18),
+        # the review `accuracy` and `calibrate` apply before scoring, and the
+        # segmenter's on-device cost, which `field-score` prints.
         "fixtures": group["fixtures"],
     }
 
@@ -653,8 +674,9 @@ def derive_calibration(conn, root, out) -> dict:
 
     rows = [dict(r) for r in conn.execute(
         "SELECT c.stem, c.sha256, c.model_version, o.id AS outcome_id, "
-        "o.meal_id, b.id AS benchmark_meal_id, b.items, b.truth_carbs_g, "
-        "b.fidelity FROM outcomes o "
+        "o.meal_id, o.model_version AS outcome_model_version, "
+        "o.measurements_json, b.id AS benchmark_meal_id, b.items, "
+        "b.truth_carbs_g, b.fidelity FROM outcomes o "
         "JOIN benchmark_meals b ON b.id = o.benchmark_meal_id "
         "JOIN captures c ON c.timestamp_ms = o.timestamp_ms "
         "WHERE o.benchmark_meal_id IS NOT NULL ORDER BY c.stem")]
@@ -692,6 +714,8 @@ def derive_calibration(conn, root, out) -> dict:
             "benchmark_meal_id": row["benchmark_meal_id"],
             "truth": truth,
             "review": review_for(conn, row["outcome_id"], row["meal_id"]),
+            **device_cost(row["measurements_json"],
+                          row["outcome_model_version"]),
         }
         group["width"] = info["width"] or group["width"]
         group["height"] = info["height"] or group["height"]

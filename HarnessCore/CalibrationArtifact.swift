@@ -199,6 +199,24 @@ public enum CalibrateRun {
         }
     }
 
+    // tools/field_loop/derive_dataset.py's `CALIBRATION_DATASET`.
+    public static let fieldDataset = "medata_field"
+
+    // The lineage's `pinned_intrinsics_model`. A field derivation's summary
+    // names the camera its captures used (`arkit_per_capture`: each bundle
+    // carries its own ARKit intrinsics), so a field run records that rather
+    // than the CLI's Nutrition5k default. Every other run keeps `cliValue`;
+    // a MetaFood3D render camera rides `render_config`, not this field.
+    public static func pinnedIntrinsicsModel(
+        cliValue: String, summaries: [IngestSummary]
+    ) -> String {
+        let field = summaries.first { $0.dataset == fieldDataset }
+        guard let model = field?.renderIntrinsicsModel, !model.isEmpty else {
+            return cliValue
+        }
+        return model
+    }
+
     // The dataset a fixture belongs to: the `source_dataset` stamp before the
     // "@" (e.g. "nutrition5k@<release>/<metaver>" → "nutrition5k"). Legacy
     // fixtures carry no stamp and read "".
