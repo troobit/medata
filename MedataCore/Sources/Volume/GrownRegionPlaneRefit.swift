@@ -40,6 +40,12 @@ public enum GrownRegionPlaneRefit {
         /// refused or growth added nothing.
         public let refitReference: SupportPlaneReference?
         public let refitRefused: Bool
+        /// The segmenter's food-like footprint on the first plane, cm²
+        /// (`FoodRegionGrowth.foodAreaCm2`), the quantity the gate reads.
+        public let seedAreaCm2: Float
+        /// True when the seed-area gate skipped growth: the first plane and
+        /// the segmenter's map stand, exactly as with growth disabled.
+        public let gated: Bool
 
         public var adopted: Bool { adoptedStats != nil }
         /// True when growth added cells and a refit was attempted.
@@ -49,6 +55,10 @@ public enum GrownRegionPlaneRefit {
     /// Runs the sequence above. `supportOffsetMm` is the support surface's
     /// height above `supportPlane` (the ring median on an `edgeBand` fit, 0
     /// otherwise), the same value `grow` and a refused refit's `prune` use.
+    /// `gateBySeedArea` applies `config.seedAreaGateCm2` (Decision 5): when
+    /// the segmenter's own footprint is above it, nothing grows and nothing
+    /// is refit. Only a caller that integrates over the grown map passes
+    /// true; the two-view branch, which takes the plane only, does not.
     public static func refit(
         argmax: ArgmaxMap,
         depth: DepthMap,
@@ -59,15 +69,23 @@ public enum GrownRegionPlaneRefit {
         palette: ClassPalette,
         config: FoodRegionGrowthConfig,
         seedPoints: [SIMD2<Int>] = [],
+        gateBySeedArea: Bool = false,
         fit: (BinaryMask) -> SupportPlaneFitOutcome
     ) -> Outcome {
+        let seedAreaCm2 = FoodRegionGrowth.foodAreaCm2(
+            argmax: argmax, intrinsics: intrinsics, supportPlane: plane, palette: palette)
+        let gated = gateBySeedArea && config.seedAreaGateCm2 > 0
+            && seedAreaCm2 > config.seedAreaGateCm2
+        // A gated pass still runs `grow` with growth disabled, so a seed
+        // restriction shapes the returned map exactly as it does ungated.
         let candidate = FoodRegionGrowth.grow(
             argmax: argmax, depth: depth, intrinsics: intrinsics,
             supportPlane: plane, supportOffsetMm: supportOffsetMm,
-            palette: palette, config: config, seedPoints: seedPoints)
+            palette: palette, config: gated ? .disabled : config, seedPoints: seedPoints)
         guard candidate.applied else {
             return Outcome(plane: plane, reference: supportReference, adoptedStats: nil,
-                           growth: candidate, refitReference: nil, refitRefused: false)
+                           growth: candidate, refitReference: nil, refitRefused: false,
+                           seedAreaCm2: seedAreaCm2, gated: gated)
         }
         let refit = fit(foodMask(from: candidate.argmax, palette: palette))
         let refitPlane = refit.foodSupportPlane
@@ -81,10 +99,12 @@ public enum GrownRegionPlaneRefit {
         if growth.applied, let refitPlane {
             return Outcome(plane: refitPlane, reference: refit.stats.reference,
                            adoptedStats: refit.stats, growth: growth,
-                           refitReference: refitReference, refitRefused: refitRefused)
+                           refitReference: refitReference, refitRefused: refitRefused,
+                           seedAreaCm2: seedAreaCm2, gated: false)
         }
         return Outcome(plane: plane, reference: supportReference, adoptedStats: nil,
-                       growth: growth, refitReference: refitReference, refitRefused: refitRefused)
+                       growth: growth, refitReference: refitReference, refitRefused: refitRefused,
+                       seedAreaCm2: seedAreaCm2, gated: false)
     }
 
     /// The food-region mask on the argmax grid, `isVolumetricClass` per pixel

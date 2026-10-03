@@ -127,7 +127,7 @@ public enum FixtureRunner {
             let refit = refitPlaneFromGrownRegion(
                 argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirIntrinsics,
                 gravity: gravity, first: fit, palette: palette, growth: growth,
-                seedPoints: nadirSeed.map { [$0] } ?? [])
+                seedPoints: nadirSeed.map { [$0] } ?? [], gateBySeedArea: true)
             let grown = refit.growth
             var measuredSeg = nadirSeg
             if grown.applied {
@@ -150,7 +150,8 @@ public enum FixtureRunner {
             regionGrowth = .init(
                 applied: grown.applied, capTripped: grown.capTripped,
                 foodPixelsBefore: grown.foodPixelsBefore, foodPixelsAfter: grown.foodPixelsAfter,
-                refitReference: refit.refitReference, refitRefused: refit.refitRefused)
+                refitReference: refit.refitReference, refitRefused: refit.refitRefused,
+                seedAreaCm2: refit.seedAreaCm2, gated: refit.gated)
             supportPlaneResidualMm = fit.plane.residualMm
             supportPlaneReference = fit.reference
             let est = try runHeightField(
@@ -343,13 +344,15 @@ public enum FixtureRunner {
         first: SingleViewPlaneFit,
         palette: ClassPalette,
         growth: FoodRegionGrowthConfig,
-        seedPoints: [SIMD2<Int>] = []
+        seedPoints: [SIMD2<Int>] = [],
+        gateBySeedArea: Bool = false
     ) -> GrownRegionPlaneRefit.Outcome {
         GrownRegionPlaneRefit.refit(
             argmax: argmax, depth: depth, intrinsics: intrinsics,
             supportPlane: first.plane, supportReference: first.reference,
             supportOffsetMm: first.supportOffsetMm,
-            palette: palette, config: growth, seedPoints: seedPoints
+            palette: palette, config: growth, seedPoints: seedPoints,
+            gateBySeedArea: gateBySeedArea
         ) { mask in
             LiDARSupportPlaneFitter.fitFromDepth(
                 depth: depth, intrinsics: intrinsics, mask: mask, gravity: gravity)

@@ -61,12 +61,23 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// a fixed floor cannot separate them, a food-relative band can, and the
     /// tilt cancels because seeds and added cells are measured the same way.
     public let seedBandMm: Float
+    /// Growth is skipped when the segmenter's own food-like footprint on the
+    /// first support plane (`FoodRegionGrowth.foodAreaCm2`) is above this,
+    /// cm²; 0 means no gate. Only callers that integrate over the grown map
+    /// apply it (`GrownRegionPlaneRefit.refit(gateBySeedArea:)`) — the
+    /// two-view branch uses growth to fit a plane and is never gated.
+    /// Why (Decision 5): growth exists for a food the segmenter barely
+    /// recognises; on a plate it already covers it can only add area, and on
+    /// the corpus's weighed plates that added area was error.
+    public let seedAreaGateCm2: Float
 
-    public init(cliffMm: Float, floorMm: Float, frameFractionCap: Float, seedBandMm: Float = 0) {
+    public init(cliffMm: Float, floorMm: Float, frameFractionCap: Float, seedBandMm: Float = 0,
+                seedAreaGateCm2: Float = 0) {
         self.cliffMm = cliffMm
         self.floorMm = floorMm
         self.frameFractionCap = frameFractionCap
         self.seedBandMm = seedBandMm
+        self.seedAreaGateCm2 = seedAreaGateCm2
     }
 
     /// Set by the 2026-09-24 corpus sweep (depth-grown-food-region task 5,
@@ -78,7 +89,16 @@ public struct FoodRegionGrowthConfig: Sendable, Equatable {
     /// plane fitted from the pre-shutter mask, as the device does, a plate
     /// that sits 3–5 mm above the fitted plane (dish, tilt) leaked a blob
     /// out to the rim on both roll captures at 3 mm and not at 5 mm.
-    public static let standard = FoodRegionGrowthConfig(cliffMm: 3, floorMm: 5, frameFractionCap: 0.35, seedBandMm: 10)
+    public static let standard = FoodRegionGrowthConfig(
+        cliffMm: 3, floorMm: 5, frameFractionCap: 0.35, seedBandMm: 10,
+        seedAreaGateCm2: standardSeedAreaGateCm2)
+    /// The shipped seed-area gate, cm² (Decision 5, 2026-10-03). Every
+    /// capture growth improved sits at or below ~145 cm² (the weighed roll at
+    /// 25 cm², a 58 g slice at 86 and 112, the roll's card captures at
+    /// 94–102); the one weighed plate it made worse sits at 330 cm² (two
+    /// slices of multigrain, already 3.2× over). On Nutrition5k any gate from
+    /// 175 cm² up scores identically to no gate.
+    public static let standardSeedAreaGateCm2: Float = 200
     public static let disabled = FoodRegionGrowthConfig(cliffMm: 0, floorMm: 0, frameFractionCap: 0, seedBandMm: 0)
 
     public var isDisabled: Bool { frameFractionCap <= 0 }
@@ -338,6 +358,38 @@ public enum FoodRegionGrowth {
             depthWidth: dw, depthHeight: dh, palette: palette,
             depth: depth, intrinsics: intrinsics, plane: plane,
             offsetMm: supportOffsetMm, floorMm: config.floorMm)
+    }
+
+    /// Footprint of the food-like pixels of `argmax` on `supportPlane`, cm²:
+    /// each pixel's ray meets the plane at range α and covers
+    /// α²·cos³θ / (fx·fy·|n̂·r̂|) there (its solid angle times the range
+    /// squared, over the obliquity). A ray parallel to the plane is skipped.
+    /// Measured on the plane growth starts from, so on an `edgeBand` fit it
+    /// is the footprint on the table, a few percent larger than on the plate.
+    public static func foodAreaCm2(
+        argmax: ArgmaxMap,
+        intrinsics k: CameraIntrinsics,
+        supportPlane plane: SupportPlane,
+        palette: ClassPalette
+    ) -> Float {
+        let w = argmax.width
+        let h = argmax.height
+        guard w > 0, h > 0, argmax.pixels.count == w * h else { return 0 }
+        var areaMm2: Double = 0
+        argmax.pixels.withUnsafeBytes { raw in
+            let labels = raw.bindMemory(to: UInt8.self)
+            for y in 0..<h {
+                for x in 0..<w where palette.isVolumetricClass(Int(labels[y * w + x])) {
+                    let dir = Vec3((Float(x) - k.cx) / k.fx, (Float(y) - k.cy) / k.fy, -1).normalised()
+                    let obliquity = abs(plane.normal.dot(dir))
+                    guard obliquity > 1e-6 else { continue }
+                    let range = abs(plane.distanceMm) / obliquity
+                    let cosTheta = abs(dir.z)
+                    areaMm2 += Double(range * range * cosTheta * cosTheta * cosTheta / (k.fx * k.fy * obliquity))
+                }
+            }
+        }
+        return Float(areaMm2 / 100)
     }
 
     // Height of the cell centre above the support surface, with the same

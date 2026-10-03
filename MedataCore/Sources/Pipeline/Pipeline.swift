@@ -990,7 +990,10 @@ public struct Pipeline: Sendable {
             argmax: argmax, depth: depth, intrinsics: nadir.intrinsics,
             supportPlane: plane, supportReference: planeReference,
             supportOffsetMm: Self.supportOffsetMm(reference: planeReference, ringMedianMm: planeRingMedianMm),
-            palette: palette, config: regionGrowth
+            palette: palette, config: regionGrowth,
+            // The seed-area gate (Decision 5) guards the integrated map only;
+            // the two-view branch takes the plane and is never gated.
+            gateBySeedArea: !planeOnly
         ) { mask in
             supportPlaneFitter.fitOutcome(
                 nadir: nadir, cardPose: cardPose, corners: corners, preShutterFoodMask: mask)
@@ -1019,7 +1022,8 @@ public struct Pipeline: Sendable {
             applied: growth.applied, capTripped: growth.capTripped,
             foodPixelsBefore: growth.foodPixelsBefore, foodPixelsAfter: growth.foodPixelsAfter,
             refitReference: outcome.refitReference?.rawValue, refitRefused: outcome.refitRefused,
-            planeOnly: planeOnly))
+            planeOnly: planeOnly, seedAreaCm2: outcome.seedAreaCm2,
+            seedAreaGateCm2: regionGrowth.seedAreaGateCm2, gated: outcome.gated))
         let refitLabel = outcome.refitReference?.rawValue ?? (outcome.refitRefused ? "refused" : "none")
         let residualMm = plane.residualMm
         // On the Release-emitted channel (pipelineStageLog is Debug-only):
@@ -1032,6 +1036,9 @@ public struct Pipeline: Sendable {
             after=\(growth.foodPixelsAfter, privacy: .public) \
             refit=\(refitLabel, privacy: .public) \
             planeOnly=\(planeOnly, privacy: .public) \
+            seedAreaCm2=\(outcome.seedAreaCm2, privacy: .public) \
+            gateCm2=\(regionGrowth.seedAreaGateCm2, privacy: .public) \
+            gated=\(outcome.gated, privacy: .public) \
             residual_mm=\(residualMm, privacy: .public)
             """
         )

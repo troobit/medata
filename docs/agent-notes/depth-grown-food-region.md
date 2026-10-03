@@ -65,7 +65,7 @@ nothing, and the estimate is today's.
 
 ## Constants (Decision 1 table, 2026-09-24)
 
-`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm (floor was 3 mm until 2026-09-25, Decision 3; the band is Decision 4). The band is a second prune test: an added cell whose height above the support surface is more than 10 mm below the seed cells' median height is dropped. It exists because the first plane can sit 4–5° off the table — on `1790315900185` the plate read 6–16 mm above it with the food at 30 mm, so no fixed floor separates them, while a food-relative band does and the tilt cancels out of it (`HarnessCLI ... --growth-band-mm N`, 0 = no band). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
+`FoodRegionGrowthConfig.standard` = cliff 3 mm, floor 5 mm, cap 0.35, seed band 10 mm, seed-area gate 200 cm² (floor was 3 mm until 2026-09-25, Decision 3; the band is Decision 4; the gate is Decision 5, below). The band is a second prune test: an added cell whose height above the support surface is more than 10 mm below the seed cells' median height is dropped. It exists because the first plane can sit 4–5° off the table — on `1790315900185` the plate read 6–16 mm above it with the food at 30 mm, so no fixed floor separates them, while a food-relative band does and the tilt cancels out of it (`HarnessCLI ... --growth-band-mm N`, 0 = no band). A refit is adopted only when it references `foodSupport` (`SupportPlaneFitOutcome.foodSupportPlane`); a table refit keeps the first plane, because the integrator measures from the adopted plane with no offset and an adopted table plane added 19 mm to every pixel of the 2026-09-25 roll (519 cm³ against 247). The harness fits the first plane from the bundle's pre-shutter mask, as the device does; replays before 2026-09-25 fitted it from the argmax and diverged.
 Floor 2 mm let plate noise in (median added area on well-segmented plates
 +40 %, one plate 2.5×); floor 3 mm reads +9 %; floor 5 mm dropped the roll's
 refit back to `edgeBand`. Cliff made no difference to the median; 3 was
@@ -94,7 +94,9 @@ the corpus on the two figures the median hides (largest addition halves;
 13 of 19 refits land `foodSupport` against 11 of 19). Against the corpus's
 three weighed plates, growth **costs** accuracy: carb mean absolute error
 rises 33.2 g → 40.4 g, all of it on `1785901032716`, an 80 g flat-bread plate
-that already read 3.2× over.
+that already read 3.2× over. Since Decision 5 the seed-area gate keeps growth
+off that plate (seed 330 cm²) and the weighed roll joined the set: 25.8 g gated
+against 31.6 g ungated and 32.9 g off, over four plates.
 
 Two practical corrections to the paragraph above. `HarnessCLI accuracy` is
 the wrong command for field bundles — they carry zero ground truth, so every
@@ -108,6 +110,46 @@ is intact and loads, and `1785054950406` (the 208 g rice plate that once
 yielded zero meals) now replays at 636 cm³. Build the harness from a scratch
 copy of committed `HEAD` when other agents are editing the tree, or a
 mid-sweep rebuild will mix two binaries into one table.
+
+## The seed-area gate (Decision 5, 2026-10-03)
+
+Growth now runs on the single-view path only when the segmenter's own
+food-like footprint on the FIRST plane is at most
+`FoodRegionGrowthConfig.standardSeedAreaGateCm2` = 200 cm²
+(`FoodRegionGrowth.foodAreaCm2`: per pixel α²·cos³θ / (fx·fy·|n̂·r̂|), the ray's
+footprint on the plane). Over it, `GrownRegionPlaneRefit.refit` runs `grow`
+with `.disabled` (so a seed restriction still shapes the map) and skips the
+refit: the estimate is byte-identical to growth off. The gate is opt-in per
+caller (`gateBySeedArea:`, default false): `Pipeline.refitPlaneFromGrownRegion`
+passes `!planeOnly`, `FixtureRunner`'s single-view replay passes true, and the
+two-view branch and `CarveResidualAudit` pass nothing — the two-view refit is
+never gated, so the "never silently the first plane" rule below still holds.
+Outcome rows carry `regionGrowth.seedAreaCm2`, `seedAreaGateCm2`, `gated`;
+`event=region.grow` prints `seedAreaCm2= gateCm2= gated=`.
+
+Why cm² and not frame fraction: the same 58 g slice is 3.5 % of the frame from
+400 mm and 9.8 % from 273 mm (86 and 112 cm²), and N5k's 640×480 rig frame is
+not a phone frame. Why 200: every capture with truth that growth improved has a
+seed of at most ~145 cm² (weighed roll 25, slice 86/112, the roll's card
+captures 94–102); the one it made worse (`1785901032716`, multigrain) is 330.
+N5k scores identically to no gate from 175 cm² up. Sweep tables: Decision 5.
+
+How the sweep was run, for the next one:
+
+- N5k: `tmp/n5k_fixtures_ckpt` holds all 3,485 fixtures (10 GB) and
+  `accuracy` loads a whole directory, so symlink the 236 `single_dominant`
+  ones into their own directory — `grep -l -a single_dominant` on the files
+  finds them. `--checkpoint-sha256` is the full 64-hex stamp
+  (`ab812dc3aa9d269e…612a88f`), not the 12-character device form.
+- Gating yields exactly the ungrown estimate and depends only on the ungrown
+  footprint, so one run with growth and one with `--growth-cap 0` give every
+  threshold post hoc; `--growth-gate-cm2 N` confirms one for real. The growth
+  line on stderr now ends `seedAreaCm2=… gated=…`.
+- N5k reads low on 206 of 216 plates, so ANY added volume scores as an
+  improvement there; it cannot say whether the added region is food.
+- Decision 1's N5k cost (9.47 vs 9.29 g) reproduces exactly with the harness
+  built at `3022b80`, and not at `abd9750` (9.18 vs 9.33 g, growth helping);
+  floor/band are not the reason. Not bisected.
 
 ## Two-view: plane only (two-view-trust Decision 10)
 
@@ -145,5 +187,14 @@ region stands.
 - `pipelineStageLog` is Debug-only; `event=region.grow` is on
   `supportPlaneLog` so it reaches the Release log.
 - Outcome rows carry `regionGrowth {applied, capTripped, foodPixelsBefore,
-  foodPixelsAfter, refitReference, refitRefused}`; the plane fields describe
-  the plane the volume used (the refit when adopted).
+  foodPixelsAfter, refitReference, refitRefused, planeOnly, seedAreaCm2,
+  seedAreaGateCm2, gated}`; the plane fields describe the plane the volume used
+  (the refit when adopted). A gated row reads `applied=false`, `gated=true`,
+  before = after.
+- The weighed corpus for this feature is four single-view bundles:
+  `tmp/device_captures/{1785901032716,1786439141215,1786450130307}-success.fixture`
+  and `medata-corpus/reports/calibration-20260929-roll/1790655022746-success.fixture`.
+  Everything under `medata-corpus/captures/` and `pulls/` was discarded
+  2026-09-29; the symlink farms in `/private/tmp` point at nothing. The roll
+  replays as `unknown_food` + a phantom `coffee`; score its `unknown_food`
+  volume as bread_wholemeal (0.152 g carbs/cm³).

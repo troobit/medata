@@ -135,6 +135,51 @@ struct GrownRegionPlaneRefitTests {
         #expect(r.reference == .edgeBand)
     }
 
+    // Decision 5. On a fronto-parallel plane every pixel covers d²/(fx·fy) of
+    // it whatever its angle off axis: 600² / 80² = 56.25 mm², so the 16-pixel
+    // seed is 9 cm².
+    @Test("the seed footprint is measured on the first plane, in cm²")
+    func seedFootprintOnThePlane() {
+        let area = FoodRegionGrowth.foodAreaCm2(
+            argmax: seed, intrinsics: k, supportPlane: first, palette: palette)
+        #expect(abs(area - 9) < 1e-3)
+    }
+
+    @Test("a seed above the gate grows nothing and refits nothing, only where gated")
+    func seedAreaGate() {
+        func run(gateCm2: Float, gated: Bool) -> (GrownRegionPlaneRefit.Outcome, Int) {
+            var fits = 0
+            let s = FoodRegionGrowthConfig.standard
+            let config = FoodRegionGrowthConfig(
+                cliffMm: s.cliffMm, floorMm: s.floorMm, frameFractionCap: s.frameFractionCap,
+                seedBandMm: s.seedBandMm, seedAreaGateCm2: gateCm2)
+            let r = GrownRegionPlaneRefit.refit(
+                argmax: seed, depth: slabDepth, intrinsics: k,
+                supportPlane: first, supportReference: .foodSupport, supportOffsetMm: 0,
+                palette: palette, config: config, gateBySeedArea: gated) { _ in
+                    fits += 1
+                    return outcome(plane(at: -598), .foodSupport)
+                }
+            return (r, fits)
+        }
+        let (over, overFits) = run(gateCm2: 5, gated: true)
+        #expect(over.gated)
+        #expect(overFits == 0)
+        #expect(!over.growth.applied)
+        #expect(over.plane.distanceMm == -600)
+        #expect(abs(over.seedAreaCm2 - 9) < 1e-3)
+
+        let (under, _) = run(gateCm2: 20, gated: true)
+        #expect(!under.gated)
+        #expect(under.growth.applied)
+
+        // The two-view branch (plane only) passes gateBySeedArea: false.
+        let (planeOnly, _) = run(gateCm2: 5, gated: false)
+        #expect(!planeOnly.gated)
+        #expect(planeOnly.growth.applied)
+        #expect(planeOnly.adopted)
+    }
+
     // The regression bar for the refactor: the helper's plane and map are the
     // ones the single-view branch produced by hand before it existed.
     @Test("the helper reproduces the verbatim grow → refit → prune → adopt sequence")

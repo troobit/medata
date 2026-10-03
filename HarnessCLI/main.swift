@@ -84,6 +84,9 @@ struct Args {
     var growthFloorMm: Float?
     var growthCap: Float?
     var growthBandMm: Float?
+    // depth-grown-food-region Decision 5: the seed-area gate, cm² on the
+    // first plane (0 = no gate). Applies to the single-view replay only.
+    var growthGateCm2: Float?
     // two-view-trust Req 3.14 / Decision 7: a hand-placed growth seed for
     // `volumes`, in NADIR COLOUR-GRID pixels (top-left origin, the 1920 x 1440
     // buffer the intrinsics declare — not view coordinates). Only the
@@ -94,14 +97,15 @@ struct Args {
 }
 
 // The growth the harness applies on the single-view replay: `.standard` (what
-// the device runs) with any of the four constants substituted when given.
+// the device runs) with any of the five constants substituted when given.
 func growthConfig(args: Args) -> FoodRegionGrowthConfig {
     let standard = FoodRegionGrowthConfig.standard
     return FoodRegionGrowthConfig(
         cliffMm: args.growthCliffMm ?? standard.cliffMm,
         floorMm: args.growthFloorMm ?? standard.floorMm,
         frameFractionCap: args.growthCap ?? standard.frameFractionCap,
-        seedBandMm: args.growthBandMm ?? standard.seedBandMm)
+        seedBandMm: args.growthBandMm ?? standard.seedBandMm,
+        seedAreaGateCm2: args.growthGateCm2 ?? standard.seedAreaGateCm2)
 }
 
 // The regularisation the harness applies to a replayed argmax: `.standard`
@@ -151,6 +155,8 @@ func parseArgs() -> Args? {
             if let s = it.next(), let f = Float(s) { result.growthCap = f }
         case "--growth-band-mm":
             if let s = it.next(), let f = Float(s) { result.growthBandMm = f }
+        case "--growth-gate-cm2":
+            if let s = it.next(), let f = Float(s) { result.growthGateCm2 = f }
         case "--max-observations":
             if let s = it.next(), let n = Int(s), n > 0 { result.maxObservations = n }
         case "--oblique":
@@ -513,9 +519,10 @@ func reportRegionGrowth(_ inputs: [MealCalibrationInput], fixtures: [PbMealFixtu
         let before = Float(g.foodPixelsBefore) / Float(px)
         let after = Float(g.foodPixelsAfter) / Float(px)
         let refit = g.refitReference?.rawValue ?? (g.refitRefused ? "refused" : "none")
-        fputs(String(format: "growth fixture=%@ before=%.4f after=%.4f applied=%d capTripped=%d refit=%@ plane=%@\n",
+        fputs(String(format: "growth fixture=%@ before=%.4f after=%.4f applied=%d capTripped=%d refit=%@ plane=%@ seedAreaCm2=%.1f gated=%d\n",
                      m.fixtureID, before, after, g.applied ? 1 : 0, g.capTripped ? 1 : 0,
-                     refit, m.supportPlaneReference?.rawValue ?? "none"), stderr)
+                     refit, m.supportPlaneReference?.rawValue ?? "none",
+                     g.seedAreaCm2, g.gated ? 1 : 0), stderr)
     }
 }
 
@@ -551,6 +558,8 @@ func runVolumes(args: Args) throws {
         let foodPixelsBefore: Int?
         let foodPixelsAfter: Int?
         let refitReference: String?
+        let seedAreaCm2: Float?
+        let growthGated: Bool?
         let nadirSeed: [Int]?
         let skipped: String?
     }
@@ -571,6 +580,8 @@ func runVolumes(args: Args) throws {
                 foodPixelsBefore: m.regionGrowth?.foodPixelsBefore,
                 foodPixelsAfter: m.regionGrowth?.foodPixelsAfter,
                 refitReference: m.regionGrowth?.refitReference?.rawValue,
+                seedAreaCm2: m.regionGrowth?.seedAreaCm2,
+                growthGated: m.regionGrowth?.gated,
                 nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: nil))
         } catch {
@@ -579,6 +590,7 @@ func runVolumes(args: Args) throws {
                 perClassVolumesCm3: [:], predictedCarbsPerClass: [:],
                 planeReference: nil, planeResidualMm: nil, growthApplied: nil,
                 foodPixelsBefore: nil, foodPixelsAfter: nil, refitReference: nil,
+                seedAreaCm2: nil, growthGated: nil,
                 nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: "\(error)"))
         }
@@ -701,7 +713,7 @@ func runAccuracy(args: Args) throws {
         fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm,
         regularisation: regularisation, growth: growth)
     fputs("accuracy: sliver fraction \(regularisation.sliverFraction)\n", stderr)
-    fputs("accuracy: growth cliff=\(growth.cliffMm) floor=\(growth.floorMm) cap=\(growth.frameFractionCap)\n", stderr)
+    fputs("accuracy: growth cliff=\(growth.cliffMm) floor=\(growth.floorMm) cap=\(growth.frameFractionCap) band=\(growth.seedBandMm) gateCm2=\(growth.seedAreaGateCm2)\n", stderr)
     reportRegionGrowth(calInputs, fixtures: fixtures)
     for skip in skips {
         fputs("accuracy: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
