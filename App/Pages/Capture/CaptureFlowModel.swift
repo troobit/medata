@@ -461,26 +461,38 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         beginCapture(stage: retryStage, frozen: snapshot, mode: mode)
     }
 
+    // Leaves the review surface. Gated on the surface being up, not only on
+    // `.showingResult`: the review does not need the camera, and the state
+    // machine can move on underneath it — an AR interruption (locking the
+    // phone mid-review) takes the state to `.trackingLost`. Gated on the state
+    // alone, Record, Retake and Delete then did nothing at all and the review
+    // could only be left by the back chevron. Only a `.showingResult` state is
+    // reset to `.ready`; any other state recovers on its own, as it does with
+    // no review pushed.
     func dismissResult() {
-        guard case .showingResult = state else { return }
+        guard isShowingResult || !navigationPath.isEmpty else { return }
         navigationPath = NavigationPath()
         firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
         inFlightMode = nil
-        state = .ready(freshSnapshot())
+        if isShowingResult { state = .ready(freshSnapshot()) }
     }
 
     // Fresh-capture ⋯ Delete (Decision 17): the meal is already persisted, so
     // discarding means deleting it from the store, then clearing the capture
-    // stack. `ResultView` holds no store reference — it calls this. The
-    // `.showingResult` guard in `dismissResult()` still holds because the delete
-    // runs asynchronously and this method calls `dismissResult()` synchronously
-    // before yielding.
+    // stack. `ResultView` holds no store reference — it calls this. The guard
+    // in `dismissResult()` still holds because the delete runs asynchronously
+    // and this method calls `dismissResult()` synchronously before yielding.
     func deleteAndDismiss(_ record: MealRecord) {
-        guard case .showingResult = state else { return }
+        guard isShowingResult || !navigationPath.isEmpty else { return }
         if let store {
             Task { [store] in try? await store.deleteMeal(id: record.id) }
         }
         dismissResult()
+    }
+
+    private var isShowingResult: Bool {
+        if case .showingResult = state { return true }
+        return false
     }
 
     // Error-overlay `2-view` action (§4). A plain `retry()` would re-run the
@@ -600,6 +612,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             startTask = nil
         case .initialising, .ready, .trackingLost, .showingResult:
             firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
+            // A review still pushed when the cover goes — a deep link or the
+            // dose reminder's Adjust can dismiss Capture mid-review — closes
+            // with it. The meal and every correction are already persisted;
+            // left on the stack it reappeared on the next Capture over a fresh
+            // session, where `.initialising` used to leave its Record dead.
+            navigationPath = NavigationPath()
             // This arm never matches `.estimating` (handled above), so the reset
             // to `.initialising` is unconditional.
             state = .initialising

@@ -1,5 +1,11 @@
 # Decision Log: Meal Review
 
+## Quick Decisions
+
+| ID | Date | Decision | Rationale |
+|----|------|----------|-----------|
+| Q1 | 2026-10-03 | Record, Retake and Delete leave the review whenever it is pushed, whatever the capture state; a review still pushed when the Capture cover is dismissed closes with it rather than reappearing on the next Capture | A screen lock mid-review interrupts the AR session and moved the state off `.showingResult`, which left all three buttons dead; the meal and every correction are already persisted, so closing loses nothing and a review resumed hours later would arm a fresh dose seed for an old meal |
+
 ## Decision 1: Split the work into one spec and two amendments
 
 **Date**: 2026-08-05
