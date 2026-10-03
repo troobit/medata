@@ -39,3 +39,10 @@ references:
   - make deploy-release; capture the roll single-view; expect event=region.grow applied=true with after ≫ before, supportplane refit reference=foodSupport, review outline over the whole roll, and a bread row in the tens of grams of carbohydrate; pull the log and bundle.
   - Verify: log trail and outcome row cited in docs/agent-notes/field-truth-sessions.md under a 2026-09-24 entry; make spell.
   - Blocked-by: 7i9k8j7 (The single-view path grows the region, refits the plane and scale from it, integrates over it, and shows it, while the bundle keeps the segmenter's map Req 4–6)
+
+## Seed-area gate
+
+- [x] 7. Growth on the single-view path is skipped when the segmenter already covers more than 200 cm² of the first plane, and every outcome row says why (Req 9, Decision 5)
+  - FoodRegionGrowth.foodAreaCm2 measures the food-like footprint on the first plane; FoodRegionGrowthConfig.seedAreaGateCm2 (standardSeedAreaGateCm2 = 200); GrownRegionPlaneRefit.refit(gateBySeedArea:) skips grow and refit when over it, single-view callers only (Pipeline via planeOnly == false, FixtureRunner single-view); the two-view plane-only growth is never gated.
+  - Outcome rows carry regionGrowth.seedAreaCm2, seedAreaGateCm2 and gated; event=region.grow prints seedAreaCm2, gateCm2 and gated; HarnessCLI takes --growth-gate-cm2 and prints both on the growth line and in volumes rows.
+  - Verify: the gate sweep (Nutrition5k 216 plates, the four weighed single-view plates) in Decision 5; GrownRegionPlaneRefitTests cover the footprint and the gate; make test green (both totals); make spell.

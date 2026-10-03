@@ -537,3 +537,50 @@ What it settles:
 The bundle survives the corpus discard at
 `medata-corpus/reports/calibration-20260929-roll/` (fixture + `run_summary.json`
 + README); `captures/` was cleared the same day, so that copy is the last one.
+
+### Re-run 2026-10-03 against the preserved bundle (harness at `abd9750` + the seed-area gate)
+
+- **`volumes`.** Replays the device row exactly: seed 32,436 px (25.1 cm² on
+  the first plane, an `edgeBand` fit), grown to 127,121 px with a
+  `foodSupport` refit, `unknown_food` 226.3 cm³ (−13.0 % against 260) plus the
+  phantom `coffee` 59.5 cm³. The seed is far under the 200 cm² gate, so
+  depth-grown-food-region Decision 5 leaves it growing. Without growth:
+  `unknown_food` 49.8 cm³ (−81 %) on the table plane.
+- **`carve-audit`.** Single-view, so it prints the `profile` line only: first
+  plane `edgeBand` at −383.4 mm, residual 2.62 mm, ungrown footprint
+  26.2 cm², height field 74.5 cm³ over both regions, height above that (table)
+  plane p50 37.1 / p90 42.0 / max 44.3 mm.
+- **`calibrate`.** Produces nothing to bake: both classes stay β = 1
+  (`uncalibrated_unity`, effective sample 0). The bundle carries no truth (it
+  lives in `benchmark_meals`), and its class is `unknown_food`. Two tooling
+  defects on the way: the derived `run_summary.json` does not load
+  (`tools/field_loop/derive_dataset.py` writes `"skipped": []`, a list, where
+  `CalibrateRun.loadIngestSummary` expects `{reason: [ids]}` —
+  `DecodingError.typeMismatch` at `skipped`), and `calibrate` treats the field
+  bundle as Nutrition5k and refuses without `--depth-test-split` (a
+  placeholder split file gets past it). Not fixed here.
+
+**Backlog 30, answered.** On this weighed roll growth moves the carbohydrate
+reading from −31.9 g to −5.1 g. With it in the set, growth no longer costs
+accuracy across the weighed single-view plates (four-plate MAE 31.6 g with
+growth, 32.9 g without), and Decision 5's gate removes the one plate it made
+worse (25.8 g).
+
+**Backlog 29, as far as one object goes.** No two-view figure for item 29 can
+come from this roll. Its one two-view success of the day (outcome `055BB705`,
+`1790655148006`, bundle discarded) read 42.2 cm³ (−84 %) because the nadir
+silhouette was 18,305 px, a 16.6 cm² footprint of a roll whose grown
+single-view footprint is about 103 cm² (127,121 px at the card's
+0.285 mm/px), and the measured food height was 3.6 mm — read from the row,
+not replayed, but that is a `foodSupport` plane on the roll's own top, the
+case where plane-only growth adds nothing (it did not: `applied=false`). That is a silhouette
+under-read, not the hull over-read item 29 is about. What the roll does give
+item 29 is a scale for its reference. The like-for-like reference of
+`two-view-geometry-audit.md` §7 is the LiDAR height field at the adopted
+plane; on this weighed roll that reference reads −13 %, and on the 2026-09-24
+capture of the same roll +7.7 %. The 0–24 % "unexplained" carve excess is
+measured against a reference that spreads −13 % to +16 % across captures of
+this one object, so one object cannot separate the two, and a two-view β still
+has no weighed two-view capture behind it. The grown footprint (~103 cm²) sits
+inside the 102.7–127.5 cm² §7 measured on the two-view roll silhouettes,
+consistent with its finding (a) that the footprint is not wide.

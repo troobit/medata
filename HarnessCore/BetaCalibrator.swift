@@ -38,15 +38,21 @@ public struct MealCalibrationInput: Sendable {
         public let foodPixelsAfter: Int
         public let refitReference: SupportPlaneReference?
         public let refitRefused: Bool
+        // The seed-area gate (Decision 5): the segmenter's footprint on the
+        // first plane, cm², and whether the gate skipped growth.
+        public let seedAreaCm2: Float
+        public let gated: Bool
         public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
                     foodPixelsAfter: Int, refitReference: SupportPlaneReference?,
-                    refitRefused: Bool) {
+                    refitRefused: Bool, seedAreaCm2: Float = 0, gated: Bool = false) {
             self.applied = applied
             self.capTripped = capTripped
             self.foodPixelsBefore = foodPixelsBefore
             self.foodPixelsAfter = foodPixelsAfter
             self.refitReference = refitReference
             self.refitRefused = refitRefused
+            self.seedAreaCm2 = seedAreaCm2
+            self.gated = gated
         }
     }
 

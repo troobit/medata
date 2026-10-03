@@ -335,10 +335,19 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         // which integrates over the grown map. Absent on rows written before
         // the field existed (all single-view growth).
         public let planeOnly: Bool?
+        // The seed-area gate (depth-grown-food-region Decision 5): the
+        // segmenter's food-like footprint on the first plane, the gate it
+        // was read against (0 = no gate), and whether the gate skipped
+        // growth. A gated row has applied=false and the ungrown estimate.
+        // Absent on rows written before the gate existed.
+        public let seedAreaCm2: Float?
+        public let seedAreaGateCm2: Float?
+        public let gated: Bool?
 
         public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
                     foodPixelsAfter: Int, refitReference: String?, refitRefused: Bool,
-                    planeOnly: Bool? = nil) {
+                    planeOnly: Bool? = nil, seedAreaCm2: Float? = nil,
+                    seedAreaGateCm2: Float? = nil, gated: Bool? = nil) {
             self.applied = applied
             self.capTripped = capTripped
             self.foodPixelsBefore = foodPixelsBefore
@@ -346,6 +355,9 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             self.refitReference = refitReference
             self.refitRefused = refitRefused
             self.planeOnly = planeOnly
+            self.seedAreaCm2 = seedAreaCm2
+            self.seedAreaGateCm2 = seedAreaGateCm2
+            self.gated = gated
         }
     }
 

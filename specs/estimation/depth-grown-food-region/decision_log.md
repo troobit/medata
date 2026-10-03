@@ -2,7 +2,7 @@
 
 ## Decision 1: Grow by depth continuity from the segmenter's seeds, then refit the plane
 
-**Date**: 2026-09-24
+**Date**: 2026-10-03
 **Status**: accepted
 
 ### Context
@@ -48,7 +48,7 @@ The roll capture grows from 0.49 % to 7.1 % of the frame at every setting — th
 | off (cap 0) | 216 | 9.29 g | 92.0 % | 0 |
 | on | 217 | 9.47 g | 99.7 % | 202 of 217 |
 
-Growth raises carb MAE by 0.18 g and MAPE by 7.7 points, so the "carb MAE must not rise" clause **fails on this corpus**, narrowly. The reading: N5k plates are mixed dishes in which the model labels one dominant class; growth extends that class over neighbouring foods the model left as background, which is the adjacent-foods-without-a-cliff risk the smolspec names. The sesame-roll case (one food, mostly unrecognised) is the opposite regime. Options for the 2026-09-25 decision: gate growth on the plate's ungrown food-like area (apply only when the segmenter found little), cap the added area relative to the seed, or accept the N5k cost as the price of not reading 4 g for a roll. Not changed tonight; the shipped constants stand pending that call.
+At commit `3022b80` growth raised carb MAE by 0.18 g and MAPE by 7.7 points, so the "carb MAE must not rise" clause failed on this corpus, narrowly; the table reproduces exactly with that commit's harness (re-run 2026-10-03). **It does not reproduce on the shipped pipeline.** At `abd9750`, cliff 3 / floor 5 / cap 0.35 / band 10, growth reads 9.18 g / 93.7 % over 217 scored plates against 9.33 g / 95.2 % over 216 without it — growth now lowers both. The floor and band are not why: floor 3 with no band reads 9.13 g / 93.2 % at `abd9750`. The pipeline changed between the two commits (Decision 3's table-refit guard among the changes); the cause was not bisected. N5k also cannot say whether the added region is food: 206 of the 216 plates read low without growth, so any added volume scores as an improvement. The gate this paragraph proposed — apply growth only when the segmenter found little — shipped on the weighed plates' evidence instead: Decision 5.
 
 ### Alternatives Considered
 
@@ -266,5 +266,79 @@ The band is food-relative: seeds and added cells are measured against the same s
 - The real defect stays open: the first plane can sit 4–5° off the table (`edgeBand` threading plate top and table on `1790315900185`) or match gravity over a depth field that is not planar (`1790315865030`). The band hides the plate from growth; the integrator still measures every pixel against that plane.
 - A food whose crust foot is more than 10 mm below its median height loses that foot (5–18 cm³ on the roll captures here).
 - The band needs seed cells with depth; a seed with no finite depth leaves the band inert and the floor alone applies.
+
+---
+
+## Decision 5: Growth applies only when the segmenter's own footprint is at most 200 cm²
+
+**Date**: 2026-10-03
+**Status**: accepted
+
+### Context
+
+Decision 2 recorded growth as a carbohydrate regression on the corpus's weighed single-view plates: mean absolute error 33.2 g without it, 40.4 g with it, all of the rise on `1785901032716` (two slices of multigrain, 80 g, 34 g of carbohydrate), which already read 3.2× over and went from +74.5 g to +97.7 g. Decision 1's overnight addendum measured a smaller cost on Nutrition5k and proposed the remedy this entry takes up: grow only when the segmenter found little. Two things have changed since. The roll the feature was built for was weighed on 2026-09-29 (104 g, 39.52 g of carbohydrate, 260 cm³ at the measured 0.4 g/cm³; `benchmark_meals` row `backfill-1790655037216-roll`), and its bundle `1790655022746` is kept in `medata-corpus/reports/calibration-20260929-roll/`. And the Nutrition5k cost no longer reproduces at `HEAD` (Decision 1, addendum).
+
+The gate needs a quantity that means the same on every camera. The fraction of the frame does not: the same 58 g slice fills 3.5 % of the frame from 400 mm and 9.8 % from 273 mm, and a Nutrition5k frame (640 × 480 from a fixed rig) is not an iPhone frame. The single-view path always has a support plane when growth runs, so the footprint on it is available in cm².
+
+### Decision
+
+Before growth, measure the footprint of the segmenter's food-like pixels on the first support plane (`FoodRegionGrowth.foodAreaCm2`: each pixel's ray meets the plane at range α and covers α²·cos³θ / (fx·fy·|n̂·r̂|) of it). On the single-view path, when that footprint exceeds `FoodRegionGrowthConfig.standardSeedAreaGateCm2` = **200 cm²**, nothing grows and nothing is refit: the estimate is exactly the ungrown one. The two-view branch, which uses growth only to fit its plane (two-view-trust Decision 10), is never gated. Every outcome row carries `regionGrowth.seedAreaCm2`, `seedAreaGateCm2` and `gated`, and `event=region.grow` prints `seedAreaCm2=`, `gateCm2=` and `gated=`.
+
+### Rationale
+
+Every capture with truth that growth improved sits at or below about 145 cm² of seed; the one it made worse sits at 330 cm². The weighed roll's seed is 25 cm² (growth: −31.9 g → −5.1 g); the 58 g slice's two captures are 86 and 112 cm² (−13.0 → −11.2 g and −12.2 → −12.1 g); the multigrain plate is 330 cm² (+74.5 → +97.7 g). The same roll's eight 2026-09-24/25 single-view captures, measured in Decision 2 before their bundles were discarded, read 105.7 cm³ mean absolute error ungrown and 26.9 cm³ grown against the 260 cm³ the roll weighs (16.1 g → 4.1 g of carbohydrate); their seeds are 94–102 cm² on the three with a card in frame (card scale from the outcome rows) and an estimated 10–143 cm² on the other five (pixel counts at the 2026-09-29 capture's scale; their distances were not recorded). Any gate between about 145 and 330 cm² keeps all of those and removes the regression; 200 sits inside that gap and is about the footprint of two bread slices side by side. Nutrition5k cannot pick a value inside it — every gate from 175 cm² up scores identically to no gate — and it only rules out gates low enough to switch growth off on its plates.
+
+Growth off by default loses to both: on Nutrition5k (9.33 g against 9.22 g), on the four weighed plates (32.9 g against 31.6 g ungated and 25.8 g gated), and on the roll's historical captures by a factor of four.
+
+### The sweep (2026-10-03, `abd9750`)
+
+**Route.** Nutrition5k: the 236 `single_dominant` fixtures of `tmp/n5k_fixtures_ckpt` (selected by their `estimator_path` stamp), `HarnessCLI accuracy` once with growth and once with `--growth-cap 0`, sliver 0.05 and every other constant as shipped. The gate is a function of the ungrown footprint only and gating yields exactly the ungrown estimate, so each threshold is the per-plate choice between those two runs; scored on the 216 plates both runs score. The 200 cm² row was then re-run for real with `--growth-gate-cm2 200` and matches (216-plate MAE 9.215 g, MAPE 93.67 %; 217 scored, 20 gated, three of which growth had changed). Weighed plates: `HarnessCLI volumes` on the bundles in `tmp/device_captures/` and the preserved roll bundle, carbohydrate as volume × 0.4 g/cm³ × 38 g/100 g (bread_wholemeal, which all four are). The roll replays as `unknown_food` (0 g) plus a phantom `coffee` region the developer rejected on the device; it is scored as its `unknown_food` volume under the class the developer named, without the phantom. Its replay matches the device row exactly (226.3 cm³ grown).
+
+| gate cm² | N5k carb MAE (216) | N5k MAPE | N5k plates that grow | weighed ×3 MAE / MAPE | weighed ×4 (with the roll) MAE / MAPE |
+|---|---|---|---|---|---|
+| growth off | 9.334 g | 95.22 % | 0 | 33.2 g / 108.0 % | 32.9 g / 101.2 % |
+| 20 | 9.329 g | 95.05 % | 2 | 33.2 g / 108.0 % | 32.9 g / 101.2 % |
+| 50 | 9.267 g | 94.55 % | 76 | 33.2 g / 108.0 % | 26.2 g / 84.3 % |
+| 100 | 9.224 g | 93.48 % | 149 | 32.7 g / 105.6 % | 25.8 g / 82.5 % |
+| 150 | 9.217 g | 93.79 % | 179 | 32.6 g / 105.5 % | 25.8 g / 82.4 % |
+| **200** | **9.215 g** | **93.67 %** | **182** | **32.6 g / 105.5 %** | **25.8 g / 82.4 %** |
+| 250–300 | 9.215 g | 93.67 % | 183 | 32.6 g / 105.5 % | 25.8 g / 82.4 % |
+| 400, or no gate | 9.215 g | 93.67 % | 185 | 40.4 g / 128.3 % | 31.6 g / 99.4 % |
+
+Nutrition5k seeds run 13–380 cm² (median 70.5). Per weighed plate:
+
+| bundle | truth | seed on first plane | growth off | growth on | gate 200 |
+|---|---|---|---|---|---|
+| `1785901032716` (80 g multigrain, 2 slices) | 34 g | 330.1 cm² | 108.5 g (+74.5) | 131.7 g (+97.7) | 108.5 g (+74.5), gated |
+| `1786439141215` (58 g slice) | 24 g | 86.1 cm² | 11.0 g (−13.0) | 12.8 g (−11.2) | 12.8 g (−11.2) |
+| `1786450130307` (same slice) | 24 g | 112.1 cm² | 11.8 g (−12.2) | 11.9 g (−12.1) | 11.9 g (−12.1) |
+| `1790655022746` (104 g roll) | 39.52 g | 25.1 cm² | 7.6 g (−31.9); 49.8 cm³ | 34.4 g (−5.1); 226.3 cm³ | 34.4 g (−5.1) |
+
+The 208 g rice plate (`1785054950406`) has a 302.3 cm² seed and growth adds nothing to it, so it reads the same in every row and is left out, as in Decision 2.
+
+### Alternatives Considered
+
+- **Growth off by default behind a developer switch**: The simpler remedy - Rejected because it loses to growth on every corpus measured (above), most of all on the roll it exists for; there is also no growth switch in `DeveloperFlags` to put it behind, so it would be new code too.
+- **Gate on the fraction of the frame**: What the overnight addendum named - Rejected because it depends on camera distance (one slice reads 3.5 % and 9.8 %) and cannot be carried between the Nutrition5k rig and the phone; cm² on the plane is the same quantity on both.
+- **Gate on how much growth adds relative to the seed**: Apply only when the segmenter found a small fraction of the raised region - Rejected because the roll's largest gains came from captures that grew only 1.1–1.2× (`1790318604792`: 124k → 144k pixels, 393 → 272 cm³); the gain there is the refit plane, not the area, and a ratio gate removes exactly those.
+- **No gate; keep accepting the regression (Decision 2)**: Rejected because the gate costs nothing measurable on Nutrition5k or on any capture with truth and removes the one regression measured.
+- **Fix the plane on the multigrain plate instead**: Its 3.2× over-read is the 26 mm table plane (support-plane-reference) - Not an alternative to the gate so much as the real fix for that plate; the gate does not preclude it.
+
+### Consequences
+
+**Positive:**
+- The only measured growth regression is gone: weighed MAE 25.8 g against 31.6 g ungated (four plates) and 32.6 g against 40.4 g (the three of Decision 2).
+- Nutrition5k is unchanged against ungated growth, and growth still applies to 182 of its 185 growing plates.
+- A field pull now shows, per capture, the seed footprint, the gate and whether it applied.
+
+**Negative:**
+- The harmful side of the gate rests on one plate. Where it sits inside the 145–330 cm² gap is judgement, not a fit.
+- A large food the segmenter only partly recognises (more than 200 cm² of seed) will not grow, and a gated capture also loses the refit — on the roll's card captures the refit's plane, not the added area, was the gain.
+- Five of the eight historical roll seeds are estimated from pixel counts, not measured; the bundles are gone.
+- The gate has not been on the phone. Its first field pulls should confirm `gated=false` on single foods and read `seedAreaCm2` against the footprint expected.
+
+### Impact
+
+`Volume/FoodRegionGrowth.swift` (`foodAreaCm2`, `seedAreaGateCm2`, `standardSeedAreaGateCm2`), `Volume/GrownRegionPlaneRefit.swift` (`gateBySeedArea`, `seedAreaCm2`, `gated`), `Pipeline.refitPlaneFromGrownRegion` (gated when `planeOnly` is false), `PipelineDiagnostics.RegionGrowthMeasurements`, `HarnessCore/FixtureRunner` (single-view replay gated), `MealCalibrationInput.RegionGrowth`, `HarnessCLI` (`--growth-gate-cm2`; the growth line and `volumes` rows print the seed area and the gate). The two-view branch, `CarveResidualAudit` and the LiDAR plane fit are unchanged.
 
 ---
