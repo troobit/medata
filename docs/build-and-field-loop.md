@@ -135,6 +135,7 @@ make field-diagnose   annotated captures → diagnoses → cycles/cycle-<n>/task
 make field-close      six guards → commits or proposals → verdict.json
 make field-report     alignment metrics                              (any time)
 make field-derive     training + calibration inputs                  (any time)
+make field-score      weighed captures → accuracy + calibrate        (any time)
 make field-discard    reclaim the space both sides hold
 make field-export     the whole corpus as learnable JSONL            (any time)
 ```
@@ -255,6 +256,42 @@ the review screen's "…" → **Weighed mass** (field builds) writes a
 `make field-pull` carries in `meals.sqlite`. No hand edit of `index.sqlite` is
 needed; `docs/agent-notes/field-truth-sessions.md` has the data path.
 
+`CALIBRATION_OUT` is written as one directory per segmenter checkpoint, and each
+`<dir>/<checkpoint>/` is a complete HarnessCLI input; the derivation prints the
+`accuracy` and `calibrate` command for each. The loader refuses a bundle from
+another checkpoint because β_c belongs to the segmenter that labelled the volume,
+so a mixed set is split rather than admitted. Each bundle is an APFS clone of the
+corpus copy with the weighed truth appended as fixture fields 17/18, which is
+where `accuracy` reads it — on APFS no data is copied, and the corpus files are
+never written. The group's `run_summary.json` carries, per fixture, that truth
+and the review: the classes the user relabelled and the regions they rejected,
+from the corpus `corrections` table. A bundle no longer in `captures/` is found
+in `pulls/*/captures/` or `reports/` when its SHA-256 matches the indexed capture.
+A re-run replaces the groups an earlier run wrote.
+
+`make field-score [OUT=<dir>]` is the whole scoring pass in one command: it runs
+the calibration derivation into `OUT` (default `.build/field-score/`), then
+`accuracy` and `calibrate` over each checkpoint group with that group's run
+summary, and prints:
+
+- one line per capture: path, support plane, scored volume, mass and carbs
+  against the weighed truth with their errors, the same meal priced at the
+  segmenter's own labels, and the classes after review;
+- the set's MAPE and MAE for carbs as reviewed, mass as reviewed, and carbs as
+  labelled;
+- per checkpoint, the β `calibrate` baked or why it baked none — the 30-plate
+  floor, and each plate the purity or support-plane gate excluded.
+
+Given `--ingest-summary`, `accuracy` and `calibrate` apply the review before
+scoring: a renamed region's volume moves to the class the review named, a
+rejected region is dropped, and the meal is re-priced at β = 1. In `calibrate`
+this happens before the τ_purity gate, which would otherwise drop every plate
+whose segmenter label differs from the truth's class. Amount corrections are not
+applied. A Nutrition5k or MetaFood3D summary has no review, so those runs are
+unchanged. Each group's harness JSON and stderr stay beside its bundles
+(`accuracy.json`, `accuracy.log`, `calibrate.json`, `calibrate.log`). The
+replays use the debug HarnessCLI and take about four minutes for five captures.
+
 ### Exporting the calculus
 
 `make field-export [OUT=<file>]` emits one JSONL record per capture. Every
@@ -296,7 +333,7 @@ roughly 20-minute support-plane corpus beam search, which is `make test-corpus`.
 both directories carry a `conftest.py` and the field-loop modules import theirs by
 name, so pytest cannot collect them together. Xcode's `python3` has no pytest, so
 this usually needs `PYTHON=/opt/homebrew/bin/python3` — the same escape hatch
-`make food-db` documents. As of 2026-09-29 it is 129 food-DB tests and 255
+`make food-db` documents. As of 2026-10-03 it is 129 food-DB tests and 264
 field-loop tests.
 
 The app-target files under `MeData/Tests/` and `MeData/UITests/` are

@@ -276,6 +276,19 @@ exits 1 when an MF3D run's summary lacks it. The field summary once
 wrote `skipped` as a list and failed to decode (2026-10-03); pytest
 (`test_derive.py`) and `CalibrateRunTests.fieldSummaryParses` now pin the shape.
 
+A field summary also carries `fixtures.<id>.review` (`relabelled`
+`{segmenter class: reviewed class}`, `rejected` `[class]`), decoded into
+`IngestSummary.review`. `HarnessCore/FieldReview.swift` applies it to a replayed
+`MealCalibrationInput`. Rejected regions are dropped, renamed ones join their
+reviewed class, and predicted carbs are recomputed at β = 1. `calibrate` applies
+the review before the τ_purity gate, and `accuracy` applies it when given
+`--ingest-summary`. Its rows then carry a `review` block with the as-labelled
+volumes and carbs. Every `accuracy` row now also carries
+`perClassVolumesCm3`, `perClassMassG`, `groundTruthClassMassG` and
+`supportPlaneReference`, which are absent on the legacy eval. N5k and MetaFood3D
+summaries have no `fixtures` key, so their runs are unchanged. The calibrate
+summary's review line prints only when a review exists.
+
 ## `diagnose` subcommand (ml-feedback-loop)
 
 A second consumer of `FixtureRunner` lives beside `accuracy`:

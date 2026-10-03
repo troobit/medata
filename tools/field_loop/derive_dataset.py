@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import struct
 import sys
 import zlib
@@ -446,41 +447,165 @@ def _write_splits(out: Path, files: dict, anchor: dict, settings: dict,
 
 
 # ------------------------------------------------------ calibration material
+# The calibration side is a set of HarnessCLI inputs, one directory per
+# segmenter checkpoint. The loader refuses a fixture whose checkpoint is not
+# `--checkpoint-sha256` because β_c is coupled to the segmenter that labelled the
+# volume (pipeline design §6.9, §7.3): a β fitted across two checkpoints belongs
+# to neither. So the derivation groups rather than asking the loader to accept a
+# mixed set, and prints one command pair per group.
 
-def derive_calibration(conn, root, out) -> dict:
-    """Weighed benchmark captures as calibrate inputs (.fixture + run_summary).
+# PbMealFixture fields `accuracy` and `calibrate` read the weighed truth from.
+F_TRUTH_CLASS_MASS = 17     # map<string, float> ground_truth_class_mass_g
+F_TRUTH_TOTAL_CARBS = 18    # float ground_truth_total_carbs_g
 
-    Only weighed benchmarks: calibration is the one place where the corpus has
-    real ground truth, and feeding it developer-stated figures would put the
-    estimate's own bias into the coefficient meant to correct it.
+# Where a weighed capture's bundle may be, after the canonical captures/. A pull
+# keeps its own hardlink, and reports/ survives `make field-discard`; a copy
+# found there is used only when its SHA-256 matches the indexed capture.
+BUNDLE_FALLBACK_GLOBS = ("pulls/*/captures/%s.fixture", "reports/**/%s.fixture")
+
+
+def _varint(value: int) -> bytes:
+    out = bytearray()
+    while True:
+        low = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(low | 0x80)
+        else:
+            out.append(low)
+            return bytes(out)
+
+
+def _key(number: int, wire: int) -> bytes:
+    return _varint((number << 3) | wire)
+
+
+def truth_bytes(class_mass_g: dict, total_carbs_g: float) -> bytes:
+    """Fields 17 and 18 of PbMealFixture, ready to append to a bundle.
+
+    A protobuf parser reads a message followed by more of its own fields as the
+    merge of both, so appending these gives the bundle its weighed truth
+    without decoding the ~200 MB message. A device bundle records neither
+    field — proto3 does not write a zero — so nothing is overwritten.
     """
-    root, out = Path(root), Path(out)
-    out.mkdir(parents=True, exist_ok=True)
+    out = bytearray()
+    for name in sorted(class_mass_g):
+        encoded = name.encode()
+        entry = (_key(1, 2) + _varint(len(encoded)) + encoded
+                 + _key(2, 5) + struct.pack("<f", class_mass_g[name]))
+        out += _key(F_TRUTH_CLASS_MASS, 2) + _varint(len(entry)) + entry
+    out += _key(F_TRUTH_TOTAL_CARBS, 5) + struct.pack("<f", total_carbs_g)
+    return bytes(out)
 
-    rows = [dict(r) for r in conn.execute(
-        "SELECT c.stem, c.capture_mode, b.truth_carbs_g, b.fidelity "
-        "FROM outcomes o JOIN benchmark_meals b ON b.id = o.benchmark_meal_id "
-        "JOIN captures c ON c.timestamp_ms = o.timestamp_ms "
-        "WHERE o.benchmark_meal_id IS NOT NULL ORDER BY c.stem")]
 
-    # `{reason: [stems]}`, the shape every ingest summary uses and
-    # `CalibrateRun.loadIngestSummary` decodes.
-    ingested, width, height = 0, 0, 0
-    skipped = {"not_weighed": [], "bundle_missing": []}
+def clone_or_copy(src: Path, dst: Path) -> None:
+    """A writable copy of `src` that shares its blocks where the volume can.
+
+    The derived fixture is appended to, so it cannot be a hardlink into the
+    corpus. On APFS `clonefile(2)` makes the copy without writing any data —
+    the appended truth is the only new block — and anywhere else this falls
+    back to a full copy.
+    """
+    import ctypes
+    import shutil
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists() or dst.is_symlink():
+        dst.unlink()
+    clonefile = getattr(ctypes.CDLL(None), "clonefile", None) \
+        if sys.platform == "darwin" else None
+    if clonefile is not None:
+        clonefile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint32]
+        clonefile.restype = ctypes.c_int
+        if clonefile(os.fsencode(src), os.fsencode(dst), 0) == 0:
+            return
+    shutil.copyfile(src, dst)
+
+
+def find_bundle(root: Path, stem: str, sha256):
+    """The capture's bundle: captures/ first, then a verified copy elsewhere."""
+    canonical = root / "captures" / ("%s.fixture" % stem)
+    if canonical.exists():
+        return canonical
+    if not sha256:
+        return None
+    for pattern in BUNDLE_FALLBACK_GLOBS:
+        for path in sorted(root.glob(pattern % stem)):
+            if corpus.sha256_file(path) == sha256:
+                return path
+    return None
+
+
+def truth_for(items_json: str, truth_carbs_g: float) -> dict:
+    """The weighed truth in the shape fields 17 and 18 carry.
+
+    Items are recorded under the class the review settled on. The device
+    writes `grams`; the 2026-09-29 back-fill wrote `mass_g`.
+    """
+    class_mass = {}
+    for item in json.loads(items_json or "[]"):
+        grams = item.get("grams", item.get("mass_g"))
+        if item.get("class_id") and grams is not None:
+            class_mass[item["class_id"]] = \
+                class_mass.get(item["class_id"], 0.0) + float(grams)
+    return {"class_mass_g": class_mass, "total_carbs_g": float(truth_carbs_g)}
+
+
+def review_for(conn, outcome_id: str, meal_id) -> dict:
+    """What the review changed on this capture: relabels and removals.
+
+    Amount corrections are left out on purpose: the volume is what is being
+    measured, the weighed mass is its truth, and a typed amount is neither.
+    """
+    rows = conn.execute(
+        "SELECT predicted_class, class_corrected, rejected, record_json "
+        "FROM corrections WHERE outcome_id = ? "
+        "OR (outcome_id IS NULL AND meal_id = ?) ORDER BY predicted_class",
+        (outcome_id, meal_id)).fetchall()
+    relabelled, rejected = {}, []
     for row in rows:
-        if row["fidelity"] != "weighed":
-            skipped["not_weighed"].append(row["stem"])
+        if row["rejected"]:
+            rejected.append(row["predicted_class"])
             continue
-        source = root / "captures" / ("%s.fixture" % row["stem"])
-        if not source.exists():
-            skipped["bundle_missing"].append(row["stem"])
+        if not row["class_corrected"]:
             continue
-        corpus.link_or_copy(source, out / source.name)
-        info = bundle.read_summary(source)
-        width, height = info["width"] or width, info["height"] or height
-        ingested += 1
+        try:
+            corrected = json.loads(row["record_json"] or "{}").get(
+                "corrected", {}).get("classId")
+        except ValueError:
+            corrected = None
+        if corrected and corrected != row["predicted_class"]:
+            relabelled[row["predicted_class"]] = corrected
+    return {"relabelled": relabelled, "rejected": rejected}
 
-    document = {
+
+def _clear_previous(out: Path) -> None:
+    """Remove the groups an earlier derivation wrote into `out`.
+
+    A capture that is no longer weighed, whose bundle has gone, or whose group
+    has changed would otherwise stay behind as a fixture the harness loads.
+    Only a group this layout wrote is touched — a field summary naming its
+    checkpoint — and a hardlinked fixture is never removed, so pointing `out`
+    at a preserved directory such as `reports/calibration-20260929-roll/`
+    cannot delete the last copy of a bundle.
+    """
+    for summary in out.glob("*/run_summary.json"):
+        try:
+            document = json.loads(summary.read_text())
+        except ValueError:
+            continue
+        if document.get("dataset") != CALIBRATION_DATASET \
+                or "checkpoint" not in document:
+            continue
+        for fixture in summary.parent.glob("*.fixture"):
+            if fixture.stat().st_nlink == 1:
+                fixture.unlink()
+        summary.unlink()
+
+
+def _summary_document(group: dict) -> dict:
+    """One checkpoint group's run_summary.json (`CalibrateRun.loadIngestSummary`)."""
+    return {
         "dataset": CALIBRATION_DATASET,
         "licence": CALIBRATION_LICENCE,
         "source_dataset": "medata field corpus",
@@ -489,23 +614,120 @@ def derive_calibration(conn, root, out) -> dict:
         "mapping_categories_source": "ClassPalette (no mapping applied — field "
                                      "captures are already in the palette's "
                                      "label space)",
-        "ingested": ingested,
+        "checkpoint": group["checkpoint"],
+        "ingested": len(group["fixtures"]),
         # CaptureBundleRecorder stamps every device bundle single_dominant.
-        "estimator_paths": {"single_dominant": ingested},
-        "skipped": {reason: sorted(stems) for reason, stems in skipped.items()},
+        "estimator_paths": {"single_dominant": len(group["fixtures"])},
+        # `{reason: [stems]}`, the shape every ingest summary uses.
+        "skipped": {reason: sorted(stems)
+                    for reason, stems in group["skipped"].items()},
         # No plane_depth_mm: nothing was posed, so there is no authored plane.
         "render_config": {
             "intrinsics_model": INTRINSICS_MODEL,
-            "image_width": width,
-            "image_height": height,
+            "image_width": group["width"],
+            "image_height": group["height"],
             "seating_rule": SEATING_RULE,
         },
         "truth_source": "benchmark_meals, weighed (SNAQ Parity); developer-"
                         "stated figures are deliberately not calibration input",
+        # Per fixture id: the truth written into the bundle (fields 17/18) and
+        # the review `accuracy` and `calibrate` apply before scoring.
+        "fixtures": group["fixtures"],
     }
-    (out / "run_summary.json").write_text(
-        json.dumps(document, indent=2, sort_keys=True) + "\n")
-    return document
+
+
+def derive_calibration(conn, root, out) -> dict:
+    """Weighed benchmark captures as HarnessCLI inputs, one directory per checkpoint.
+
+    Only weighed benchmarks: calibration is the one place where the corpus has
+    real ground truth, and feeding it developer-stated figures would put the
+    estimate's own bias into the coefficient meant to correct it.
+
+    Each `<out>/<checkpoint>/` holds the group's bundles with their truth
+    written in, and a run_summary.json carrying each fixture's review. The
+    corpus bundles are never written.
+    """
+    root, out = Path(root), Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    _clear_previous(out)
+
+    rows = [dict(r) for r in conn.execute(
+        "SELECT c.stem, c.sha256, c.model_version, o.id AS outcome_id, "
+        "o.meal_id, b.id AS benchmark_meal_id, b.items, b.truth_carbs_g, "
+        "b.fidelity FROM outcomes o "
+        "JOIN benchmark_meals b ON b.id = o.benchmark_meal_id "
+        "JOIN captures c ON c.timestamp_ms = o.timestamp_ms "
+        "WHERE o.benchmark_meal_id IS NOT NULL ORDER BY c.stem")]
+
+    groups = {}
+
+    def group_for(checkpoint: str) -> dict:
+        return groups.setdefault(checkpoint, {
+            "checkpoint": checkpoint, "fixtures": {}, "width": 0, "height": 0,
+            "skipped": {"not_weighed": [], "bundle_missing": []}})
+
+    for row in rows:
+        indexed = row["model_version"] or "unstamped"
+        if row["fidelity"] != "weighed":
+            group_for(indexed)["skipped"]["not_weighed"].append(row["stem"])
+            continue
+        source = find_bundle(root, row["stem"], row["sha256"])
+        if source is None:
+            group_for(indexed)["skipped"]["bundle_missing"].append(row["stem"])
+            continue
+        info = bundle.read_summary(source)
+        # The bundle's own stamp, not the index's: it is what the loader
+        # compares against `--checkpoint-sha256`.
+        group = group_for(info["model_version"] or indexed)
+        truth = truth_for(row["items"], row["truth_carbs_g"])
+        target = out / group["checkpoint"] / source.name
+        clone_or_copy(source, target)
+        with open(target, "ab") as handle:
+            handle.write(truth_bytes(truth["class_mass_g"],
+                                     truth["total_carbs_g"]))
+        group["fixtures"][info["fixture_id"] or row["stem"]] = {
+            "stem": row["stem"],
+            "source": str(source.relative_to(root)),
+            "outcome_id": row["outcome_id"],
+            "benchmark_meal_id": row["benchmark_meal_id"],
+            "truth": truth,
+            "review": review_for(conn, row["outcome_id"], row["meal_id"]),
+        }
+        group["width"] = info["width"] or group["width"]
+        group["height"] = info["height"] or group["height"]
+
+    for checkpoint, group in sorted(groups.items()):
+        directory = out / checkpoint
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "run_summary.json").write_text(
+            json.dumps(_summary_document(group), indent=2, sort_keys=True) + "\n")
+
+    skipped = {}
+    for group in groups.values():
+        for reason, stems in group["skipped"].items():
+            skipped.setdefault(reason, []).extend(stems)
+    return {
+        "out": str(out),
+        "ingested": sum(len(g["fixtures"]) for g in groups.values()),
+        "skipped": {reason: sorted(stems) for reason, stems in skipped.items()},
+        "groups": {checkpoint: {
+            "dir": str(out / checkpoint),
+            "ingested": len(group["fixtures"]),
+            "commands": harness_commands(out / checkpoint, checkpoint),
+        } for checkpoint, group in sorted(groups.items())},
+    }
+
+
+def harness_commands(directory, checkpoint: str) -> dict:
+    """`accuracy` and `calibrate` over one checkpoint group."""
+    common = ("--fixtures-dir %s --checkpoint-sha256 %s --ingest-summary "
+              "%s/run_summary.json" % (directory, checkpoint, directory))
+    return {
+        "accuracy": "swift run HarnessCLI accuracy %s --output %s/accuracy.json"
+                    % (common, directory),
+        "calibrate": "swift run HarnessCLI calibrate %s --output %s/calibrate.json"
+                     % (common, directory),
+    }
 
 
 # ----------------------------------------------------- recommended commands
@@ -514,9 +736,10 @@ def recommended_commands(out) -> dict:
     """What to run next, recorded and never executed (Req 8.6)."""
     return {
         "retrain": "python tools/segmenter/train.py --data %s" % out,
-        "recalibrate": "swift run HarnessCLI calibrate --fixtures-dir "
-                       "<calibration output> --checkpoint-sha256 <bundle "
-                       "checkpoint> --ingest-summary <calibration output>/"
+        "recalibrate": "make field-score, or per checkpoint group: swift run "
+                       "HarnessCLI calibrate --fixtures-dir <calibration "
+                       "output>/<checkpoint> --checkpoint-sha256 <checkpoint> "
+                       "--ingest-summary <calibration output>/<checkpoint>/"
                        "run_summary.json --output <artifact>",
         "rebake": "make food-db CALIBRATION=<artifact>",
         "human_gated": True,
@@ -550,6 +773,23 @@ def record_commands(cycle_dir, commands: dict, summary: dict) -> Path:
 
 # ------------------------------------------------------------------ the run
 
+def print_calibration(document: dict) -> None:
+    """The derivation, then one directory and command pair per checkpoint."""
+    print("derive calibration ingested=%d skipped=%d out=%s"
+          % (document["ingested"],
+             sum(len(s) for s in document["skipped"].values()),
+             document["out"]))
+    for reason, stems in sorted(document["skipped"].items()):
+        for stem in stems:
+            print("derive calibration skipped %s=%s" % (reason, stem))
+    for checkpoint, group in sorted(document["groups"].items()):
+        print("derive calibration checkpoint=%s ingested=%d dir=%s"
+              % (checkpoint, group["ingested"], group["dir"]))
+        if group["ingested"]:
+            for name, command in sorted(group["commands"].items()):
+                print("derive calibration %s=%s" % (name, command))
+
+
 def run(args) -> int:
     settings = config.load(args.config)
     root = Path(args.corpus) if args.corpus else corpus.corpus_root()
@@ -557,10 +797,7 @@ def run(args) -> int:
 
     if args.calibration_out:
         document = derive_calibration(conn, root, Path(args.calibration_out))
-        print("derive calibration ingested=%d skipped=%d out=%s"
-              % (document["ingested"],
-                 sum(len(s) for s in document["skipped"].values()),
-                 args.calibration_out))
+        print_calibration(document)
 
     summary = None
     if args.out:

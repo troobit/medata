@@ -13,6 +13,7 @@ import CardDetectionVision
 import Foods
 import Foundation
 import HarnessCore
+import Macros
 import PortableContracts
 import Segmentation
 import SupportPlane
@@ -255,6 +256,29 @@ struct AccuracyJSON: Encodable {
         // Null when the meal carries no truth — absent, not zero.
         let absoluteErrorG: Float?; let percentError: Float?
         let scored: Bool
+        // What the scored figure was computed from (the `accuracy` path only;
+        // absent on the legacy eval). Volumes and masses are the scored ones —
+        // under the review's classes when a review applied.
+        let perClassVolumesCm3: [String: Float]?
+        let perClassMassG: [String: Float]?
+        let groundTruthClassMassG: [String: Float]?
+        let supportPlaneReference: String?
+        let review: ReviewJSON?
+    }
+    // Present only on a fixture whose ingest summary carried a review: what
+    // the review changed, and the meal as the segmenter labelled it.
+    struct ReviewJSON: Encodable {
+        let relabelled: [String: String]
+        let rejected: [String]
+        let labelledVolumesCm3: [String: Float]
+        let labelledCarbsG: Float
+    }
+    struct DetailJSON {
+        let perClassVolumesCm3: [String: Float]
+        let perClassMassG: [String: Float]
+        let groundTruthClassMassG: [String: Float]
+        let supportPlaneReference: String?
+        let review: ReviewJSON?
     }
 }
 
@@ -262,6 +286,7 @@ struct AccuracyJSON: Encodable {
 // `accuracy` and legacy-eval paths so the two cannot drift apart.
 func emitAccuracy(_ report: AccuracyReport,
                   checkpointSHAs: [String] = [],
+                  details: [String: AccuracyJSON.DetailJSON] = [:],
                   to outputPath: String) throws {
     try writeJSON(AccuracyJSON(
         mape: report.mape, mae: report.mae,
@@ -276,12 +301,18 @@ func emitAccuracy(_ report: AccuracyReport,
                                       calibrationStatus: s.calibrationStatus.rawValue)
         },
         rows: report.rows.map { r in
-            AccuracyJSON.RowJSON(
+            let detail = details[r.fixtureID]
+            return AccuracyJSON.RowJSON(
                 fixtureID: r.fixtureID, capturePath: r.capturePath,
                 groundTruthCarbsG: r.groundTruthCarbsG,
                 predictedCarbsG: r.predictedCarbsG,
                 absoluteErrorG: r.absoluteErrorG, percentError: r.percentError,
-                scored: r.isScored)
+                scored: r.isScored,
+                perClassVolumesCm3: detail?.perClassVolumesCm3,
+                perClassMassG: detail?.perClassMassG,
+                groundTruthClassMassG: detail?.groundTruthClassMassG,
+                supportPlaneReference: detail?.supportPlaneReference,
+                review: detail?.review)
         }
     ), to: outputPath)
 
@@ -711,9 +742,42 @@ func runAccuracy(args: Args) throws {
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let regularisation = regularisationConfig(args: args)
     let growth = growthConfig(args: args)
-    let (calInputs, skips) = buildCalInputs(
+    let (labelledInputs, skips) = buildCalInputs(
         fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm,
         regularisation: regularisation, growth: growth)
+    // `--ingest-summary` (a field derivation's run_summary.json) scores each
+    // reviewed capture at the classes its review named, as `calibrate` fits it.
+    let review = CalibrateRun.review(from: try args.ingestSummaryPaths.map {
+        try CalibrateRun.loadIngestSummary(from: URL(fileURLWithPath: $0))
+    })
+    let fixtureByID = Dictionary(fixtures.map { ($0.fixtureID, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+    var details: [String: AccuracyJSON.DetailJSON] = [:]
+    let calInputs = labelledInputs.map { labelled -> MealCalibrationInput in
+        let edition = fixtureByID[labelled.fixtureID]?.databaseEdition ?? ""
+        var scored = labelled
+        var reviewJSON: AccuracyJSON.ReviewJSON?
+        if let reviewed = review[labelled.fixtureID] {
+            scored = reviewed.apply(to: labelled, database: db, edition: edition)
+            reviewJSON = AccuracyJSON.ReviewJSON(
+                relabelled: reviewed.relabelled, rejected: reviewed.rejected.sorted(),
+                labelledVolumesCm3: labelled.perClassVolumesCm3,
+                labelledCarbsG: labelled.predictedCarbsPerClass.values.reduce(0, +))
+        }
+        let macros = Macros.compute(perClassVolumesCm3: scored.perClassVolumesCm3,
+                                    database: db, edition: edition)
+        details[labelled.fixtureID] = AccuracyJSON.DetailJSON(
+            perClassVolumesCm3: scored.perClassVolumesCm3,
+            perClassMassG: macros.perClass.mapValues(\.massG),
+            groundTruthClassMassG: fixtureByID[labelled.fixtureID]?.groundTruthClassMassG ?? [:],
+            supportPlaneReference: scored.supportPlaneReference?.rawValue,
+            review: reviewJSON)
+        return scored
+    }
+    if !review.isEmpty {
+        fputs("accuracy: review applied to \(details.values.filter { $0.review != nil }.count) "
+              + "of \(calInputs.count) replayed fixture(s)\n", stderr)
+    }
     fputs("accuracy: sliver fraction \(regularisation.sliverFraction)\n", stderr)
     fputs("accuracy: growth cliff=\(growth.cliffMm) floor=\(growth.floorMm) cap=\(growth.frameFractionCap) band=\(growth.seedBandMm) gateCm2=\(growth.seedAreaGateCm2)\n", stderr)
     reportRegionGrowth(calInputs, fixtures: fixtures)
@@ -741,7 +805,8 @@ func runAccuracy(args: Args) throws {
     }
     let report = AccuracyHarness.evaluate(meals: evalMeals)
     let checkpointSHAs = Set(fixtures.map(\.segmenterCheckpointSha256)).sorted()
-    try emitAccuracy(report, checkpointSHAs: checkpointSHAs, to: args.outputPath)
+    try emitAccuracy(report, checkpointSHAs: checkpointSHAs, details: details,
+                     to: args.outputPath)
 }
 
 // MARK: - calibrate (task 58, extended by nutrition5k-calibration tasks 21–22)
@@ -836,6 +901,12 @@ func runCalibration(args: Args, db: any FoodDatabase,
         exit(1)
     }
 
+    // A field capture's volume rows are relabelled to the review's classes
+    // BEFORE the purity gate: its truth is recorded under the class the user
+    // named, and a plate measured under the segmenter's class would be dropped
+    // for disagreeing with it. N5k and MetaFood3D summaries carry no review.
+    let review = CalibrateRun.review(from: ingestSummaries)
+
     // Single-dominant (and legacy) fixtures via FixtureRunner; plates whose
     // pipeline run fails (e.g. poor plate-plane fit) are skipped + recorded
     // (Req 3.4/3.8).
@@ -844,9 +915,12 @@ func runCalibration(args: Args, db: any FoodDatabase,
     var massDominant: [String: String] = [:]
     for fx in routed.singleDominant {
         do {
-            let input = try FixtureRunner.run(fixture: fx, palette: palette,
+            var input = try FixtureRunner.run(fixture: fx, palette: palette,
                                               database: db, voxelEdgeMm: args.voxelEdgeMm,
                                               regularisation: regularisationConfig(args: args))
+            if let reviewed = review[fx.fixtureID] {
+                input = reviewed.apply(to: input, database: db, edition: fx.databaseEdition)
+            }
             sdInputs.append(input)
             if fx.estimatorPath == "single_dominant" {
                 massDominant[fx.fixtureID] =
@@ -1100,6 +1174,11 @@ func runCalibration(args: Args, db: any FoodDatabase,
           stacking excluded: \(mixtureResult.excludedPlates)
           liquid excluded: \(mixtureResult.liquidExcludedPlates)\n
         """, stderr)
+    if !review.isEmpty {
+        let applied = routed.singleDominant.filter { review[$0.fixtureID] != nil }.count
+        fputs("  review relabels applied before the purity gate: \(applied) "
+              + "of \(routed.singleDominant.count) single-dominant fixture(s)\n", stderr)
+    }
 
     // Per-dataset exclusion buckets (cross-dataset-calibration Req 1.4): the
     // N5k depth-test-split drops and each dataset's ingestion skips stay

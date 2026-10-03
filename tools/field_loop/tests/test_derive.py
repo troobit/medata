@@ -344,25 +344,49 @@ def test_a_marked_capture_leaves_the_evaluation_set(index, corpus_root,
 
 # ---------------------------------------------------- calibration derivation
 
+def weigh(index, stem_ms, *, outcome_id="o1", meal_id="m1", fidelity="weighed",
+          items=None, carbs=30.4):
+    """A benchmark row linked to the capture's outcome, as an ingest leaves it."""
+    benchmark_id = "b-%s" % outcome_id
+    corpus.upsert_benchmark(index, {
+        "id": benchmark_id, "pull_id": "p1", "name": "weighed roll",
+        "created_at": stem_ms, "truth_carbs_g": carbs,
+        "items": json.dumps(items if items is not None
+                            else [{"class_id": "bread_wholemeal", "grams": 80.0}]),
+        "db_edition": "cofid-2026-01", "fidelity": fidelity})
+    corpus.upsert_outcome(index, {
+        "id": outcome_id, "pull_id": "p1", "last_pull_id": "p1",
+        "timestamp_ms": stem_ms, "outcome": "success", "failure": None,
+        "meal_id": meal_id, "model_version": "coreml_ab812dc3aa9d",
+        "benchmark_meal_id": benchmark_id, "measurements_json": "{}",
+        "protected": 0})
+    index.commit()
+
+
+def correct(index, predicted, *, corrected=None, rejected=0, amount=0,
+            outcome_id="o1", meal_id="m1"):
+    record = {"corrected": {"classId": corrected}} if corrected else {}
+    corpus.upsert_correction(index, {
+        "meal_id": meal_id, "predicted_class": predicted, "pull_id": "p1",
+        "outcome_id": outcome_id, "created_at": TS, "updated_at": TS,
+        "class_corrected": 1 if corrected else 0, "rejected": rejected,
+        "absent": 0, "amount_corrected": amount,
+        "record_json": json.dumps(record)})
+    index.commit()
+
+
 def test_calibration_derivation_emits_a_fixture_and_a_run_summary(
         index, corpus_root, tmp_path):
     stem = seed_capture(index, corpus_root, TS, note_id="n0")
-    corpus.upsert_benchmark(index, {
-        "id": "b1", "pull_id": "p1", "name": "weighed rice", "created_at": TS,
-        "items": "[]", "truth_carbs_g": 42.0, "db_edition": "cofid-2026-01",
-        "fidelity": "weighed"})
-    corpus.upsert_outcome(index, {
-        "id": "o1", "pull_id": "p1", "last_pull_id": "p1", "timestamp_ms": TS,
-        "outcome": "success", "failure": None, "meal_id": "m1",
-        "model_version": "coreml_ab812dc3aa9d", "benchmark_meal_id": "b1",
-        "measurements_json": "{}", "protected": 0})
-    index.commit()
+    weigh(index, TS)
 
     out = tmp_path / "calibration"
     summary = derive_dataset.derive_calibration(index, corpus_root, out)
-    assert (out / ("%s.fixture" % stem)).exists()
-    document = json.loads((out / "run_summary.json").read_text())
+    group = out / "ab812dc3aa9d"
+    assert (group / ("%s.fixture" % stem)).exists()
+    document = json.loads((group / "run_summary.json").read_text())
     assert summary["ingested"] == 1
+    assert document["ingested"] == 1
     for key in ("dataset", "licence", "snapshot", "mapping_version",
                 "render_config"):
         assert key in document
@@ -375,13 +399,100 @@ def test_calibration_derivation_emits_a_fixture_and_a_run_summary(
     assert all(isinstance(v, list) for v in document["skipped"].values())
 
 
+def test_the_derived_fixture_carries_the_weighed_truth_and_the_corpus_does_not(
+        index, corpus_root, tmp_path):
+    """Fields 17 and 18 are what `accuracy` scores; the corpus stays the device's."""
+    from candidate_probe import fields
+
+    stem = seed_capture(index, corpus_root, TS, note_id="n0")
+    weigh(index, TS, items=[{"class_id": "bread_wholemeal", "grams": 50.0},
+                            {"class_id": "bread_wholemeal", "mass_g": 30.0}])
+    source = corpus_root / "captures" / ("%s.fixture" % stem)
+    before = source.read_bytes()
+
+    out = tmp_path / "calibration"
+    derive_dataset.derive_calibration(index, corpus_root, out)
+    derived = (out / "ab812dc3aa9d" / ("%s.fixture" % stem)).read_bytes()
+    assert source.read_bytes() == before
+    assert derived.startswith(before)
+    parsed = list(fields(derived))
+    entries = [dict(fields(payload)) for number, payload in parsed if number == 17]
+    assert entries == [{1: b"bread_wholemeal", 2: 80.0}]
+    assert [round(v, 2) for n, v in parsed if n == 18] == [30.4]
+
+
 def test_calibration_derivation_takes_only_weighed_benchmarks(
         index, corpus_root, tmp_path):
-    seed_capture(index, corpus_root, TS, note_id="n0")
+    stem = seed_capture(index, corpus_root, TS, note_id="n0")
+    weigh(index, TS, fidelity="stated")
     out = tmp_path / "calibration"
     summary = derive_dataset.derive_calibration(index, corpus_root, out)
     assert summary["ingested"] == 0
-    assert json.loads((out / "run_summary.json").read_text())["ingested"] == 0
+    assert summary["skipped"]["not_weighed"] == [stem]
+    assert not list(out.glob("*/*.fixture"))
+
+
+def test_calibration_inputs_are_grouped_by_segmenter_checkpoint(
+        index, corpus_root, tmp_path):
+    """The loader takes one checkpoint per run, because β belongs to one segmenter."""
+    first = seed_capture(index, corpus_root, TS, note_id="n0")
+    second = seed_capture(index, corpus_root, TS + 600_000, note_id="n1")
+    make_fixture(corpus_root / "captures" / ("%s.fixture" % second),
+                 fixture_id=second, classes=(1,), checkpoint="88d34e27e8bf")
+    weigh(index, TS, outcome_id="o1", meal_id="m1")
+    weigh(index, TS + 600_000, outcome_id="o2", meal_id="m2")
+
+    out = tmp_path / "calibration"
+    summary = derive_dataset.derive_calibration(index, corpus_root, out)
+    assert sorted(summary["groups"]) == ["88d34e27e8bf", "ab812dc3aa9d"]
+    assert [p.name for p in (out / "ab812dc3aa9d").glob("*.fixture")] \
+        == ["%s.fixture" % first]
+    assert [p.name for p in (out / "88d34e27e8bf").glob("*.fixture")] \
+        == ["%s.fixture" % second]
+    command = summary["groups"]["88d34e27e8bf"]["commands"]["calibrate"]
+    assert "--checkpoint-sha256 88d34e27e8bf" in command
+    assert "%s/run_summary.json" % (out / "88d34e27e8bf") in command
+
+
+def test_the_review_reaches_the_run_summary_without_amount_corrections(
+        index, corpus_root, tmp_path):
+    stem = seed_capture(index, corpus_root, TS, note_id="n0")
+    weigh(index, TS)
+    correct(index, "bread_white", corrected="bread_wholemeal", amount=1)
+    correct(index, "white_rice", rejected=1)
+    correct(index, "peas")    # confirmed as predicted: no change
+
+    out = tmp_path / "calibration"
+    derive_dataset.derive_calibration(index, corpus_root, out)
+    document = json.loads((out / "ab812dc3aa9d" / "run_summary.json").read_text())
+    fixture = document["fixtures"][stem]
+    assert fixture["review"] == {"relabelled": {"bread_white": "bread_wholemeal"},
+                                 "rejected": ["white_rice"]}
+    assert fixture["truth"] == {"class_mass_g": {"bread_wholemeal": 80.0},
+                                "total_carbs_g": 30.4}
+
+
+def test_a_bundle_outside_captures_is_used_only_when_its_hash_matches(
+        index, corpus_root, tmp_path):
+    """reports/ survives a discard; a stale or foreign copy there must not score."""
+    stem = seed_capture(index, corpus_root, TS, note_id="n0")
+    weigh(index, TS)
+    source = corpus_root / "captures" / ("%s.fixture" % stem)
+    kept = corpus_root / "reports" / "kept" / source.name
+    kept.parent.mkdir(parents=True)
+    source.rename(kept)
+
+    out = tmp_path / "calibration"
+    summary = derive_dataset.derive_calibration(index, corpus_root, out)
+    assert summary["ingested"] == 1
+    document = json.loads((out / "ab812dc3aa9d" / "run_summary.json").read_text())
+    assert document["fixtures"][stem]["source"] == "reports/kept/%s" % source.name
+
+    kept.write_bytes(kept.read_bytes() + b"\x00")
+    summary = derive_dataset.derive_calibration(index, corpus_root, out)
+    assert summary["skipped"]["bundle_missing"] == [stem]
+    # The fixture the first run left there is gone, so the harness cannot load it.
+    assert not list(out.glob("*/*.fixture"))
 
 
 # ------------------------------------------------------ recommended commands

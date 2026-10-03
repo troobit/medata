@@ -37,7 +37,7 @@ SEGMENTER_PYTHON ?= tools/segmenter/.venv/bin/python
 .PHONY: help build test test-corpus test-python spell food-db model app deploy \
         debug dev dev-stub product logs harness-accuracy spec-portfolio worktree \
         field-pull field-notes field-discard field-export field-triage field-diagnose \
-        field-report field-close field-derive
+        field-report field-close field-derive field-score
 
 help:  ## list every target
 	@awk 'BEGIN {FS = ":.*##"} \
@@ -220,6 +220,17 @@ field-derive:  ## training and calibration inputs  OUT=<corpus> | CALIBRATION_OU
 	  $(if $(CALIBRATION_OUT),--calibration-out "$(CALIBRATION_OUT)",) \
 	  $(if $(CYCLE_DIR),--cycle-dir "$(CYCLE_DIR)",) \
 	  $(if $(IDENT),--ident "$(IDENT)",)
+
+# derive -> accuracy -> calibrate over every weighed capture, one segmenter
+# checkpoint at a time, applying the review's relabels. The output directory
+# holds the derived groups (APFS clones of the corpus bundles with the truth
+# appended, so no data is copied) and each group's harness JSON and logs.
+FIELD_SCORE_OUT ?= $(CURDIR)/.build/field-score
+field-score:  ## score the weighed captures: derive, accuracy, calibrate  [OUT=<dir>]
+	swift build -q --product HarnessCLI
+	$(PYTHON) tools/field_loop/field_score.py \
+	  --harness "$$(swift build --show-bin-path)/HarnessCLI" \
+	  --out "$(or $(OUT),$(FIELD_SCORE_OUT))"
 
 ##@ Offline harnesses and repo tooling
 

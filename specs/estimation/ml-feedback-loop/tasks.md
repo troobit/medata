@@ -283,3 +283,14 @@ references:
   - No agent may attempt this task
   - Blocked-by: i6u18ch (Weighed mass entry on the review screen, written as a weighed benchmark_meals row)
   - Stream: 2
+
+## Scoring the weighed set
+
+- [x] 41. make field-score: derive, accuracy and calibrate over the weighed captures in one command <!-- id:i6u18cj -->
+  - Blocker: scoring the weighed captures took three hand steps on 2026-10-03 - splitting the derived set by checkpoint, injecting the truth into scratch copies, and the purity gate dropping every plate the review had relabelled.
+  - field-derive CALIBRATION_OUT writes one directory per segmenter checkpoint, each a complete accuracy/calibrate input with the weighed truth in fixture fields 17/18 (APFS clone plus append) and the review in its run_summary.json (Decisions Q2, Q3).
+  - accuracy and calibrate apply the review (relabels, rejections; not amounts) when given --ingest-summary; calibrate applies it before the purity gate (Decision Q4). N5k and MetaFood3D summaries carry no review and replay unchanged.
+  - make field-score prints each capture against the scale, the set MAPE/MAE as reviewed and as labelled, and the beta result or why none was baked.
+  - Gates: make test, make test-python, make spell, and a real make field-score run pasted into docs/agent-notes/field-truth-sessions.md.
+  - Stream: 2
+  - Requirements: [8.4](requirements.md#8.4), [8.6](requirements.md#8.6)

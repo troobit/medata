@@ -28,11 +28,14 @@ The data path, end to end:
    into `index.sqlite` and the outcome with its link (`upsert_outcome`: the
    device wins when it has a link).
 3. `make field-derive CALIBRATION_OUT=<dir>` joins outcome → benchmark →
-   capture by timestamp and hardlinks the fixture into `<dir>`;
+   capture by timestamp, clones each bundle into `<dir>/<checkpoint>/` with the
+   truth appended as fixture fields 17/18, and writes the review (relabels,
+   rejections) from `corrections` into that group's `run_summary.json`;
    `field_close`'s weighed veto reads the same rows.
 
-After a sitting: `make field-pull`, then `make field-derive
-CALIBRATION_OUT=<dir>` and read `ingested=`. A capture whose bundle is still on
+After a sitting: `make field-pull`, then `make field-score`. It derives, runs
+`accuracy` and `calibrate` per checkpoint, and prints each capture against the
+scale, the set's MAPE/MAE and the β result. A capture whose bundle is still on
 the phone reports as skipped until a full pull lands it.
 
 Gotchas:
@@ -46,14 +49,17 @@ Gotchas:
   pulled stays in the index joined to nothing — inert.
 - Re-tagging moves the attempt out of the 500-row non-benchmark eviction
   population into a one-row benchmark group, so it needs no protection row.
-- The derived directory is not yet a one-command `calibrate` input. It mixes
-  segmenter checkpoints, and the loader refuses any bundle whose checkpoint is
-  not `--checkpoint-sha256`, so split it per checkpoint first. The weighed
-  figure is not in the bundles either (it lives in `benchmark_meals`), so
-  `accuracy` scores nothing and `calibrate` fits nothing until the truth is
-  written into the fixture. The 2026-10-03 entry has the scratch recipe. Run
-  `calibrate` with `--ingest-summary <dir>/run_summary.json`; it needs no
-  `--depth-test-split` since 2026-10-03.
+- `calibrate` scores a plate at the classes its review named, so the truth
+  and the review must agree on the class. The Weighed mass sheet records truth
+  under each row's current class, so they agree by construction. A back-filled
+  row can disagree: the 2026-10-03 back-fill put two roll captures under
+  bread_wholemeal while their reviews kept bread_white, and the purity gate
+  drops both. Fix the review or the truth, not the gate.
+- Each `<dir>/<checkpoint>/` is a complete input:
+  `--fixtures-dir <dir>/<checkpoint> --checkpoint-sha256 <checkpoint>
+  --ingest-summary <dir>/<checkpoint>/run_summary.json`. Without
+  `--ingest-summary`, `accuracy` still scores (the truth is in the bundle) but
+  at the segmenter's labels. Neither needs `--depth-test-split`.
 
 ## 2026-10-03 — an 80 g roll three times on the R16 segmenter, and four truths back-filled (builds `a179e0b-20261003-110500`, `0ff10cc-20261003-110738`, segmenter `coreml_88d34e27e8bf`)
 
@@ -172,13 +178,11 @@ priced at 0.
   (the toast's 300.9 of 426.0 cm³ is 0.71 against τ 0.90). A field β needs the
   review's relabel applied to the volume before the purity gate.
 
-Scratch recipe for scoring field bundles, used above: hardlink the bundles
-into one directory per checkpoint. Copy each one and append protobuf fields 17
-(`ground_truth_class_mass_g`, `{class: grams}`) and 18
-(`ground_truth_total_carbs_g`); a protobuf message followed by more fields
-parses as their merge. Then run `accuracy`, `volumes` and `calibrate
---ingest-summary <derived>/run_summary.json` on the copies. Never append to
-the corpus files: the derived directory holds hardlinks to them.
+The figures above came from a scratch recipe: hardlink the bundles into one
+directory per checkpoint, copy each and append protobuf fields 17
+(`ground_truth_class_mass_g`) and 18 (`ground_truth_total_carbs_g`), then run
+`accuracy`, `volumes` and `calibrate`. `make field-score` now does the same in
+one step (below).
 
 Tooling fixed the same day (`derive_dataset.py`, `CalibrateRun.loadIngestSummary`,
 HarnessCLI `calibrate`). The field `run_summary.json` now loads: `skipped`
@@ -227,6 +231,48 @@ Nothing shipped. The full grid is in Decision 6.
 - **Next for this plate:** a toasted-bread density, and the plane under food on
   an `edgeBand` fit (`support-plane-reference`). A ring median would not do:
   it reads the rim (11.4 mm), not the 1–4 mm under the toast.
+
+### One-command run: `make field-score` (harness at `2a6f2b8` plus the field-score change)
+
+The same five captures, scored with no hand step. The derivation found the
+104 g roll's bundle under `reports/` by its SHA-256, so nothing was skipped.
+Output as printed, with the checkout path shortened:
+
+```
+field-score: 5 weighed capture(s) in 2 checkpoint group(s), out=<checkout>/.build/field-score
+
+capture                checkpoint    path    plane        vol cm3   mass g / truth      err  carbs g / truth      err     as labelled  classes after review (cm3)
+1790655022746-success  ab812dc3aa9d  1-view  foodSupport    226.3     90.5 / 104.0   -13.0%      34.4 / 39.5   -13.0%      0.2 -99.5%  bread_wholemeal 226.3 (was unknown_food); coffee 59.5 rejected
+1790748465041-success  ab812dc3aa9d  1-view  edgeBand       426.0     170.4 / 83.0  +105.3%      64.7 / 31.5  +105.3%     45.7 +45.0%  bread_wholemeal 426.0 (was unknown_food)
+1790989654696-success  88d34e27e8bf  1-view  foodSupport    201.6      76.6 / 80.0    -4.3%      36.8 / 30.4   +20.9%     40.6 +33.5%  bread_white 201.6; white_rice 16.3 rejected
+1790989735795-success  88d34e27e8bf  1-view  edgeBand       236.8      94.7 / 80.0   +18.4%      36.0 / 30.4   +18.4%     43.2 +42.1%  bread_wholemeal 236.8 (was bread_white)
+1790989787903-success  88d34e27e8bf  2-view  edgeBand       224.2      85.2 / 80.0    +6.5%      40.9 / 30.4   +34.5%     40.9 +34.5%  bread_white 224.2
+
+set carbs as reviewed (n=5): MAPE 38.4%  MAE 12.2 g
+set mass as reviewed (n=5): MAPE 29.5%  MAE 24.8 g
+set carbs as labelled (n=5): MAPE 50.9%  MAE 17.4 g
+
+beta 88d34e27e8bf: none baked — no plate passed the gates
+  purity dropped 1790989654696-success: reviewed bread_white 201.6; white_rice 16.3 rejected; truth bread_wholemeal; purity 0.00 < 0.90
+  purity dropped 1790989787903-success: reviewed bread_white 224.2; truth bread_wholemeal; purity 0.00 < 0.90
+  reference excluded 1790989735795-success: plane edgeBand; beta is fitted on foodSupport
+beta ab812dc3aa9d: none baked — bread_wholemeal has 1 admitted plate(s), the floor is 30
+  reference excluded 1790748465041-success: plane edgeBand; beta is fitted on foodSupport
+```
+
+- **As labelled matches the scratch run** (50.9 % / 17.4 g), so the derivation
+  and the hand recipe agree.
+- **As reviewed is 38.4 %, not the 29.9 % "true class" figure.** Two roll
+  captures kept bread_white in review, so they are priced at bread_white's
+  density and coefficient. The "true class" row priced every capture at
+  bread_wholemeal. The review is now the class of record, and it says
+  bread_white for `…654696` and `…787903`.
+- **β is no longer blocked by tooling.** The relabel now reaches the volume,
+  and the 104 g roll and `…735795` pass purity. What is left is data. Three
+  of the five plates fit an `edgeBand` plane, and β is fitted on
+  `foodSupport` only (Req 5.4). The back-filled truth says bread_wholemeal
+  where two reviews kept bread_white. One admitted plate is 29 short of the
+  30-plate floor.
 
 ## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
 
