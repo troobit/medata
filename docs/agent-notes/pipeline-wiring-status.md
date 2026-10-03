@@ -3,8 +3,9 @@
 **Status:** Landed. The 2026-05-23 investigation below is **superseded** —
 the real factory, the RGB conversion, and `VisionCardDetector` have all since
 shipped, and **Blocker 1 closed too**: real checkpoints were trained and
-exported 2026-07-05/06; the bundled model is `24e0b022241a` under a
-(see `model-production.md`). Historical references
+exported 2026-07-05/06, and the bundled model has been `ab812dc3aa9d` since
+2026-08-16 (myfoodrepo-bridge Decision 27; see `model-production.md`). The
+current end-to-end state is `mvp-gap-analysis.md`. Historical references
 below to the iPhone 13 Pro Max as the hardware floor are also stale — the
 floor is the iPhone 16 Pro since 2026-07-15 (segmenter-foundation Decision 22).
 The rest of this note is kept as historical context; see the
@@ -36,7 +37,7 @@ What changed since the original 2026-05-23 investigation:
   `Package.swift` (`.copy("Resources")`); see `docs/architecture.md` §9.
 
 **Bottom line:** nothing remains — Blocker 1 closed with the 2026-07-05/06
-trained models (bundled `24e0b022241a`). Everything in the original note is
+trained models (bundled `ab812dc3aa9d` since 2026-08-16). Everything in the original note is
 history.
 
 ---
