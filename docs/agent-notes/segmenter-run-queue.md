@@ -5,6 +5,45 @@ Recipe history and verdicts live in
 `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md`;
 this note is the mechanics and the reading rules.
 
+## Research handoff after the decoder merge (2026-10-04)
+
+`research` and `origin/research` both contain decoder merge `7c56f0d`; the
+segmenter suite passed 339 tests during the merge. `../MODELRESUME.md` describes
+the earlier recovery window and is now stale. Its watcher merged on **marker
+presence**, although R17's marker says exit 124: the watchdog killed R17 after
+epoch 7, leaving `checkpoint_r17_size641_seed2.pt.resume.pt`. R17 has no final
+checkpoint, v3 validation, or verdict yet. Do not treat the merge as an R17
+success or rerun the watcher.
+
+The live serial runner started R18 (`110-r18_size769_seed1`) on 2026-10-03 at
+19:36; it is a 769-pixel resolution measurement. A queued
+`115-r17_resume_after_r18` resumes R17's sidecar with the identical 641-pixel
+recipe and validates it on `heldout_leakfree_v3`. It runs between R18 and R19.
+R19's entry checks successful R18 and R17 recovery markers before starting.
+Either prerequisite failure creates `build/queue/PAUSE`. The queue must stay
+serial: never launch another MPS trainer while R18 is active.
+
+For a fresh human or agent session, check `git status --short --branch`,
+`ps -axo pid,ppid,etime,command` (filter for `run_queue`, `train.py`),
+`build/queue/runner.log`, `build/queue/done/`, and the latest train/validate
+logs. Check whether `build/queue/PAUSE` exists. If R18 or the R17 recovery has
+failed, diagnose its log and sidecar before releasing PAUSE; a `done/` file
+with a nonzero code is a failure, not completion. Do not restart a trainer
+without checking the process list and its final checkpoint first. An old
+nonzero marker from R8–R16 can mean the former strict validation gate rejected
+an otherwise valid measurement; read its train/validation log and lineage.
+
+Once R17, R18 and R19 have final checkpoints and v3 lineage metrics, record
+their results in the estimation-quality task file. Compare R17 to R16 at 641
+to measure seed spread; compare R18 to that 641 pair to judge the extra
+resolution and cost; compare R19 to R16 (same 641 size and seed) for the decoder
+effect, with R17 as a second baseline. Use the readable-28 mean and mask block
+on the **same v3 anchor**, with the prediction intervals below. Boundary F is
+the decoder's primary metric, then region IoU and staples. Check for an actual
+effect before considering export or a device run. Decoder adoption requires a
+spec decision and an iPhone 16 Pro ANE latency measurement; R19 itself is only
+an experiment. The currently bundled model is unchanged.
+
 ## Mechanics
 
 - `tools/segmenter/run_queue.sh` runs every `tools/segmenter/queue/NN-<name>.sh`
@@ -68,6 +107,10 @@ entry's `done/` marker, edit, test (`tools/segmenter/.venv/bin/python -m pytest
 tools/segmenter/tests -q`), commit, remove `PAUSE`.
 
 ## R17 and the decoder merge watcher: moving the laptop
+
+Historical recovery instructions below preceded the 2026-10-03 merge. The
+watcher has finished and must not be restarted. Use the handoff above for the
+current queued recovery.
 
 Checked 2026-10-03: both processes are detached (parent PID 1), so quitting
 Codex or its terminal does not stop them. Ordinary sleep suspends them; reopen

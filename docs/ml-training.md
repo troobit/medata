@@ -684,6 +684,10 @@ the mask block, boundary F first. The entry raises `MEDATA_STALL_SECS` to 3 h:
 the train log only moves once an epoch (stdout is flushed when the next
 epoch's DataLoader workers spawn), R16's epochs took 50 minutes, and a
 decoder epoch can pass the default 90-minute stall window.
+The 2026-10-03 R17 attempt stopped after epoch 7; the queued
+`115-r17_resume_after_r18.sh` resumes and validates it after R18. R19 waits
+for that recovery. See `docs/agent-notes/segmenter-run-queue.md` for the live
+handoff and failure checks.
 
 ## 5. Validating the segmenter
 
