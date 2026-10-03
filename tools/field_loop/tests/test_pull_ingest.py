@@ -606,6 +606,76 @@ def test_mac_side_truth_link_survives_reingest(corpus_root, index):
     assert index.execute("SELECT pull_id FROM outcomes WHERE id = 'o1'").fetchone()[0] == "p1"
 
 
+def _weighed_pull(root, pull_id, *, meal_id, grams, truth, created_at,
+                  captures=()):
+    """A pull whose meals.sqlite carries what the review's weighed-mass entry
+    writes: a `fidelity=weighed` benchmark row and the capture's outcome
+    pointed at it (`GRDBPersistenceStore.attachWeighedTruth`)."""
+    items = json.dumps([{"class_id": "bread_wholemeal", "grams": grams}])
+    return build_pull(
+        root, pull_id, captures=captures,
+        db={"outcomes": [{"id": "O-ROLL", "timestamp": TS, "outcome": "success",
+                          "meal_id": "M-ROLL", "benchmark_meal_id": meal_id}],
+            "benchmarks": [{"id": meal_id, "created_at": created_at,
+                            "name": "Bread wholemeal — weighed after capture",
+                            "items": items, "truth_carbs_g": truth}]})
+
+
+def test_weighed_mass_entered_on_the_phone_reaches_calibration(
+        corpus_root, index, tmp_path):
+    """The weighed truth needs no Mac-side edit any more.
+
+    Before the review screen could write it, the 2026-09-29 roll (104 g) had to
+    be back-filled into the index by hand. Now the device's own rows carry it,
+    and the calibration join finds the bundle on the first ingest.
+    """
+    from field_loop import derive_dataset
+
+    stem = corpus.stem_for(TS, "success")
+    pull = _weighed_pull(corpus_root, "20261003-1", meal_id="B-ROLL",
+                         grams=104.0, truth=39.52, created_at=TS + 15_000,
+                         captures=[{"stem": stem, "classes": (1,)}])
+    summary = ingest_pull(pull, corpus_root, index)
+    assert summary.benchmarks == 1
+
+    out = tmp_path / "calibration"
+    document = derive_dataset.derive_calibration(index, corpus_root, out)
+    assert document["ingested"] == 1
+    assert (out / ("%s.fixture" % stem)).exists()
+    row = index.execute(
+        "SELECT b.truth_carbs_g, b.fidelity FROM outcomes o "
+        "JOIN benchmark_meals b ON b.id = o.benchmark_meal_id "
+        "WHERE o.id = 'O-ROLL'").fetchone()
+    assert (row["truth_carbs_g"], row["fidelity"]) == (39.52, "weighed")
+
+
+def test_a_weighed_reentry_on_the_phone_moves_the_link(corpus_root, index,
+                                                      tmp_path):
+    """A corrected entry re-points the outcome; the Mac follows the device.
+
+    The device deletes the superseded meal, but ingest never deletes, so the
+    old row stays in the index joined to nothing — inert, and the calibration
+    set still holds the capture once, under the corrected truth.
+    """
+    from field_loop import derive_dataset
+
+    stem = corpus.stem_for(TS, "success")
+    first = _weighed_pull(corpus_root, "20261003-1", meal_id="B-TYPO",
+                          grams=1040.0, truth=395.2, created_at=TS + 15_000,
+                          captures=[{"stem": stem, "classes": (1,)}])
+    ingest_pull(first, corpus_root, index)
+    second = _weighed_pull(corpus_root, "20261003-notes-1", meal_id="B-FIXED",
+                           grams=104.0, truth=39.52, created_at=TS + 30_000)
+    ingest_pull(second, corpus_root, index)
+
+    assert index.execute(
+        "SELECT benchmark_meal_id FROM outcomes WHERE id = 'O-ROLL'"
+    ).fetchone()[0] == "B-FIXED"
+    document = derive_dataset.derive_calibration(index, corpus_root,
+                                                 tmp_path / "calibration")
+    assert document["ingested"] == 1
+
+
 def test_device_truth_link_overrides_a_stale_local_one(corpus_root, index):
     """The device wins when it actually carries a link."""
     base = {

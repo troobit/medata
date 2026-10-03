@@ -5,6 +5,48 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## Recording a weighed figure (since 2026-10-03)
+
+Enter it on the phone, not in a field note. On the review screen of a field
+build (`FIELD_LOOP`: Debug or Release), "…" → **Weighed mass** opens one gram
+field per food still on the plate; Save once every food has one. The mass line
+then reads "≈ N g on plate · M g weighed". Name or reject unnamed and
+"not in the database" rows first — truth carbohydrate is grams × the item
+class's own coefficient, and those rows have none. Re-entering replaces the
+earlier figure.
+
+The data path, end to end:
+
+1. `PersistenceStore.attachWeighedTruth` writes a `fidelity=weighed` row to the
+   device's `benchmark_meals` (items = `[{class_id, grams}]` under each row's
+   current class, truth derived at save from the bundled coefficient at the
+   record's edition) and sets `estimation_outcomes.benchmark_meal_id` on the
+   capture's attempt — one transaction, in `Documents/meals.sqlite`. Log line:
+   `event=weighed.attach outcomeId=… benchmarkMealId=… items=class:grams`.
+2. `make field-pull` (or `make field-notes` when the bundle is already ashore)
+   copies `meals.sqlite`; `ingest._ingest_device_rows` copies the benchmark row
+   into `index.sqlite` and the outcome with its link (`upsert_outcome`: the
+   device wins when it has a link).
+3. `make field-derive CALIBRATION_OUT=<dir>` joins outcome → benchmark →
+   capture by timestamp and hardlinks the fixture into `<dir>`;
+   `field_close`'s weighed veto reads the same rows.
+
+After a sitting: `make field-pull`, then `make field-derive
+CALIBRATION_OUT=<dir>` and read `ingested=`. A capture whose bundle is still on
+the phone reports as skipped until a full pull lands it.
+
+Gotchas:
+
+- The entry needs the attempt's outcome id, which the review resolves after a
+  possible 500 ms retry; the menu item stays disabled until then, and for good
+  on a history meal whose outcome row has been evicted.
+- A re-entry deletes the superseded meal on the device only when that meal was
+  written after the attempt; a meal authored on Settings › Benchmark before the
+  capture is kept. Ingest never deletes, so a superseded meal that was already
+  pulled stays in the index joined to nothing — inert.
+- Re-tagging moves the attempt out of the 500-row non-benchmark eviction
+  population into a one-row benchmark group, so it needs no protection row.
+
 ## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
 
 Two-view capture `1790306988367` (outcome 681F8E4C), gold portrait card flat on the table beside the plate, roll on the plate. Field note: "Unknown food registered here - that is the reference card". Row: `scaleSource=lidar`, no `card` block, bread_white 534.5 cm³ + unknown_food 1103.8 cm³; nadir argmax is unknown_food over the whole roll and over the card's printed panel, oblique is bread_white with unknown patches (two-view label mismatch, Req 2, unchanged).
@@ -492,7 +534,8 @@ on plate", linked to meal `45FE1DF5` / outcome `006D7CFA`. Back-filled into the
 index as `benchmark_meals` row `backfill-1790655037216-roll` — 104 g, 39.52 g
 carbohydrate at the bundled CoFID coefficient (38.0 g/100 g), `fidelity=weighed`.
 At the measured bread_wholemeal density of 0.4 g/cm³ that puts **truth volume at
-260 cm³**.
+260 cm³**. This was the last hand back-fill: the review screen writes the same
+row on the phone since 2026-10-03 (see "Recording a weighed figure" above).
 
 What it settles:
 

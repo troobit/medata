@@ -55,18 +55,26 @@ struct MiddleDotLine: View {
 // the confidence tier, so this line no longer carries two quantities that look
 // alike but are not — a measured mass and a dose derived from it. What is left
 // is the figure a kitchen scale can be held against.
+//
+// `weighedG` is that scale's reading once the developer has entered it
+// (FIELD_LOOP weighed-mass entry): appended to the same line, so the estimate
+// and the truth it is checked against sit side by side and nothing above the
+// review's scroll boundary moves. nil draws the estimate alone.
 struct MealTotalSecondLine: View {
     let massG: Double
+    var weighedG: Double?
 
     private var mass: Int { Int(massG.rounded()) }
+    private var weighed: Int? { weighedG.map { Int($0.rounded()) } }
 
     var body: some View {
-        Text("≈ \(mass) g on plate")
+        Text(weighed.map { "≈ \(mass) g on plate · \($0) g weighed" } ?? "≈ \(mass) g on plate")
             .font(.subheadline.monospacedDigit())
             .foregroundStyle(Color.captureChromeText.opacity(0.75))
             .lineLimit(1)
             .minimumScaleFactor(0.9)
-            .accessibilityLabel("\(mass) grams on plate")
+            .accessibilityLabel(weighed.map { "\(mass) grams on plate, \($0) grams weighed" }
+                ?? "\(mass) grams on plate")
             .accessibilityIdentifier("review.massLine")
     }
 }

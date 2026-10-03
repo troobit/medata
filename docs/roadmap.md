@@ -157,6 +157,9 @@ already produces MAE, MAPE, within-10 g share and per-meal error rows against
 
 Its one structural limit: truth must be attached **before** the capture, via
 `EstimationOutcome.benchmarkMealID`. There is no retroactive "the actual value was X g".
+*(Closed 2026-10-03: the review screen's field-build "Weighed mass" entry attaches a weighed
+benchmark meal to the capture's outcome after the fact — `PersistenceStore.attachWeighedTruth`,
+ml-feedback-loop Q1.)*
 
 Do **not** repurpose `PbUserCorrection` for this. It means "I am adjusting the portion", carries no
 fidelity flag, hangs off `MealRecord` rather than the attempt, and nothing consumes it as truth.

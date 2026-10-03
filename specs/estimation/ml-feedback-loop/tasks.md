@@ -264,3 +264,22 @@ references:
 - [x] 38. First routing pass over the rolling triage ledger
   - Route every unchecked ledger item to one destination per the design's routing contract and check it off with routed: <destination>; <date>
   - Requirements: [7.3](requirements.md#7.3)
+
+## Weighed truth from the review screen
+
+- [x] 39. Weighed mass entry on the review screen, written as a weighed benchmark_meals row <!-- id:i6u18ch -->
+  - Blocker: a weighed figure could only be typed as a field note, so the 104 g roll (2026-09-29) was back-filled into index.sqlite by hand (benchmark_meals row backfill-1790655037216-roll, outcome 006D7CFA). Every weighed object needed the same edit.
+  - Review screen, FIELD_LOOP only: the ... menu gains Weighed mass (review.weighedMass), a sheet with one gram field per food still on the plate under its current class; unnamed and not-in-database rows block Save. The entered total joins the mass line as '≈ N g on plate · M g weighed' (Decision Q1).
+  - PersistenceStore.attachWeighedTruth: validates and derives truth as saveBenchmarkMeal does, inserts the fidelity=weighed benchmark_meals row and sets estimation_outcomes.benchmark_meal_id in one transaction; a re-entry deletes the meal it supersedes when that meal post-dates the attempt and nothing else references it; outcomeNotFound writes nothing.
+  - No ingestion change: field_pull already copies meals.sqlite, ingest already copies benchmark_meals and the outcome link, derive_calibration already joins them. Two pytest cases pin the device-authored path end to end; five XCTest cases pin the store method.
+  - Gates: make test, make test-python, make spell, make app CONFIG=Release SEGMENTER=stub and CONFIG=ProductRelease SEGMENTER=stub (product gate passes; event=weighed.attach absent from the product binary).
+  - Stream: 2
+  - Requirements: [8.4](requirements.md#8.4), [8.6](requirements.md#8.6), [9.1](requirements.md#9.1)
+
+- [ ] 40. STOP: weighed-mass look-check on device <!-- id:i6u18ci -->
+  - Human-gated: make dev (or make dev-stub); capture a single food, weigh it, enter the grams via ... > Weighed mass; the mass line reads '≈ N g on plate · M g weighed'; re-open the sheet and see the grams prefilled; correct them once and Save again
+  - make logs shows event=weighed.attach with the outcome and benchmark meal ids; Settings > Benchmark lists the meal once (the superseded entry is gone)
+  - make field-pull then make field-derive CALIBRATION_OUT=<dir> reports ingested=1 for the capture with no hand edit to index.sqlite
+  - No agent may attempt this task
+  - Blocked-by: i6u18ch (Weighed mass entry on the review screen, written as a weighed benchmark_meals row)
+  - Stream: 2

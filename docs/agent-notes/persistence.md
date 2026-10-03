@@ -259,6 +259,19 @@ id, but the upsert is rejected with `benchmarkMealImmutable` once any
 `estimation_outcomes` row references the meal (checked inside the write
 transaction) — corrections create a new meal. No `eventsDidChange`.
 
+`attachWeighedTruth(_:toOutcome:carbsPer100g:)` is the after-the-capture path
+(ml-feedback-loop Q1, the review screen's FIELD_LOOP "Weighed mass" entry).
+Same validation and truth derivation as `saveBenchmarkMeal` — both go through
+the private `derivedBenchmarkRow` + `upsertBenchmarkMeal` helpers — then
+`UPDATE estimation_outcomes SET benchmark_meal_id` on the named attempt, all in
+one write transaction. `outcomeNotFound` (new `PersistenceError` case) when the
+attempt row is gone, writing nothing. On re-entry the meal the attempt pointed
+at before is deleted only if `created_at > attempt timestamp` AND no outcome
+still references it — the timestamp is what tells a review-born meal from one
+authored on the Benchmark surface before the capture, with no schema change.
+The re-tag also moves the row out of the non-benchmark eviction population
+(only inserts evict, and only their own population).
+
 The report maths lives in the separate `Benchmark` SwiftPM target (depends on
 Persistence only): `BenchmarkReport.compute(meals:outcomes:lineage:)` (pure;
 latest-completed-attempt scoring with (timestamp, id) tie-break; SNAQ anchor

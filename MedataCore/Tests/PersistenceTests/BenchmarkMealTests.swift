@@ -277,4 +277,107 @@ final class BenchmarkMealTests: XCTestCase {
         let fetched = try await store.benchmarkMeals()
         XCTAssertEqual(fetched.count, 2)
     }
+
+    // MARK: - Weighed truth attached after the capture (ml-feedback-loop Q1)
+
+    private static let captureMs: Int64 = 1_790_655_022_746
+
+    // The review surface's attempt: a completed, untagged outcome.
+    private func capturedAttempt(benchmarkMealID: UUID? = nil) -> EstimationOutcome {
+        EstimationOutcome(
+            timestampMs: Self.captureMs,
+            outcome: "success",
+            failureJSON: nil,
+            measurementsJSON: #"{"v":1}"#,
+            mealID: UUID(),
+            modelVersion: "coreml_abc123def456",
+            benchmarkMealID: benchmarkMealID
+        )
+    }
+
+    private func weighed(_ grams: Double, at createdAtMs: Int64 = captureMs + 15_000) -> BenchmarkMeal {
+        makeMeal(
+            name: "Bread white — weighed after capture",
+            createdAtMs: createdAtMs,
+            items: [BenchmarkMealItem(classID: "bread_white", grams: grams)]
+        )
+    }
+
+    func testAttachLinksTheOutcomeAndDerivesTruth() async throws {
+        let outcome = capturedAttempt()
+        try await store.saveEstimationOutcome(outcome)
+
+        let meal = weighed(104)
+        try await store.attachWeighedTruth(meal, toOutcome: outcome.id, carbsPer100g: lookup)
+
+        let meals = try await store.benchmarkMeals()
+        XCTAssertEqual(meals.map(\.id), [meal.id])
+        XCTAssertEqual(meals[0].fidelity, .weighed)
+        XCTAssertEqual(meals[0].truthCarbsG, 47.944, accuracy: 1e-9)  // 104 g × 46.1 / 100
+        let outcomes = try await store.estimationOutcomes(limit: 10)
+        XCTAssertEqual(outcomes.map(\.benchmarkMealID), [meal.id])
+    }
+
+    func testReattachReplacesTheMealWrittenAfterTheCapture() async throws {
+        // A typo fixed on the review: the first entry existed only for this
+        // attempt, so it goes rather than lingering as a zero-attempt meal.
+        let outcome = capturedAttempt()
+        try await store.saveEstimationOutcome(outcome)
+        let typo = weighed(1040)
+        try await store.attachWeighedTruth(typo, toOutcome: outcome.id, carbsPer100g: lookup)
+
+        let fixed = weighed(104, at: Self.captureMs + 30_000)
+        try await store.attachWeighedTruth(fixed, toOutcome: outcome.id, carbsPer100g: lookup)
+
+        let meals = try await store.benchmarkMeals()
+        XCTAssertEqual(meals.map(\.id), [fixed.id])
+        let outcomes = try await store.estimationOutcomes(limit: 10)
+        XCTAssertEqual(outcomes.map(\.benchmarkMealID), [fixed.id])
+    }
+
+    func testReattachKeepsAMealAuthoredBeforeTheCapture() async throws {
+        // Launched from the Benchmark surface, so the attempt already carries
+        // a meal written before it. Re-pointing the attempt must not delete
+        // the developer's authored meal.
+        let authored = makeMeal(name: "authored", createdAtMs: Self.captureMs - 60_000)
+        try await store.saveBenchmarkMeal(authored, carbsPer100g: lookup)
+        let outcome = capturedAttempt(benchmarkMealID: authored.id)
+        try await store.saveEstimationOutcome(outcome)
+
+        let meal = weighed(104)
+        try await store.attachWeighedTruth(meal, toOutcome: outcome.id, carbsPer100g: lookup)
+
+        let meals = try await store.benchmarkMeals()
+        XCTAssertEqual(Set(meals.map(\.id)), [authored.id, meal.id])
+        let outcomes = try await store.estimationOutcomes(limit: 10)
+        XCTAssertEqual(outcomes.map(\.benchmarkMealID), [meal.id])
+    }
+
+    func testAttachToAMissingOutcomeThrowsAndWritesNothing() async throws {
+        let missing = UUID()
+        do {
+            try await store.attachWeighedTruth(weighed(104), toOutcome: missing, carbsPer100g: lookup)
+            XCTFail("expected outcomeNotFound")
+        } catch let error as Persistence.PersistenceError {
+            XCTAssertEqual(error, .outcomeNotFound(missing))
+        }
+        let meals = try await store.benchmarkMeals()
+        XCTAssertTrue(meals.isEmpty)
+    }
+
+    func testAttachWithAnUnresolvableClassLeavesTheOutcomeUntagged() async throws {
+        let outcome = capturedAttempt()
+        try await store.saveEstimationOutcome(outcome)
+        let unnamed = makeMeal(items: [BenchmarkMealItem(classID: "unknown_food", grams: 104)])
+        do {
+            try await store.attachWeighedTruth(unnamed, toOutcome: outcome.id, carbsPer100g: lookup)
+            XCTFail("expected benchmarkClassUnresolvable")
+        } catch let error as Persistence.PersistenceError {
+            XCTAssertEqual(error, .benchmarkClassUnresolvable("unknown_food"))
+        }
+        let outcomes = try await store.estimationOutcomes(limit: 10)
+        XCTAssertEqual(outcomes.map(\.benchmarkMealID), [nil])
+        let meals = try await store.benchmarkMeals()
+        XCTAssertTrue(meals.isEmpty)
+    }
 }

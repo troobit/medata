@@ -28,6 +28,10 @@ public enum PersistenceError: Error, Equatable {
     // attempts recorded against it. Editing items/grams would silently
     // re-score history — corrections create a new meal (snaq-parity lane B).
     case benchmarkMealImmutable(UUID)
+    // Weighed truth named an estimation outcome the store does not hold
+    // (evicted, or never written). Nothing is saved: a truth row linked to no
+    // attempt would score nothing and look like a finished entry.
+    case outcomeNotFound(UUID)
 }
 
 // Vocabulary for the `event_type` column on the events table. Centralised here
@@ -685,6 +689,24 @@ public protocol PersistenceStore: Sendable {
     // are not `events` rows: no `eventsDidChange` interaction.
     func saveBenchmarkMeal(
         _ meal: BenchmarkMeal, carbsPer100g: (_ classID: String, _ edition: String) -> Double?
+    ) async throws
+
+    // Weighed truth attached AFTER the capture (ml-feedback-loop Q1): the
+    // developer weighs the plate once the review is up, so the benchmark meal
+    // cannot exist before the attempt the way the Benchmark surface's tagged
+    // launch requires. Saves `meal` — validated and truth-derived exactly as
+    // `saveBenchmarkMeal` does — and points the outcome's `benchmark_meal_id`
+    // at it, in ONE write transaction. That pair is the row `make field-pull`
+    // carries off the phone and `derive_dataset.derive_calibration` joins.
+    //
+    // Re-entry replaces: the meal the outcome pointed at before is deleted
+    // when it was written after the outcome (it existed only for this
+    // capture) and nothing else references it. A meal authored before the
+    // capture — the Benchmark surface's — is never deleted. Throws
+    // `outcomeNotFound` when no outcome row has `outcomeID`, writing nothing.
+    func attachWeighedTruth(
+        _ meal: BenchmarkMeal, toOutcome outcomeID: UUID,
+        carbsPer100g: (_ classID: String, _ edition: String) -> Double?
     ) async throws
 
     // Req 1.3 read path (benchmark report / export). Returns every meal

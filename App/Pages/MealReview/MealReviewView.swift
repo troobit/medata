@@ -64,6 +64,10 @@ struct MealReviewView: View {
     @AppStorage(DeveloperFlags.reviewPhotoFillsWidthKey) private var reviewPhotoFillsWidth = false
     // Swap-loop attempt switch (review-swap-loop): the chip line on each row.
     @AppStorage(DeveloperFlags.inlineFoodChipsKey) private var inlineFoodChips = false
+    // Weighed truth for this capture (ml-feedback-loop Q1): the "Weighed
+    // mass" menu action opens the sheet; the entered figure joins the mass line.
+    @State private var weighedMass: WeighedMassModel
+    @State private var weighingMass = false
     #endif
     // "Add a food" picker (review-swap-loop attempt 2).
     @State private var addingFood = false
@@ -106,6 +110,11 @@ struct MealReviewView: View {
         _model = State(initialValue: MealReviewModel(
             record: record, store: store, database: Self.foodDatabase
         ))
+        #if FIELD_LOOP
+        _weighedMass = State(initialValue: WeighedMassModel(
+            store: store, record: record, database: Self.foodDatabase
+        ))
+        #endif
     }
 
     private var sigma: Float { record.confidence.sigmaMeal }
@@ -150,6 +159,19 @@ struct MealReviewView: View {
             displayedTotalCarbsG: model.pendingTotalCarbsG,
             displayedTotalMassG: model.pendingTotalMassG
         )
+    }
+
+    // What the weighed-mass sheet lists: the foods still on the plate, each
+    // under the class it currently stands for.
+    private var weighedFoods: [WeighedMassModel.Food] {
+        model.activeFoods.map { food in
+            WeighedMassModel.Food(
+                id: food.classId,
+                classID: food.currentClassId,
+                displayName: MealReviewModel.prettify(food.currentClassId),
+                isBlocked: food.isUnnamed || food.flags.absent
+            )
+        }
     }
     #endif
 
@@ -201,6 +223,9 @@ struct MealReviewView: View {
             meal: FieldNoteMealLink(mealID: record.id),
             estimate: fieldEstimateSnapshot
         )
+        // The outcome id arrives from `model.start()` (after a possible
+        // 500 ms retry); truth attaches to that attempt and nothing else.
+        .task(id: model.outcomeID) { await weighedMass.load(outcomeID: model.outcomeID) }
         #endif
         // On appearance and on every correction — see `refreshDose()`.
         .task { await refreshDose() }
@@ -219,6 +244,13 @@ struct MealReviewView: View {
             // set capture_abandoned on every row before the delete lands.
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    #if FIELD_LOOP
+                    // Scale truth for this capture (ml-feedback-loop Q1).
+                    // Disabled until the attempt it attaches to resolves.
+                    Button("Weighed mass") { weighingMass = true }
+                        .disabled(!weighedMass.canWeigh)
+                        .accessibilityIdentifier("review.weighedMass")
+                    #endif
                     // Capture-born preset (manual-carb-intake Req 8.1): the
                     // draft freezes the DISPLAYED total at the moment of the
                     // tap (Req 8.3); no confidence, calibration or dev_stub
@@ -594,7 +626,15 @@ struct MealReviewView: View {
             // Mass only. The dose left this line for the pill above, so the
             // measured quantity and the quantity derived from it are no
             // longer rendered as two peers on one line.
+            #if FIELD_LOOP
+            MealTotalSecondLine(massG: model.pendingTotalMassG, weighedG: weighedMass.weighedTotalG)
+                // Its own modifier site, like the surface's other sheets.
+                .sheet(isPresented: $weighingMass) {
+                    WeighedMassSheet(model: weighedMass, foods: weighedFoods)
+                }
+            #else
             MealTotalSecondLine(massG: model.pendingTotalMassG)
+            #endif
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("review.total")
