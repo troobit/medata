@@ -189,6 +189,28 @@ struct FoodRegionGrowthReplayTests {
         #expect(single.regionGrowth?.refitReference == twoView.regionGrowth?.refitReference)
         #expect(single.regionGrowth?.foodPixelsAfter == twoView.regionGrowth?.foodPixelsAfter)
     }
+
+    // The device refuses at stage D when a depth-bearing capture's fit refuses,
+    // on either path. The replay and the carve audit must refuse there too, not
+    // carve on the nominal plane that exists for depth-free fixtures only.
+    @Test("a two-view fixture whose LiDAR fit refuses is refused at the plane, not carved")
+    func twoViewFitRefusalRefuses() throws {
+        var fx = Self.twoViewFixture(seedRadius: Self.seedRadiusCells, tiltDeg: 15)
+        fx.nadirDepth = ParityScene.blankDepth().pb
+        let replays: [() throws -> Void] = [
+            { _ = try FixtureRunner.run(fixture: fx, palette: Self.palette, database: EmptyDB(),
+                                        regularisation: .disabled) },
+            { _ = try CarveResidualAudit.audit(fixture: fx, palette: Self.palette) },
+        ]
+        for replay in replays {
+            do {
+                try replay()
+                Issue.record("a fixture the device refuses produced a number")
+            } catch FixtureRunner.Error.volumeEstimationFailed(_, let cause) {
+                #expect(cause is SupportPlaneError, "refused at \(cause), not at the plane")
+            }
+        }
+    }
 }
 
 private struct EmptyDB: FoodDatabase {
