@@ -42,9 +42,12 @@ public struct MealCalibrationInput: Sendable {
         // first plane, cm², and whether the gate skipped growth.
         public let seedAreaCm2: Float
         public let gated: Bool
+        // The grown region's footprint on the same first plane, cm².
+        public let grownAreaCm2: Float
         public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
                     foodPixelsAfter: Int, refitReference: SupportPlaneReference?,
-                    refitRefused: Bool, seedAreaCm2: Float = 0, gated: Bool = false) {
+                    refitRefused: Bool, seedAreaCm2: Float = 0, gated: Bool = false,
+                    grownAreaCm2: Float = 0) {
             self.applied = applied
             self.capTripped = capTripped
             self.foodPixelsBefore = foodPixelsBefore
@@ -53,6 +56,7 @@ public struct MealCalibrationInput: Sendable {
             self.refitRefused = refitRefused
             self.seedAreaCm2 = seedAreaCm2
             self.gated = gated
+            self.grownAreaCm2 = grownAreaCm2
         }
     }
 

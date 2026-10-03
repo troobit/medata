@@ -151,7 +151,8 @@ public enum FixtureRunner {
                 applied: grown.applied, capTripped: grown.capTripped,
                 foodPixelsBefore: grown.foodPixelsBefore, foodPixelsAfter: grown.foodPixelsAfter,
                 refitReference: refit.refitReference, refitRefused: refit.refitRefused,
-                seedAreaCm2: refit.seedAreaCm2, gated: refit.gated)
+                seedAreaCm2: refit.seedAreaCm2, gated: refit.gated,
+                grownAreaCm2: refit.grownAreaCm2)
             supportPlaneResidualMm = fit.plane.residualMm
             supportPlaneReference = fit.reference
             let est = try runHeightField(

@@ -168,10 +168,12 @@ struct GrownRegionPlaneRefitTests {
         #expect(!over.growth.applied)
         #expect(over.plane.distanceMm == -600)
         #expect(abs(over.seedAreaCm2 - 9) < 1e-3)
+        #expect(over.grownAreaCm2 == over.seedAreaCm2)
 
         let (under, _) = run(gateCm2: 20, gated: true)
         #expect(!under.gated)
         #expect(under.growth.applied)
+        #expect(under.grownAreaCm2 > under.seedAreaCm2)
 
         // The two-view branch (plane only) passes gateBySeedArea: false.
         let (planeOnly, _) = run(gateCm2: 5, gated: false)

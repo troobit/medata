@@ -343,11 +343,16 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         public let seedAreaCm2: Float?
         public let seedAreaGateCm2: Float?
         public let gated: Bool?
+        // The grown region's footprint on the same first plane, by the same
+        // helper, so it reads directly against seedAreaCm2 (equal to it when
+        // nothing grew). Absent on rows written before the field existed.
+        public let grownAreaCm2: Float?
 
         public init(applied: Bool, capTripped: Bool, foodPixelsBefore: Int,
                     foodPixelsAfter: Int, refitReference: String?, refitRefused: Bool,
                     planeOnly: Bool? = nil, seedAreaCm2: Float? = nil,
-                    seedAreaGateCm2: Float? = nil, gated: Bool? = nil) {
+                    seedAreaGateCm2: Float? = nil, gated: Bool? = nil,
+                    grownAreaCm2: Float? = nil) {
             self.applied = applied
             self.capTripped = capTripped
             self.foodPixelsBefore = foodPixelsBefore
@@ -358,6 +363,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             self.seedAreaCm2 = seedAreaCm2
             self.seedAreaGateCm2 = seedAreaGateCm2
             self.gated = gated
+            self.grownAreaCm2 = grownAreaCm2
         }
     }
 

@@ -519,10 +519,10 @@ func reportRegionGrowth(_ inputs: [MealCalibrationInput], fixtures: [PbMealFixtu
         let before = Float(g.foodPixelsBefore) / Float(px)
         let after = Float(g.foodPixelsAfter) / Float(px)
         let refit = g.refitReference?.rawValue ?? (g.refitRefused ? "refused" : "none")
-        fputs(String(format: "growth fixture=%@ before=%.4f after=%.4f applied=%d capTripped=%d refit=%@ plane=%@ seedAreaCm2=%.1f gated=%d\n",
+        fputs(String(format: "growth fixture=%@ before=%.4f after=%.4f applied=%d capTripped=%d refit=%@ plane=%@ seedAreaCm2=%.1f gated=%d grownAreaCm2=%.1f\n",
                      m.fixtureID, before, after, g.applied ? 1 : 0, g.capTripped ? 1 : 0,
                      refit, m.supportPlaneReference?.rawValue ?? "none",
-                     g.seedAreaCm2, g.gated ? 1 : 0), stderr)
+                     g.seedAreaCm2, g.gated ? 1 : 0, g.grownAreaCm2), stderr)
     }
 }
 
@@ -559,6 +559,7 @@ func runVolumes(args: Args) throws {
         let foodPixelsAfter: Int?
         let refitReference: String?
         let seedAreaCm2: Float?
+        let grownAreaCm2: Float?
         let growthGated: Bool?
         let nadirSeed: [Int]?
         let skipped: String?
@@ -581,6 +582,7 @@ func runVolumes(args: Args) throws {
                 foodPixelsAfter: m.regionGrowth?.foodPixelsAfter,
                 refitReference: m.regionGrowth?.refitReference?.rawValue,
                 seedAreaCm2: m.regionGrowth?.seedAreaCm2,
+                grownAreaCm2: m.regionGrowth?.grownAreaCm2,
                 growthGated: m.regionGrowth?.gated,
                 nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: nil))
@@ -590,7 +592,7 @@ func runVolumes(args: Args) throws {
                 perClassVolumesCm3: [:], predictedCarbsPerClass: [:],
                 planeReference: nil, planeResidualMm: nil, growthApplied: nil,
                 foodPixelsBefore: nil, foodPixelsAfter: nil, refitReference: nil,
-                seedAreaCm2: nil, growthGated: nil,
+                seedAreaCm2: nil, grownAreaCm2: nil, growthGated: nil,
                 nadirSeed: nadirSeed.map { [$0.x, $0.y] },
                 skipped: "\(error)"))
         }
