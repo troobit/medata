@@ -154,7 +154,12 @@ lineage into `meta`, which the DB v2 rebake had dropped.
 
 - N5k runs REQUIRE `--depth-test-split` (exit 1 without it — Req 4.4 is a
   SHALL) and warn to stderr when `--ingest-summary` is missing (the Req 4.1
-  unmapped exclusion cannot be applied without it).
+  unmapped exclusion cannot be applied without it). Since 2026-10-03 a run
+  counts as N5k only when a fixture's `source_dataset` stamp says
+  `nutrition5k`. N5k ingestion wrote that stamp and `estimator_path` in the
+  same commit (`c3e36e3`). Before the change, any stamped path counted, so device
+  capture bundles (`single_dominant`, no `source_dataset`) were refused
+  without a split they cannot have.
 - The lineage block also records `liquid_significant_fraction`,
   `unmapped_significant_fraction`, `relative_se_bound`,
   `effective_sample_min` — a bake is reproducible from lineage alone.
@@ -262,6 +267,14 @@ emitter-generated fixture `tools/metafood3d/tests/fixtures/
 run_summary_contract.json`, which pytest diffs against the Python emitter
 and `EndToEndCalibrateBakeTests` feeds to the built binary. The truth
 sidecar is a flat `{fixture_id: mesh_volume_mm3}` JSON.
+
+The field corpus's summary (`tools/field_loop/derive_dataset.py`, dataset
+`medata_field`) meets the same contract, but `render_config` has no
+`plane_depth_mm` because nothing was posed. `plane_depth_mm` is therefore
+optional in the decoder. The MetaFood3D requirement still holds: `calibrate`
+exits 1 when an MF3D run's summary lacks it. The field summary once
+wrote `skipped` as a list and failed to decode (2026-10-03); pytest
+(`test_derive.py`) and `CalibrateRunTests.fieldSummaryParses` now pin the shape.
 
 ## `diagnose` subcommand (ml-feedback-loop)
 

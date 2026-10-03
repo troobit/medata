@@ -46,6 +46,147 @@ Gotchas:
   pulled stays in the index joined to nothing — inert.
 - Re-tagging moves the attempt out of the 500-row non-benchmark eviction
   population into a one-row benchmark group, so it needs no protection row.
+- The derived directory is not yet a one-command `calibrate` input. It mixes
+  segmenter checkpoints, and the loader refuses any bundle whose checkpoint is
+  not `--checkpoint-sha256`, so split it per checkpoint first. The weighed
+  figure is not in the bundles either (it lives in `benchmark_meals`), so
+  `accuracy` scores nothing and `calibrate` fits nothing until the truth is
+  written into the fixture. The 2026-10-03 entry has the scratch recipe. Run
+  `calibrate` with `--ingest-summary <dir>/run_summary.json`; it needs no
+  `--depth-test-split` since 2026-10-03.
+
+## 2026-10-03 — an 80 g roll three times on the R16 segmenter, and four truths back-filled (builds `a179e0b-20261003-110500`, `0ff10cc-20261003-110738`, segmenter `coreml_88d34e27e8bf`)
+
+Pull `20261003-1`. The roll weighed 80 g on the plate and was captured three
+times: single-view on `a179e0b`, then single-view and two-view on `0ff10cc`.
+Field notes: "Exact 80g on plate 1 view got pretty close", "VERY good estimate
+1 view", "STILL very good for 2 view, 80g truth on plate". Both builds carry
+the two-view plane refit (two-view-trust Decision 10) and predate both the
+Weighed mass sheet and the 200 cm² seed-area gate (`7f52815`), so they have the
+same estimation code. The same pull brought the 2026-09-30 note "True weight -
+83 grams (from scale)" on capture `1790748465041` (build `2d39910`, segmenter
+`coreml_ab812dc3aa9d`). The screenshot shows two slices of topped toast, not a
+roll.
+
+**Truth, back-filled by hand into `index.sqlite`** the way the 104 g row was
+(`fidelity=weighed`, bread_wholemeal at 38.0 g/100 g):
+
+| Benchmark row | Outcome | Capture | Grams | Truth carbs |
+|---|---|---|---|---|
+| `backfill-1790748516454-toast` | `BF8BECC2` | `1790748465041` | 83 | 31.54 |
+| `backfill-1790989704658-roll` | `34E24CCE` | `1790989654696` | 80 | 30.40 |
+| `backfill-1790989773659-roll` | `FA1C12F5` | `1790989735795` | 80 | 30.40 |
+| `backfill-1790989820366-roll` | `BB6B5835` | `1790989787903` | 80 | 30.40 |
+
+Each id is named after its note's stamp. The `1790989773659` note gives no
+weight; the roll's other two notes do. The class comes from the developer's
+corrections. The toast relabelled `unknown_food` to bread_wholemeal. The roll
+was relabelled bread_white → bread_wholemeal once (`FA1C12F5`); the other two
+captures kept bread_white and were not relabelled. If the roll is white bread,
+truth is 38.4 g of carbohydrate and the bread_white readings below fall within
+−4 % to +12 %.
+
+<details><summary>SQL as run (backup first: <code>cp index.sqlite …bak</code>)</summary>
+
+```sql
+BEGIN;
+INSERT INTO benchmark_meals (id, pull_id, name, created_at, items, truth_carbs_g, db_edition, fidelity) VALUES
+('backfill-1790748516454-roll', '20261003-1', 'bread roll, 83 g weighed (back-filled from field note)', 1790748516454,
+ '[{"class_id": "bread_wholemeal", "grams": 83.0, "carbs_per_100g": 38.0, "carbs_g": 31.54, "mass_source": "kitchen_scale", "provenance": "weighed and stated in field note 1790748516454 (''True weight - 83 grams (from scale)''); class is the developer''s correction on outcome BF8BECC2 (unknown_food relabelled bread_wholemeal beside a bread_wholemeal region); carbs from the bundled CoFID coefficient, not assayed"}]',
+ 31.54, 'CoFID 2024 + AFCD 2024', 'weighed'),
+('backfill-1790989704658-roll', '20261003-1', 'bread roll, 80 g weighed (back-filled from field note)', 1790989704658,
+ '[{"class_id": "bread_wholemeal", "grams": 80.0, "carbs_per_100g": 38.0, "carbs_g": 30.4, "mass_source": "kitchen_scale", "provenance": "weighed and stated in field note 1790989704658 (''Exact 80g on plate''); class from the developer''s correction of the same roll on outcome FA1C12F5 (bread_white relabelled bread_wholemeal) - this outcome kept bread_white uncorrected and rejected a white_rice region; carbs from the bundled CoFID coefficient, not assayed"}]',
+ 30.4, 'CoFID 2024 + AFCD 2024', 'weighed'),
+('backfill-1790989773659-roll', '20261003-1', 'bread roll, 80 g weighed (back-filled from field note)', 1790989773659,
+ '[{"class_id": "bread_wholemeal", "grams": 80.0, "carbs_per_100g": 38.0, "carbs_g": 30.4, "mass_source": "kitchen_scale", "provenance": "the roll weighed 80 g in the same sitting (field notes 1790989704658 and 1790989820366); this note (1790989773659) is on this capture but states no weight; class is the developer''s correction on this outcome (bread_white relabelled bread_wholemeal); carbs from the bundled CoFID coefficient, not assayed"}]',
+ 30.4, 'CoFID 2024 + AFCD 2024', 'weighed'),
+('backfill-1790989820366-roll', '20261003-1', 'bread roll, 80 g weighed (back-filled from field note)', 1790989820366,
+ '[{"class_id": "bread_wholemeal", "grams": 80.0, "carbs_per_100g": 38.0, "carbs_g": 30.4, "mass_source": "kitchen_scale", "provenance": "weighed and stated in field note 1790989820366 (''80g truth on plate''); class from the developer''s correction of the same roll on outcome FA1C12F5 (bread_white relabelled bread_wholemeal) - this outcome kept bread_white uncorrected; carbs from the bundled CoFID coefficient, not assayed"}]',
+ 30.4, 'CoFID 2024 + AFCD 2024', 'weighed');
+UPDATE outcomes SET benchmark_meal_id = 'backfill-1790748516454-roll' WHERE id = 'BF8BECC2-BA92-4006-A60D-98827CFB4460';
+UPDATE outcomes SET benchmark_meal_id = 'backfill-1790989704658-roll' WHERE id = '34E24CCE-1327-4186-A124-CACEDF4EA8D1';
+UPDATE outcomes SET benchmark_meal_id = 'backfill-1790989773659-roll' WHERE id = 'FA1C12F5-B7B5-4C00-9B95-A533267919E3';
+UPDATE outcomes SET benchmark_meal_id = 'backfill-1790989820366-roll' WHERE id = 'BB6B5835-1FCE-41F1-97CA-FE3EF3DA6D3C';
+COMMIT;
+-- after the screenshot showed toast, not a roll:
+UPDATE benchmark_meals SET name = 'two slices of topped toast, 83 g weighed (back-filled from field note)' WHERE id = 'backfill-1790748516454-roll';
+BEGIN;
+UPDATE benchmark_meals SET id = 'backfill-1790748516454-toast' WHERE id = 'backfill-1790748516454-roll';
+UPDATE outcomes SET benchmark_meal_id = 'backfill-1790748516454-toast' WHERE id = 'BF8BECC2-BA92-4006-A60D-98827CFB4460';
+COMMIT;
+```
+
+The items carry `grams`, the key the device's `BenchmarkMealItem` decodes. The
+104 g row from 2026-09-29 carries `mass_g` instead.
+</details>
+
+**Replay.** `make field-derive CALIBRATION_OUT=<dir>` printed `ingested=4
+skipped=1`. The skipped capture is the 104 g roll, whose bundle survives only
+under `reports/calibration-20260929-roll/`. The figures below are the harness
+at `bac388c`: the installed builds plus the seed-area gate, which gates
+single-view growth only. Each bundle replays its own recorded segmenter output.
+The replay matches every device row to 0.1 cm³ except capture `…654696`, the
+one the gate changes: its seed is 259.8 cm² because the segmenter took table
+speckle for food (the note says so).
+
+| Capture | Path | Replayed class(es), cm³ | Mass at true class | Carbs as labelled | Truth | Mass error | Carbs error as labelled |
+|---|---|---|---|---|---|---|---|
+| `1790655022746` 104 g roll (09-29) | single-view, card+lidar | unknown_food 226.3 (+ coffee 59.5, rejected) | 90.5 g | 0.2 g | 104 g / 39.52 g | −13.0 % | −99.5 % |
+| `1790748465041` toast (09-30) | single-view, lidar | bread_wholemeal 300.9 + unknown_food 125.0 (relabelled) | 170.4 g | 45.7 g | 83 g / 31.54 g | +105.3 % | +45.0 % |
+| `1790989654696` roll, `a179e0b` | single-view, lidar | bread_white 201.6 (+ white_rice 16.3, rejected); device 223.4 + 47.7 | 80.6 g (device 89.4) | 40.6 g (device 51.9) | 80 g / 30.4 g | +0.8 % (device +11.7 %) | +33.5 % (device +70.7 %) |
+| `1790989735795` roll, `0ff10cc` | single-view, lidar | bread_white 236.8 (relabelled wholemeal) | 94.7 g | 43.2 g | 80 g / 30.4 g | +18.4 % | +42.1 % |
+| `1790989787903` roll, `0ff10cc` | two-view carve, card+lidar | bread_white 224.2 | 89.7 g | 40.9 g | 80 g / 30.4 g | +12.1 % | +34.5 % |
+
+"Mass at true class" is the volume of the food regions the review kept, at
+bread_wholemeal's 0.4 g/cm³. Its error is also the carbohydrate error once the
+review names the food correctly. "Carbs as labelled" is the harness `accuracy`
+figure: the segmenter's own class at β = 1, with an `unknown_food` region
+priced at 0.
+
+| Over the weighed set (n = 5) | MAPE | MAE (carbs) |
+|---|---|---|
+| `accuracy`, as labelled (HEAD) | 50.9 % | 17.4 g |
+| Same, installed builds (`--growth-gate-cm2 0`) | 58.4 % | 19.7 g |
+| True class (HEAD) | 29.9 % | 9.6 g |
+| True class, the four roll captures | 11.1 % | 3.7 g |
+
+- **Volume is inside the MAPE < 20 % bar on the rolls; labelling is not.**
+  All four roll captures are within ±18.4 % of the scale at the true class,
+  and the two-view carve reads +12.1 %, its first weighed figure. End to end,
+  bread_white (48 g/100 g against 38) adds about +26 % on a wholemeal roll,
+  and `unknown_food` prices the 104 g roll at zero.
+- **The gate helps the one plate it touches.** On `…654696` it holds bread_white
+  at 201.6 cm³ against the device's 223.4, and the white_rice phantom at
+  16.3 cm³ against 47.7. The seed is large because the table speckle is in it,
+  so the gate is firing for the wrong reason.
+- **The toast over-read is growth filling the plate.** The seed is 43,039 px
+  (27.8 cm², well under the gate) and growth takes it to 317,062 px on an
+  `edgeBand` plane. Ungrown it reads 61.4 cm³ (−70 %); grown, 426.0 cm³
+  (+105 %). Flat food on a raised plate is the case growth gets wrong.
+- **`calibrate` runs and bakes nothing.** With no truth in the bundles, the
+  field plates take the legacy single-dominant path with zero truth. With
+  truth written in (scratch copies), every plate is purity-dropped: the truth
+  class is bread_wholemeal and the volume is bread_white or `unknown_food`
+  (the toast's 300.9 of 426.0 cm³ is 0.71 against τ 0.90). A field β needs the
+  review's relabel applied to the volume before the purity gate.
+
+Scratch recipe for scoring field bundles, used above: hardlink the bundles
+into one directory per checkpoint. Copy each one and append protobuf fields 17
+(`ground_truth_class_mass_g`, `{class: grams}`) and 18
+(`ground_truth_total_carbs_g`); a protobuf message followed by more fields
+parses as their merge. Then run `accuracy`, `volumes` and `calibrate
+--ingest-summary <derived>/run_summary.json` on the copies. Never append to
+the corpus files: the derived directory holds hardlinks to them.
+
+Tooling fixed the same day (`derive_dataset.py`, `CalibrateRun.loadIngestSummary`,
+HarnessCLI `calibrate`). The field `run_summary.json` now loads: `skipped`
+is `{reason: [stems]}`, `render_config` carries `intrinsics_model`
+(`arkit_per_capture`), `estimator_paths` says `single_dominant`, and the
+reader no longer requires `plane_depth_mm`, which a real capture does not have.
+`calibrate` identifies Nutrition5k by the `source_dataset` stamp, so device
+bundles no longer need `--depth-test-split`. A `medata_field` summary now
+records its own lineage and licence, where the run used to fall back to
+N5k's CC BY 4.0.
 
 ## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
 
@@ -534,8 +675,9 @@ on plate", linked to meal `45FE1DF5` / outcome `006D7CFA`. Back-filled into the
 index as `benchmark_meals` row `backfill-1790655037216-roll` — 104 g, 39.52 g
 carbohydrate at the bundled CoFID coefficient (38.0 g/100 g), `fidelity=weighed`.
 At the measured bread_wholemeal density of 0.4 g/cm³ that puts **truth volume at
-260 cm³**. This was the last hand back-fill: the review screen writes the same
-row on the phone since 2026-10-03 (see "Recording a weighed figure" above).
+260 cm³**. The review screen writes the same row on the phone since 2026-10-03
+(see "Recording a weighed figure" above). The four captures back-filled that
+morning predate the sheet, so they were the last hand back-fills.
 
 What it settles:
 
@@ -601,7 +743,8 @@ The bundle survives the corpus discard at
   `CalibrateRun.loadIngestSummary` expects `{reason: [ids]}` —
   `DecodingError.typeMismatch` at `skipped`), and `calibrate` treats the field
   bundle as Nutrition5k and refuses without `--depth-test-split` (a
-  placeholder split file gets past it). Not fixed here.
+  placeholder split file gets past it). Both fixed 2026-10-03 (see that
+  entry).
 
 **Backlog 30, answered.** On this weighed roll growth moves the carbohydrate
 reading from −31.9 g to −5.1 g. With it in the set, growth no longer costs

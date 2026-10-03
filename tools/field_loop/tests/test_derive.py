@@ -366,8 +366,13 @@ def test_calibration_derivation_emits_a_fixture_and_a_run_summary(
     for key in ("dataset", "licence", "snapshot", "mapping_version",
                 "render_config"):
         assert key in document
-    for key in ("image_width", "image_height", "seating_rule"):
+    # The keys `CalibrateRun.loadIngestSummary` requires of a non-N5k summary.
+    for key in ("intrinsics_model", "image_width", "image_height",
+                "seating_rule"):
         assert key in document["render_config"]
+    # `{reason: [stems]}`, never a bare list: the Swift side decodes a dict.
+    assert isinstance(document["skipped"], dict)
+    assert all(isinstance(v, list) for v in document["skipped"].values())
 
 
 def test_calibration_derivation_takes_only_weighed_benchmarks(
