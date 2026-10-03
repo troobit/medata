@@ -641,7 +641,8 @@ def test_weighed_mass_entered_on_the_phone_reaches_calibration(
     out = tmp_path / "calibration"
     document = derive_dataset.derive_calibration(index, corpus_root, out)
     assert document["ingested"] == 1
-    assert (out / ("%s.fixture" % stem)).exists()
+    # One directory per segmenter checkpoint; the bundle carries the truth.
+    assert (out / "ab812dc3aa9d" / ("%s.fixture" % stem)).exists()
     row = index.execute(
         "SELECT b.truth_carbs_g, b.fidelity FROM outcomes o "
         "JOIN benchmark_meals b ON b.id = o.benchmark_meal_id "

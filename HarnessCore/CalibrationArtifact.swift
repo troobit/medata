@@ -70,6 +70,10 @@ public enum CalibrateRun {
         public let renderImageWidth: Int?
         public let renderImageHeight: Int?
         public let renderSeatingRule: String?
+        // Field summaries only (tools/field_loop/derive_dataset.py): the review
+        // screen's relabels and removals per fixture id. Empty for every other
+        // dataset, so their replay is unchanged.
+        public let review: [String: FieldReview]
     }
 
     // A non-N5k summary missing a Req 9.1 lineage key (cross-dataset
@@ -107,6 +111,13 @@ public enum CalibrateRun {
                 case seatingRule = "seating_rule"
             }
         }
+        struct ReviewDoc: Decodable {
+            let relabelled: [String: String]?
+            let rejected: [String]?
+        }
+        struct FixtureDoc: Decodable {
+            let review: ReviewDoc?
+        }
         struct Doc: Decodable {
             let dataset: String?
             let snapshot: String?
@@ -116,8 +127,9 @@ public enum CalibrateRun {
             let mixtureFitExcludedUnmapped: [String]?
             let liquidExcluded: [String]?
             let renderConfig: RenderDoc?
+            let fixtures: [String: FixtureDoc]?
             enum CodingKeys: String, CodingKey {
-                case dataset, snapshot, licence, skipped
+                case dataset, snapshot, licence, skipped, fixtures
                 case mappingVersion = "mapping_version"
                 case mixtureFitExcludedUnmapped = "mixture_fit_excluded_unmapped"
                 case liquidExcluded = "liquid_excluded"
@@ -167,7 +179,24 @@ public enum CalibrateRun {
             renderIntrinsicsModel: doc.renderConfig?.intrinsicsModel,
             renderImageWidth: doc.renderConfig?.imageWidth,
             renderImageHeight: doc.renderConfig?.imageHeight,
-            renderSeatingRule: doc.renderConfig?.seatingRule)
+            renderSeatingRule: doc.renderConfig?.seatingRule,
+            review: (doc.fixtures ?? [:]).compactMapValues { fixture in
+                fixture.review.map {
+                    FieldReview(relabelled: $0.relabelled ?? [:],
+                                rejected: Set($0.rejected ?? []))
+                }
+            })
+    }
+
+    // Every summary's review, keyed by fixture id. A fixture is reviewed once,
+    // on the device that captured it, so two summaries never name the same id;
+    // if they did, the first given wins rather than the order of a dictionary.
+    public static func review(
+        from summaries: [IngestSummary]
+    ) -> [String: FieldReview] {
+        summaries.reduce(into: [:]) { merged, summary in
+            merged.merge(summary.review) { first, _ in first }
+        }
     }
 
     // The dataset a fixture belongs to: the `source_dataset` stamp before the

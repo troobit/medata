@@ -210,6 +210,77 @@ struct CalibrateRunTests {
         #expect(summary.ingestionSkipCount == 1)
     }
 
+    // MARK: - Field review (field-score): relabels reach the volume before the gate
+
+    @Test("A field summary's per-fixture review decodes; a summary without one is empty")
+    func fieldReviewParses() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        {"dataset": "medata_field", "licence": "own", "snapshot": "field",
+         "mapping_version": "palette-native",
+         "render_config": {"intrinsics_model": "arkit_per_capture",
+                           "image_width": 4, "image_height": 4, "seating_rule": "none"},
+         "fixtures": {
+           "a-success": {"truth": {"class_mass_g": {"bread_wholemeal": 80},
+                                   "total_carbs_g": 30.4},
+                         "review": {"relabelled": {"bread_white": "bread_wholemeal"},
+                                    "rejected": ["white_rice"]}},
+           "b-success": {"truth": {"class_mass_g": {}, "total_carbs_g": 1}}}}
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let summary = try CalibrateRun.loadIngestSummary(from: url)
+        #expect(summary.review == ["a-success": FieldReview(
+            relabelled: ["bread_white": "bread_wholemeal"], rejected: ["white_rice"])])
+
+        try #"{"ingested": 1, "skipped": {}}"#.write(to: url, atomically: true, encoding: .utf8)
+        #expect(try CalibrateRun.loadIngestSummary(from: url).review.isEmpty)
+    }
+
+    @Test("Review volumes drop removed regions, merge renamed ones, and never chain")
+    func fieldReviewVolumes() {
+        let review = FieldReview(
+            relabelled: ["unknown_food": "bread_wholemeal", "bread_wholemeal": "toast"],
+            rejected: ["coffee"])
+        let volumes = review.volumes(
+            ["unknown_food": 125, "bread_wholemeal": 300, "coffee": 60, "peas": 5])
+        // bread_wholemeal's own region moved to toast; unknown_food's took its
+        // place rather than following it on to toast.
+        #expect(volumes == ["bread_wholemeal": 125, "toast": 300, "peas": 5])
+        #expect(FieldReview().volumes(["peas": 5]) == ["peas": 5])
+    }
+
+    @Test("A relabelled plate passes the purity gate it failed under the segmenter's class")
+    func fieldReviewBeforePurityGate() throws {
+        let db = try GRDBFoodDatabase.bundled()
+        let labelled = MealCalibrationInput(
+            fixtureID: "roll", capturePath: .singleViewLidar, dominantClass: "bread_white",
+            predictedCarbsPerClass: ["bread_white": 43, "white_rice": 4],
+            actualCarbsPerClass: ["bread_wholemeal": 30.4],
+            groundTruthTotalCarbsG: 30.4,
+            perClassVolumesCm3: ["bread_white": 236.8, "white_rice": 16.3],
+            supportPlaneReference: .foodSupport)
+        let dominant = ["roll": "bread_wholemeal"]
+        #expect(CalibrateRun.applyPurityGate([labelled], massDominantByFixture: dominant)
+            .dropped == ["roll"])
+
+        let review = FieldReview(relabelled: ["bread_white": "bread_wholemeal"],
+                                 rejected: ["white_rice"])
+        let edition = "CoFID 2024 + AFCD 2024"  // informational in v1 (§6.12)
+        let reviewed = review.apply(to: labelled, database: db, edition: edition)
+        #expect(reviewed.perClassVolumesCm3 == ["bread_wholemeal": 236.8])
+        #expect(reviewed.dominantClass == "bread_wholemeal")
+        #expect(reviewed.actualCarbsPerClass == labelled.actualCarbsPerClass)
+        #expect(reviewed.supportPlaneReference == .foodSupport)
+        // Re-priced at the reviewed class, β = 1: V · ρ · κ / 100.
+        let entry = try #require(db.entry(for: "bread_wholemeal", edition: edition))
+        let expected = 236.8 * entry.densityGPerCm3 * entry.carbsMonoG / 100
+        #expect(abs((reviewed.predictedCarbsPerClass["bread_wholemeal"] ?? 0) - expected) < 1e-3)
+        #expect(CalibrateRun.applyPurityGate([reviewed], massDominantByFixture: dominant)
+            .admitted.map(\.fixtureID) == ["roll"])
+    }
+
     @Test("The strictest contributing licence wins the top-level lineage field (Decision 17)")
     func strictestLicenceWins() {
         #expect(CalibrationArtifact.strictestLicence(
