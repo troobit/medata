@@ -342,3 +342,106 @@ The 208 g rice plate (`1785054950406`) has a 302.3 cm² seed and growth adds not
 `Volume/FoodRegionGrowth.swift` (`foodAreaCm2`, `seedAreaGateCm2`, `standardSeedAreaGateCm2`), `Volume/GrownRegionPlaneRefit.swift` (`gateBySeedArea`, `seedAreaCm2`, `gated`), `Pipeline.refitPlaneFromGrownRegion` (gated when `planeOnly` is false), `PipelineDiagnostics.RegionGrowthMeasurements`, `HarnessCore/FixtureRunner` (single-view replay gated), `MealCalibrationInput.RegionGrowth`, `HarnessCLI` (`--growth-gate-cm2`; the growth line and `volumes` rows print the seed area and the gate). The two-view branch, `CarveResidualAudit` and the LiDAR plane fit are unchanged.
 
 ---
+
+## Decision 6: No second guard against growth; the toast over-read is not runaway growth
+
+**Date**: 2026-10-03
+**Status**: accepted
+
+### Context
+
+The 2026-10-03 replay of the weighed set (`docs/agent-notes/field-truth-sessions.md`, that day's entry) put the 83 g toast plate `1790748465041` (outcome `BF8BECC2`, build `2d39910`) at +105 % in mass at the true class. Growth took the segmenter's 43,039 px (27.8 cm² on the first plane) to 317,062 px, 7.4×, and the plate read bread_wholemeal 300.9 cm³ + `unknown_food` 125.0 cm³ = 426.0 cm³, which is 170.4 g at 0.4 g/cm³ against 83 g. Ungrown it reads 61.4 cm³ (−70 %). The seed is far under Decision 5's 200 cm² gate, so the gate let growth run. On the 104 g roll (`1790655022746`) growth goes 25.1 → 98.8 cm² (3.9×) and reads −13 %.
+
+The working reading was that growth had spread over the plate, and that a second guard on how far growth spreads would separate the two plates: a cap on the ratio of grown to seed area, or on the grown footprint in cm², either falling back to the ungrown region or clamping the fill at the cap.
+
+### Decision
+
+Ship no second guard. The growth stage, `FoodRegionGrowthConfig.standard` and Decision 5's seed-area gate are unchanged. The toast's grown region is the toast, and its over-read comes from things growth does not control: the plate under the toast and the density.
+
+### Rationale
+
+**No variant beats the current state on both sets.** The only variants that leave Nutrition5k as it is are the ones that do nothing there: no Nutrition5k plate grows more than 2.64×, so a ratio fall-back from 3× up and a 6× clamp change no plate. Every footprint cap and every clamp that binds costs Nutrition5k mean absolute error or MAPE, and the 2× and 3× clamps take the 104 g roll out of ±20 % (−50.8 %, −27.1 %). The 150 cm² clamp lowers MAE by 0.004 g on 10 plates and raises MAPE by 0.08 points, which is noise either way. That leaves the ratio fall-back at 4–6×: Nutrition5k unchanged, rolls unchanged, toast +105 % → −70 %.
+
+**The grown region is the toast.** Rendered against the bundle's own LiDAR depth, the segmenter labelled only the crust ends of two slices of toast. Measured from the board (the dominant plane), the depth shows the slices as two slabs 18–25 mm high, the plate between them 1–4 mm, and the plate rim 8–11 mm. The depth cells at least 12 mm above the board cover 207 cm² and hold 415 cm³. Growth's region is 205.2 cm² on the first plane and 426.0 cm³. Growth found the two slices and no plate. It is the case growth exists for: a food the segmenter partly recognised, with the depth showing all of it. The 104 g roll has the same shape at 3.9×, three seed blobs on a roll the depth shows whole. The ratio measures how much of the food the segmenter missed. It does not measure leaks.
+
+**What the +105 % is.** Two parts, and growth controls neither. The plane is the board (`edgeBand`), and the refit from the grown mask also returned `edgeBand`, so Decision 3 kept it. The integrator measures from that plane, so every toast pixel carries the plate under it: 205 cm² × 1–4 mm = 20–80 cm³. The fitter's ring median (11.4 mm) is the rim, not the surface under the toast, so subtracting it would over-correct. The rest is 345–405 cm³ of toast against 83 g, which is 0.20–0.24 g/cm³: thick slices of toasted open-crumb bread, against the 0.4 g/cm³ that bread_wholemeal carries (measured on the roll). That density is inferred from this one plate, not measured. But the depth's own volume is far above the 207.5 cm³ that 0.4 g/cm³ implies, and the depth is not where the error is.
+
+**So a guard would fix the toast by breaking its measurement.** The 4–6× fall-back improves the toast only by going back to the crust-only reading. That reading covers 13.6 % of the toast's footprint and swaps a +105 % over-read for a −70 % under-read. It scores better only because the two errors are compared as absolute values. Once the density or the plane is right for this plate, the grown reading is the closer one, and the guard would hold the plate at −70 %. The clamps cut a footprint that is correct, by distance from the crust seeds, which means the middle of each slice.
+
+**And the ratio guard removes the case growth was built for.** On 2026-09-24, `1790223818017` grew 15.2× (13,571 → 205,945 px) and went from 25.6 to 230.7 cm³ against the roll's 260 cm³ (Decision 2). Every ratio cap from 2× to 15× falls back on it. Over the roll's eight 2026-09-24/25 single-view captures, volume mean absolute error would double, from 26.9 to 52.6 cm³ (10.8 → 21.0 g). A k× clamp would keep about k/15 of that roll. Its bundle is gone, so it is not in the replay tables, but these figures were measured at the time.
+
+**And a footprint cap is a statement about plate size, not about leaks.** Any value under 205 cm² cuts the toast. 200 cm² sits 2.6 % under the toast, and Decision 5 chose 200 as "about two bread slices side by side". A cap there means that any partly recognised food bigger than two slices reads at the segmenter's footprint.
+
+### The sweep (2026-10-03, `2a6f2b8`)
+
+**Route.** `HarnessCLI` was a release build of `2a6f2b8`. Nutrition5k: the 236 `single_dominant` fixtures of `tmp/n5k_fixtures_ckpt`, with `accuracy` run once at the shipped constants (gate 200) and once with `--growth-cap 0`, sliver 0.05. They are scored on the 216 plates both runs score. A fall-back returns exactly the ungrown estimate, so each fall-back row is the per-plate choice between those two runs. The grown footprint (`foodAreaCm2` of the pruned map on the first plane) comes from a scratch build that matched the committed binary to 0.0 g on all 231 rows. The clamp rows are real runs of that scratch build: the fill stops when the labelled depth cells reach k × the seed cells, or the cm² cap scaled by seed cells per seed cm². The clamp counts depth cells, so the final pixel ratio and footprint run above the nominal value (toast: 2× → 2.82×, 100 cm² → 131 cm²). The scratch build was not committed. Weighed set: `volumes`. Mass at the true class is the kept regions × 0.4 g/cm³, kept as the review kept them: the roll without its phantom `coffee`, the 80 g roll `…654696` without its `white_rice`, and both toast regions.
+
+Nutrition5k (216 plates; 182 grow at the current state):
+
+| variant | carb MAE | MAPE | plates changed vs current |
+|---|---|---|---|
+| growth off | 9.334 g | 95.22 % | 182 |
+| **current (seed-area gate 200 cm²)** | **9.215 g** | **93.67 %** | — |
+| fall back, ratio > 2× | 9.249 g | 94.72 % | 5 |
+| fall back, ratio > 3×, 4×, 5×, 6× (up to 16×) | 9.215 g | 93.67 % | 0 |
+| fall back, grown > 100 cm² | 9.261 g | 94.58 % | 39 |
+| fall back, grown > 150 cm² | 9.248 g | 94.67 % | 11 |
+| fall back, grown > 175 cm² | 9.225 g | 94.03 % | 4 |
+| fall back, grown > 200 cm² | 9.217 g | 93.79 % | 3 |
+| fall back, grown > 250 cm² | 9.215 g | 93.67 % | 0 |
+| clamp at 2× seed | 9.205 g | 93.60 % | 5 |
+| clamp at 3× | 9.222 g | 93.78 % | 1 |
+| clamp at 4× | 9.242 g | 94.11 % | 1 |
+| clamp at 5× | 9.262 g | 94.45 % | 1 |
+| clamp at 6× | 9.215 g | 93.67 % | 0 |
+| clamp at 100 cm² | 9.239 g | 93.99 % | 33 |
+| clamp at 150 cm² | 9.211 g | 93.75 % | 10 |
+| clamp at 200 cm² | 9.224 g | 93.84 % | 2 |
+
+On the growing plates the ratio has a median of 1.02×, a 90th percentile of 1.09× and a maximum of 2.64×. The grown footprint has a median of 68.1 cm², a 90th percentile of 121.7 cm² and a maximum of 219.0 cm². Nutrition5k reads low on 206 of its 216 plates, so it cannot say whether an added region is food.
+
+Weighed set, mass at the true class against the scale. Ratio and footprint at the current state: 104 g roll 3.92× / 98.8 cm²; toast 7.37× / 205.2 cm²; 80 g roll a gated (seed 259.8 cm²); 80 g roll b 1.06× / 80.1 cm²; the two-view capture's growth is plane-only and never gated.
+
+| variant | 104 g roll `…022746` | 83 g toast `…465041` | 80 g roll a `…654696` | 80 g roll b `…735795` | 80 g roll two-view `…787903` | MAE / MAPE (5) |
+|---|---|---|---|---|---|---|
+| growth off | −80.8 % | −70.4 % | +0.8 % | +14.2 % | +12.1 % | 32.8 g / 35.7 % |
+| **current** | **−13.0 %** | **+105.3 %** | **+0.8 %** | **+18.4 %** | **+12.1 %** | **25.2 g / 29.9 %** |
+| fall back, ratio > 2× or 3× | −80.8 % | −70.4 % | +0.8 % | +18.4 % | +12.1 % | 33.5 g / 36.5 % |
+| fall back, ratio > 4×, 5× or 6× | −13.0 % | −70.4 % | +0.8 % | +18.4 % | +12.1 % | 19.4 g / 22.9 % |
+| fall back, grown > 100, 150 or 200 cm² | −13.0 % | −70.4 % | +0.8 % | +18.4 % | +12.1 % | 19.4 g / 22.9 % |
+| clamp at 2× seed | −50.8 % | −19.7 % | +0.8 % | +18.4 % | +12.1 % | 18.8 g / 20.4 % |
+| clamp at 3× | −27.1 % | +12.4 % | +0.8 % | +18.4 % | +12.1 % | 12.7 g / 14.2 % |
+| clamp at 4× | −13.0 % | +46.4 % | +0.8 % | +18.4 % | +12.1 % | 15.4 g / 18.1 % |
+| clamp at 5× | −13.0 % | +78.6 % | +0.8 % | +18.4 % | +12.1 % | 20.8 g / 24.6 % |
+| clamp at 6× | −13.0 % | +105.3 % | +0.8 % | +18.4 % | +12.1 % | 25.2 g / 29.9 % |
+| clamp at 100 cm² | −13.0 % | +32.4 % | +0.8 % | +18.4 % | +12.1 % | 13.1 g / 15.3 % |
+| clamp at 150 cm² | −13.0 % | +90.8 % | +0.8 % | +18.4 % | +12.1 % | 22.8 g / 27.0 % |
+| clamp at 200 cm² | −13.0 % | +105.3 % | +0.8 % | +18.4 % | +12.1 % | 25.2 g / 29.9 % |
+
+Decision 5's three older plates barely move. The multigrain plate is gated, and the 58 g slice grows 1.0–1.2×. Only the 100 cm² footprint rows touch them: the fall-back drops slice a's growth (103.4 cm² grown), and the clamp trims slice b by 0.2 g.
+
+### Alternatives Considered
+
+- **Ratio fall-back at 4–6×**: Fall back to the ungrown region when the pruned map is more than k times the seed - Rejected because it is a no-op on Nutrition5k and gains on the toast only by discarding 86 % of a correctly found footprint, and it would have discarded the 15.2× founding roll capture (25.6 against 230.7 cm³ for a 260 cm³ roll).
+- **Grown-footprint fall-back at 150–200 cm²**: Fall back when the grown region covers more than A cm² - Rejected because it costs Nutrition5k at every value that cuts the toast (9.217–9.261 g), and it caps the size of food growth may find rather than detecting a leak.
+- **Clamp the fill at the cap (ratio or cm²)**: Stop the fill when it reaches the cap and keep the partial region - Rejected because the values that help the toast either push the roll out of ±20 % (2×, 3×) or cost Nutrition5k (4×, 5×, 100 cm²). The partial region is set by distance from wherever the segmenter happened to fire, so whatever it gains on the toast comes from offsetting a density error by chance.
+- **Measure grown pixels from the support surface (plane + ring median) on an `edgeBand` plane**: Removes the plate under the toast - Not taken here. It is a change to what every `edgeBand` volume measures (160 of 231 Nutrition5k fits), and here the ring median is the rim (11.4 mm), not the 1–4 mm surface under the toast. It belongs to `support-plane-reference`.
+
+### Consequences
+
+**Positive:**
+- Growth keeps the founding case (15.2×) and the toast's correct footprint. The review outline on the toast still covers both slices.
+- No new constant whose value rests on one plate.
+- The field-truth reading is corrected: the toast is a density and plane case, not "flat food on a raised plate" defeating growth.
+
+**Negative:**
+- The toast keeps reading +105 % until the density for toasted bread or the plane under it is addressed. The five-capture MAE stays at 25.2 g where a 4–6× ratio guard would show 19.4 g.
+- The density split (0.20–0.24 g/cm³) is inferred from one plate's mass and depth, not measured. The plate height under the toast comes from a narrow gap between the slices, where LiDAR smoothing may read low.
+- The strongest case against the ratio guard is a capture whose bundle was discarded. Its numbers are from Decision 2, not from this replay.
+- Growth still has no guard against a real leak beyond the 0.35 frame cap. No weighed or Nutrition5k plate shows one at the current constants.
+
+### Impact
+
+No code change. `FoodRegionGrowth`, `GrownRegionPlaneRefit`, the pipeline, the harness and the outcome schema are as Decision 5 left them. The follow-ups are elsewhere: a density for toasted bread (food database or class), and the plane under food on an `edgeBand` fit (`specs/estimation/support-plane-reference`).
+
+---

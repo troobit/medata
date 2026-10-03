@@ -151,6 +151,40 @@ How the sweep was run, for the next one:
   built at `3022b80`, and not at `abd9750` (9.18 vs 9.33 g, growth helping);
   floor/band are not the reason. Not bisected.
 
+## No second guard (Decision 6, 2026-10-03)
+
+The 83 g toast (`1790748465041`) reads +105 % with growth (7.4×, 27.8 →
+205.2 cm²) and −70 % without. It looked like growth running over the plate,
+so a ratio cap (grown/seed) and a grown-footprint cap were swept, each as a
+fall-back to the ungrown map and as a clamp on the fill. Nothing shipped.
+
+- **The grown region is the toast.** The segmenter labelled only the crust
+  ends of two slices. The depth shows two slabs 18–25 mm above the board and
+  the plate 1–4 mm. The cells at least 12 mm up cover 207 cm² and hold 415 cm³;
+  growth's region is 205 cm² and 426 cm³. The over-read is the plate under the
+  toast (the plane is the board, `edgeBand`, and the refit is `edgeBand` too)
+  plus density: 83 g over the depth's 345–405 cm³ is 0.20–0.24 g/cm³, against
+  bread_wholemeal's 0.4.
+- **The growth ratio measures segmenter recall, not leaks.** Toast 7.4×,
+  104 g roll 3.9×, and the founding 2026-09-24 roll capture (`1790223818017`)
+  15.2×. Any ratio cap low enough to catch the toast also removes that roll
+  (25.6 against 230.7 cm³ for 260). Decision 5 rejected the opposite ratio
+  gate for the mirror reason.
+- No Nutrition5k plate grows past 2.64× (median 1.02×), so ratio caps from 3×
+  up do nothing there, and every footprint cap or clamp that binds costs it
+  something. The tables are in Decision 6.
+- For a toast-like plate, look at density and the plane, not growth. Render the
+  bundle before blaming growth: a minimal raw-protobuf reader (fields 6 image,
+  8 depth with float32 mm, 11 argmax, 13 intrinsics) plus a RANSAC table plane
+  in numpy is enough. `tools/segmenter/.venv` has numpy and PIL. Background is
+  palette index 33 on `ab812dc3aa9d`.
+- Sweep mechanics, for the next one: the fall-back is exact post hoc from one
+  growth run and one `--growth-cap 0` run. The growth line's `before`/`after`
+  give the pixel ratio, and seed cm² × ratio is the grown footprint to within
+  1 %. A clamp needs a scratch build. Stage the release binary and its
+  `*.bundle` directories together (`MedataCore_Foods.bundle` is loaded at
+  runtime), or every run dies with `unable to find bundle`.
+
 ## Two-view: plane only (two-view-trust Decision 10)
 
 The two-view branch fitted its plane once and never refitted; the carve

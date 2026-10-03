@@ -46,3 +46,10 @@ references:
   - FoodRegionGrowth.foodAreaCm2 measures the food-like footprint on the first plane; FoodRegionGrowthConfig.seedAreaGateCm2 (standardSeedAreaGateCm2 = 200); GrownRegionPlaneRefit.refit(gateBySeedArea:) skips grow and refit when over it, single-view callers only (Pipeline via planeOnly == false, FixtureRunner single-view); the two-view plane-only growth is never gated.
   - Outcome rows carry regionGrowth.seedAreaCm2, seedAreaGateCm2 and gated; event=region.grow prints seedAreaCm2, gateCm2 and gated; HarnessCLI takes --growth-gate-cm2 and prints both on the growth line and in volumes rows.
   - Verify: the gate sweep (Nutrition5k 216 plates, the four weighed single-view plates) in Decision 5; GrownRegionPlaneRefitTests cover the footprint and the gate; make test green (both totals); make spell.
+
+## Second growth guard
+
+- [x] 8. A second guard against runaway growth (grown/seed ratio or grown-footprint cap, fall-back or clamp) is swept on Nutrition5k and the weighed set, and ships only if it beats the current state on both (Decision 6)
+  - Swept on 2a6f2b8: ratio fall-back 2-16x, grown-footprint fall-back 100-400 cm2, clamp at 2-6x seed and 100/150/200 cm2, over the 216 scored Nutrition5k plates and the five 2026-09-29/10-03 weighed captures (mass at true class).
+  - Outcome: nothing ships. No variant beats the current state on both sets; the toast (1790748465041) grown region is its two slices (205 cm2 against a 207 cm2 raised slab), and its +105 % is the plate under it plus density, not runaway growth. A ratio cap would also remove the 15.2x founding roll capture 1790223818017.
+  - Verify: Decision 6 tables; field-truth-sessions 2026-10-03 replay table; make test green (both totals); make spell.
