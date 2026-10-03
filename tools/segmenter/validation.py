@@ -111,9 +111,10 @@ def food_mean_iou(per_class_iou: Mapping[str, float]) -> float:
     the mean, matching train.food_class_miou. Returns 0.0 when no food class is
     present.
 
-    On the 182-image leak-free anchor only 13 food classes appear in 20 or more
-    images; the rest swing by up to 0.78 between identical runs, so read this
-    mean against the measured noise bands (estimation-quality task 14)."""
+    A class needs about 20 held-out images before identical runs agree on it.
+    The 182-image anchor had 13 such classes, and the rest swung by up to 0.78;
+    the 2,506-image ``heldout_leakfree_v3`` anchor has 28 readable classes. Read
+    this mean against the measured noise bands (estimation-quality task 14)."""
     foods = set(food_class_names())
     values = [
         float(v) for name, v in per_class_iou.items()

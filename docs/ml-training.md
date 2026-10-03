@@ -559,17 +559,34 @@ stable to 0.001 but single classes moving by up to 0.45 and staples by 0.05, so
 recipe comparisons are seeded from here on and read against the seeded
 reference R8 (`--seed 1`).
 
-Six runs of the R3 recipe (R3, R7, R8, R9, R10, R8b; 2026-09-26 to 09-29) set what this anchor
-can resolve. A class needs about **20 of the 182 held-out images** to be readable at single-run
-resolution: every class above that bar has a spread of 0.097 or less over the six, while soup
-(1 image) swings 0.775, banana and apple (2) swing 0.69 and 0.60, and fruit_juice (3) swings
-0.30. The thirteen readable classes are unknown_food, mixed_vegetables, bread_white,
-potato_boiled, beef, carrot, wine, chicken, white_rice, pork, tomato, broccoli and peas; their
-mean spans 0.4783–0.5031 across the six, so **0.025 is the smallest recipe effect one run can
-resolve**. Score verdicts on that mean and on the mask-quality block (spread over the six: food IoU 0.008,
-region IoU 0.022, boundary F 0.016, top-3 hit 0.021). The tool's own
-`mean_iou` is not usable for verdicts — it includes classes with no held-out truth and classes
-present in one image, and it ranks the six runs differently from the readable thirteen.
+Six runs of the R3 recipe (R3, R7, R8, R9, R10, R8b; 2026-09-26 to 09-29) set what the anchor
+can resolve. A class needs about **20 held-out images** to be readable at single-run
+resolution. On the original 182-image anchor that left thirteen readable classes, a readable
+mean spanning 0.4783–0.5031 across the six, and 0.025 as the smallest resolvable recipe effect.
+
+**The anchor since 2026-10-03 is `heldout_leakfree_v3`** (backlog 35): 2,506 images under
+`data/merged_foodseg_foodrec2022/`, every merged-corpus image outside `train` that survives a
+byte-hash and perceptual-hash duplicate audit against all 45,515 train images
+(`tools/segmenter/build_anchor.py`, which writes the split and a `manifest.json` with per-class
+counts and the audit). It includes the merged `val` split, which is held out only because
+`train.py` never selects a checkpoint on val — keep it that way. On it the same six runs give:
+
+- **28 readable classes** (at least 20 images and at most 0.10 spread): every palette class
+  except tea and milk (at the bar, spread 0.14 and 0.18), cereal (14 images), beer (7),
+  potato_mashed (4), brown_rice (3) and beans_baked (0). Median per-class spread 0.034.
+- **Readable-28 mean band 0.4593–0.4703**, so ~0.011 is the smallest class-mean effect one run
+  resolves.
+- **Mask bands** (spread over the six): food IoU 0.8369–0.8404 (0.004), region IoU 0.4807–0.4923
+  (0.012), boundary F 0.3875–0.3921 (0.005), top-3 hit 0.8177–0.8268 (0.009).
+- **Staple spreads**: potato_boiled 0.012, pasta 0.017, bread_white 0.023, white_rice 0.024,
+  chips_fries 0.071, bread_wholemeal 0.072.
+
+Absolute levels on v3 are not comparable with 182-anchor figures: the Food Recognition 2022 third
+of the anchor has polygon-traced masks that read about 0.10 lower on food IoU and 0.13 lower on
+boundary F than FoodSeg103 for the same checkpoint. Compare runs on one anchor only. The
+182-image split stays for checkpoints trained on the pre-merge seed-1234 carve. The tool's own
+`mean_iou` is not usable for verdicts. It includes classes with almost no held-out truth, and on
+the 182 anchor it ranked the six runs differently from the readable thirteen.
 
 Multi-hour runs go through the serial queue rather than hand-launched
 `nohup` lines: entries in `tools/segmenter/queue/`, runner
@@ -705,14 +722,17 @@ unknown_food 34, unsupported_liquid 35 — `validation.special_channel_indices`)
 
 Re-score an old checkpoint into its lineage file without touching the class
 metrics or the gate verdict (CPU is about 3 minutes for the 182-image anchor
-and leaves MPS to a live training run):
+and leaves MPS to a live training run; a full validation on the 2,506-image v3
+anchor is about 4.5 minutes on MPS, 5.5 at 641). Re-scoring onto v3 writes a
+copy of the lineage (`lineage-<name>_v3anchor.json`) so the recorded 182-anchor
+reading survives:
 
 ```sh
+cp tools/segmenter/build/lineage-r3.json tools/segmenter/build/lineage-r3_v3anchor.json
 tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
     --checkpoint tools/segmenter/build/checkpoint_r3_combined_noweight.pt \
-    --data data/foodseg103_remapped_v2 --split heldout_leakfree \
-    --lineage tools/segmenter/build/lineage-r3.json \
-    --device cpu --mask-quality-only
+    --data data/merged_foodseg_foodrec2022 --split heldout_leakfree_v3 \
+    --lineage tools/segmenter/build/lineage-r3_v3anchor.json
 ```
 
 The lineage block uses the spike's food definition (RESULTS.md): everything

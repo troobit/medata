@@ -14,7 +14,8 @@ this note is the mechanics and the reading rules.
   `runner.pid`, `<entry>.log` (the entry's own output), `done/<entry>` holding
   the exit code and finish time. Train and validation logs land beside the
   historical ones in `tools/segmenter/build/` as `train_<name>_<date>.log`,
-  `validate_<name>_leakfree_v2anchor.log`, `lineage-<name>.json`,
+  `validate_<name>_leakfree_v3anchor.log` (runs before 2026-10-03:
+  `_leakfree_v2anchor.log`, the 182-image anchor), `lineage-<name>.json`,
   `checkpoint_<name>.pt`.
 - An entry is three lines: source `lib.sh`, call
   `run_variant <name> [--epochs N] -- <recipe flags>`. `lib.sh` supplies the
@@ -68,53 +69,71 @@ tools/segmenter/tests -q`), commit, remove `PAUSE`.
 
 ## Reading a run
 
-- The anchor is `data/foodseg103_remapped_v2` split `heldout_leakfree`, 182
-  images. `run_validation.py` writes `mean_iou` and `per_class_iou` into the
-  run's lineage file; compare two runs with a few lines of Python over their
-  `metrics.per_class_iou`.
-- The same run also writes `metrics.mask_quality` — the class-agnostic numbers
-  MD-29 made the product-relevant ones (`docs/ml-training.md` §5 "Mask
-  quality"): `food_iou`, `region_iou`, `boundary_f2`, `shortlist_top3_hit`,
-  with `n_images` / `n_regions` / `scored_at`. The log shows them as four
-  `[validate] mask …` lines after the staples. Record only; nothing gates on
-  them yet. Re-score an older run in place with `--mask-quality-only` (CPU,
-  about 3 minutes, does not touch the class metrics or the verdict):
-  `tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py
-  --checkpoint build/checkpoint_<name>.pt --data data/foodseg103_remapped_v2
-  --split heldout_leakfree --lineage build/lineage-<name>.json --device cpu
-  --mask-quality-only`.
-- Mask-quality noise, measured 2026-09-27 by re-scoring the same-recipe runs
-  R3, R7 (unseeded repeats), R8 and R9 (seed-1 repeats) on the anchor: food
-  IoU 0.709–0.736, region IoU 0.484–0.494, boundary F 0.376–0.398, top-3
-  shortlist hit 0.821–0.833. So the noise floor is about 0.03 on food IoU,
-  0.01 on region IoU, 0.02 on boundary F and 0.01 on the shortlist; seeding
-  narrows none of them (R8 vs R9 differ by 0.015 / 0.002 / 0.011 / 0.007).
-  Against that band, R6 (focal + photometric) is below on food IoU (0.677),
-  region IoU (0.464) and boundary F (0.351) and level on the shortlist
-  (0.838); the shipped `ab812dc3aa9d` sits inside the band on everything but
-  region IoU (0.464). No recipe change has moved boundary F or region IoU up.
-  These are the lineage-block definitions (sentinels excluded); the spike's
-  RESULTS.md numbers use a wider food definition and read about 0.15 higher
-  on food IoU.
-- Three classes have zero held-out truth pixels (bread_wholemeal, brown_rice,
-  potato_mashed) and so do beer, milk and water. A run that never predicts one
-  of them shows it as absent and drops it from the mean; a run that predicts it
-  anywhere scores 0.0 and the mean falls. Compare means on the common scored
-  set as well as the tool's number, or a false-positive class masquerades as a
-  recipe effect (R6 lost 0.04 of its 0.064 gap this way; R7 gained 0.009).
-- Noise, measured by R7 (an unseeded exact repeat of R3, 2026-09-26): the
-  mean is stable to 0.001 on the common set; single classes swing by up to
-  0.45 (soup +0.45, apple -0.40) and staples by 0.05. A single-run tail-class
-  reading means nothing. The seeded block R8/R9/R10 (task 13) measures how
-  much of that seeding removes and sets the per-staple tolerance.
-- Mask-quality block (2026-09-27, background-only food definition, six
-  checkpoints re-scored): food IoU 0.879–0.887, region IoU 0.481–0.503,
-  boundary F 0.443–0.460, top-3 hit 0.810–0.824 across the five identical-recipe
-  runs R3/R7/R8/R9/R10 — noise bands 0.008 / 0.022 / 0.016 / 0.014. R6 (focal)
-  is below the band on boundary F (0.423). No recipe so far moved any of them
-  up; R15 (boundary weight) and R16 (641) are the first that could.
-- The in-run val split over-reports: R6 trailed R3 by 0.03 there and by 0.064
-  on the anchor; R4/R5 showed the same. Never judge on the training log.
+- The anchor (since 2026-10-03, backlog 35) is `data/merged_foodseg_foodrec2022`
+  split `heldout_leakfree_v3`: 2,506 images, built by
+  `tools/segmenter/build_anchor.py` from every merged-corpus image outside
+  `train` — FoodSeg103 heldout 830 and val 687, Food Recognition 2022
+  validation 989 — after a duplicate audit against all 45,515 train images.
+  `manifest.json` beside `images/` holds the per-class and per-source counts,
+  the audit and a sha256. `queue/lib.sh` validates every run on it into
+  `validate_<name>_leakfree_v3anchor.log`. Rebuild (deterministic, about a
+  minute): `tools/segmenter/.venv/bin/python tools/segmenter/build_anchor.py`.
+- It contains the merged `val` split. That is held out only because `train.py`
+  evaluates val in eval mode and saves the LAST epoch. A trainer change that
+  selects a checkpoint on val would silently make the anchor a training-time
+  split. The in-run val number still over-reports (different metric, different
+  image set) — never judge on the training log.
+- The audit: stems, SHA-256, then a 64-bit pHash screen (12 bits, eight
+  rotations/mirrors) judged by at most 4 bits or aligned 64×64 thumbnail
+  correlation of at least 0.85. A pHash alone does not work on food photos:
+  among 45k plates a 6–8 bit match is routinely an unrelated dish, while a
+  colour-filtered copy of a train photo correlates at only 0.85. It dropped 59
+  of 2,565 (19 byte-identical to train, 36 near-duplicates, 4 within-pool).
+  FoodSeg103 ships the same photo under two ids, so a stem check proves
+  nothing. Three of the old 182-image anchor's images are train copies.
+- Residual leak the hash cannot see: Food Recognition 2022 splits by image,
+  not by user, so its val shares users and scenes with train (the audit caught
+  several burst shots and one user's repeated water glass). It inflates
+  absolute numbers on FR22-heavy classes (water, coffee, cheese,
+  bread_wholemeal), not A/B comparisons.
+- `run_validation.py` writes `mean_iou`, `per_class_iou` and
+  `metrics.mask_quality` (`food_iou`, `region_iou`, `boundary_f2`,
+  `shortlist_top3_hit`, `n_images`, `n_regions`, `scored_at`; MD-29) into the
+  lineage file. To re-score an older run onto v3, copy its lineage to
+  `lineage-<name>_v3anchor.json` and pass that, so the recorded reading
+  survives (about 4.5 minutes on MPS, 5.5 at 641).
+- Noise on v3, six identical-recipe runs (R3, R7, R8, R9, R10, R8b): 28
+  classes readable at single-run resolution (at least 20 images and at most
+  0.10 spread). Tea and milk sit at the image bar and miss (0.14, 0.18 over
+  six). Cereal (14 images), beer, potato_mashed, brown_rice and beans_baked
+  cannot be read. Median per-class spread 0.034, fruit_juice the widest
+  readable (0.099). Readable-28 mean band 0.4593–0.4703: a class-mean effect
+  under ~0.011 is not a result. Mask bands: food IoU 0.8369–0.8404, region IoU
+  0.4807–0.4923, boundary F 0.3875–0.3921, top-3 hit 0.8177–0.8268. Staple
+  spreads: potato_boiled 0.012, pasta 0.017, bread_white 0.023, white_rice
+  0.024, chips_fries 0.071, bread_wholemeal 0.072.
+- Absolute levels differ by source and must not be compared across anchors.
+  FR22's polygon-traced masks read food IoU ~0.78 and boundary F ~0.31 where
+  FoodSeg103 reads ~0.88 and ~0.44 for the same checkpoint. Region IoU and
+  top-3 are level across sources. A resolution lever shows up only on
+  FoodSeg103 (FR22 photos are ~480 px, below the 513 input): R16 sits above
+  the FoodSeg103 band on region IoU and boundary F, and inside or marginally
+  below the FR22 one.
+  `run_validation.py` reports only the whole-split block; for a per-source
+  reading, group `mask_quality_over_loader`'s per-image scores by stem
+  (`fr22_` prefix = FR22) and pass each group to `mask_quality.summarise`.
+- Only beans_baked has no held-out truth on v3. A class with no truth scores
+  0.0 whenever a run predicts it anywhere and is dropped from the tool's mean
+  when it does not, so the tool's own `mean_iou` stays unusable for verdicts.
+  Read the readable-28 mean and the mask block.
+- The 182-image `foodseg103_remapped_v2/heldout_leakfree` anchor stays for
+  checkpoints trained on the pre-merge seed-1234 carve (`0295ea61edd9`,
+  `24e0b022241a`), for which v3's FoodSeg103 images are training data. Its
+  six-run bands (readable-13 mean 0.4783–0.5031; mask 0.8792–0.8873 /
+  0.4808–0.5029 / 0.4433–0.4596 / 0.8033–0.8244) and every R3–R16 verdict in
+  estimation-quality task 13/14 were read there. On it, six classes have no
+  truth at all and anything under 20 images swings up to 0.78 between
+  identical runs.
 
 ## Seeds
 
