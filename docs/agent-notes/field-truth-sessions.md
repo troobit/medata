@@ -88,9 +88,19 @@ Each id is named after its note's stamp. The `1790989773659` note gives no
 weight; the roll's other two notes do. The class comes from the developer's
 corrections. The toast relabelled `unknown_food` to bread_wholemeal. The roll
 was relabelled bread_white → bread_wholemeal once (`FA1C12F5`); the other two
-captures kept bread_white and were not relabelled. If the roll is white bread,
-truth is 38.4 g of carbohydrate and the bread_white readings below fall within
-−4 % to +12 %.
+captures kept bread_white and were not relabelled.
+
+**User clarification, 2026-10-03:** this 80 g roll was a Turkish white roll;
+`bread_white` is the intended class. Alternating white/brown predictions was
+acceptable in this sitting because switching the label was quick; this is
+not a blocking classification defect. At the bundled CoFID white-bread
+coefficient, the carbohydrate reference is 38.4 g (not assayed), and the
+bread_white readings below fall within −4 % to +12 %. The historical table,
+SQL and scores below describe the original wholemeal back-fill; the corpus
+database and derived scores have not been revised by this documentation
+update. Do not reuse their 30.4 g figure as the confirmed roll truth. This
+clarification applies to the three 80 g captures, not the separate toast or
+104 g roll.
 
 <details><summary>SQL as run (backup first: <code>cp index.sqlite …bak</code>)</summary>
 

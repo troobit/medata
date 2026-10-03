@@ -34,3 +34,5 @@ references:
   - Run bash tools/check_spelling.sh
   - Stream: 1
   - References: specs/estimation/resumable-segmenter-training/smolspec.md, docs/ml-training.md
+
+- [x] 4. Document R17 checkpoint recovery and the decoder merge watcher after laptop sleep or reboot

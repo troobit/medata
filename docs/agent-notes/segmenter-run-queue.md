@@ -67,6 +67,85 @@ trainer changes only in a `PAUSE` window: touch `PAUSE`, wait for the current
 entry's `done/` marker, edit, test (`tools/segmenter/.venv/bin/python -m pytest
 tools/segmenter/tests -q`), commit, remove `PAUSE`.
 
+## R17 and the decoder merge watcher: moving the laptop
+
+Checked 2026-10-03: both processes are detached (parent PID 1), so quitting
+Codex or its terminal does not stop them. Ordinary sleep suspends them; reopen
+on AC power to continue. A reboot or terminated process needs a restart.
+The R17 sidecar was readable at epoch 5/12; termination loses at most the
+unfinished epoch. Resume restores weights and optimiser, not the full RNG
+stream, so it is not a bit-identical continuation.
+
+The existing local watcher is `tools/segmenter/build/queue/land-decoder.sh`
+(gitignored, not launchd and not automatically started at login). It checks
+every 120 seconds for `done/100-r17_size641_seed2`, waits another 30 seconds,
+merges `staging/decoder` into the main checkout, runs segmenter pytest, pushes
+`research`, then removes `PAUSE`. R18 then runs before R19. Its log is
+`tools/segmenter/build/queue/land-decoder.log`. Keep the branch until it lands;
+its linked worktree is not required. The watcher expects a clean main checkout
+on `research`. It treats any done marker as completion, even a nonzero exit;
+on pytest failure its existing rollback is `git reset --hard HEAD~1`. Do not
+make concurrent edits during the merge/test window. A failed push is only
+logged; the script still releases PAUSE.
+
+Check before restarting; if the trainer, queue and watcher are still alive,
+leave them alone:
+
+```sh
+cd /Users/r/repos/medata
+pgrep -fl 'train.py|run_queue.live.sh|land-decoder.sh'
+tail -n 8 tools/segmenter/build/train_r17_size641_seed2_*.log
+tail -n 8 tools/segmenter/build/queue/land-decoder.log
+```
+
+**After a reboot, with all three processes absent and R17 still incomplete:**
+the queue does not automatically add `--resume`. Run R17 through the existing
+queue library explicitly, while the restarted serial runner waits on PAUSE.
+This keeps the exact recipe, validation and lineage-copy steps. Confirm the
+sidecar exists and research is clean before running the block. Do not use this
+block once R17 has completed (its sidecar is removed on successful training).
+
+```sh
+cd /Users/r/repos/medata
+git status --short --branch
+ls -lh tools/segmenter/build/checkpoint_r17_size641_seed2.pt.resume.pt
+
+touch tools/segmenter/build/queue/PAUSE
+rm -f tools/segmenter/build/queue/STOP
+rm -f tools/segmenter/build/queue/done/100-r17_size641_seed2
+
+nohup caffeinate -is bash -c '
+  source tools/segmenter/queue/lib.sh
+  run_variant r17_size641_seed2 -- \
+    --loss combined --class-weighting none --photometric-augment \
+    --target-size 641 --seed 2 \
+    --resume tools/segmenter/build/checkpoint_r17_size641_seed2.pt.resume.pt
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf "0 %s\n" "$(date)" > tools/segmenter/build/queue/done/100-r17_size641_seed2
+  fi
+  exit "$rc"
+' >> tools/segmenter/build/queue/r17-resume.log 2>&1 < /dev/null &
+
+nohup caffeinate -is tools/segmenter/run_queue.sh \
+  >> tools/segmenter/build/queue/restart.log 2>&1 < /dev/null &
+nohup bash tools/segmenter/build/queue/land-decoder.sh \
+  >> tools/segmenter/build/queue/watcher-restart.log 2>&1 < /dev/null &
+```
+
+The recovery wrapper writes the completion marker only after training AND
+validation succeed. On failure, inspect `r17-resume.log` and the train/validate
+logs; PAUSE stays set. If training finished and only validation failed, the
+sidecar will be gone: rerun validation against the final checkpoint instead
+of restarting training. The normal queue writes markers even on failure and
+skips every marked entry, which is why stale failure markers must be removed
+before restarting the watcher.
+
+If **only the watcher** has died and R17/queue remain alive, run only its
+`nohup bash .../land-decoder.sh` command after confirming it is absent. If
+only the queue has died, inspect R17 and its marker first; do not start a
+second R17 trainer. These are local background processes, not session jobs.
+
 ## Reading a run
 
 - The anchor (since 2026-10-03, backlog 35) is `data/merged_foodseg_foodrec2022`

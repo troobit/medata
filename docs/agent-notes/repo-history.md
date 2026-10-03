@@ -1,5 +1,22 @@
 # Repo history gotchas
 
+## Local cleanup and pending decoder landing (2026-10-03)
+
+Today's reachable commits are on `research` except `230d0bb` and its staging
+merge `1cd8d52`, retained on `staging/decoder` for the existing R17 completion
+watcher. Recovery commands and watcher behaviour are in
+`segmenter-run-queue.md`. Both linked worktrees were removed; the watcher
+uses the branch from the main checkout and does not need its old worktree.
+
+Deleted local refs: `bugfix/segmenter-output-stride-ignored` (its changed
+files are identical in research commit `e26e3f4`),
+`doc/mvp-gap-rebaseline` (superseded by today's `394b359` rewrite), and
+`worktree-ui-wireframe-library-spec` (ancestor of retained
+`wireframe-library-delivery`). Remote refs remain. Other unmerged branches
+were retained. The wireframe worktree's ignored screenshots and
+`Package.resolved` were copied to `tmp/worktree-archive/wireframe-library/`
+before removal; build caches were discarded.
+
 ## Rewritten main lineage (May 2026)
 
 `origin/main`'s five pre-refocus commits were rewritten at some point
