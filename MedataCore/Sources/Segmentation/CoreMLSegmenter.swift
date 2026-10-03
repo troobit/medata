@@ -247,9 +247,14 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
     private let inputIsCHW: Bool
     private let outputIsCHW: Bool
     private let classes: Int
-    private let targetSize: Int
 
-    public init(modelPath: String, useNeuralEngine: Bool = true, targetSize: Int) throws {
+    // The square input side the loaded model was exported at, read from its
+    // input constraint. The preprocessor letterboxes to this, so a model
+    // trained at 641 (R16) binds without any code knowing the number; before
+    // 2026-10-03 the factory passed a fixed 513 and a 641 model read 0 classes.
+    public let targetSize: Int
+
+    public init(modelPath: String, useNeuralEngine: Bool = true, targetSize: Int? = nil) throws {
         let url = URL(fileURLWithPath: modelPath)
         let compiled: URL
         // `MLModel(contentsOf:)` only loads a compiled `.mlmodelc`. A raw
@@ -270,7 +275,6 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
             throw SegmentationError.modelLoadFailed("MLModel load failed: \(error.localizedDescription)")
         }
         self.model = loaded
-        self.targetSize = targetSize
 
         let userMeta = (loaded.modelDescription.metadata[.creatorDefinedKey] as? [String: String]) ?? [:]
         self.modelVersion = Self.resolveModelVersion(fromUserMetadata: userMeta)
@@ -281,7 +285,11 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         }
         self.inputName = inEntry.key
         let inShape = inEntry.value.multiArrayConstraint?.shape.map(\.intValue) ?? []
-        self.inputIsCHW = Self.detectCHW(shape: inShape, channelHint: 3, targetSize: targetSize)
+        guard let side = targetSize ?? Self.detectInputSide(shape: inShape, channelHint: 3) else {
+            throw SegmentationError.modelLoadFailed("cannot read a square input side from shape \(inShape)")
+        }
+        self.targetSize = side
+        self.inputIsCHW = Self.detectCHW(shape: inShape, channelHint: 3, targetSize: side)
 
         let outDescs = loaded.modelDescription.outputDescriptionsByName
         guard let outEntry = outDescs.first(where: { $1.type == .multiArray }) else {
@@ -289,7 +297,7 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         }
         self.outputName = outEntry.key
         let outShape = outEntry.value.multiArrayConstraint?.shape.map(\.intValue) ?? []
-        let (isCHW, c) = Self.detectClassesAndLayout(shape: outShape, targetSize: targetSize)
+        let (isCHW, c) = Self.detectClassesAndLayout(shape: outShape, targetSize: side)
         self.outputIsCHW = isCHW
         self.classes = c
     }
@@ -420,6 +428,18 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
 
     // Layout detector: if the channel-3 slot lies before the two spatial dims, treat
     // as CHW; otherwise HWC. The shape may include a leading batch dimension.
+    // The square side of a [C, H, W] or [H, W, C] input (leading unit dims
+    // stripped), or nil when the two spatial dims disagree or the shape is
+    // not an image.
+    static func detectInputSide(shape: [Int], channelHint: Int) -> Int? {
+        var s = shape
+        while let first = s.first, first <= 1 { s.removeFirst() }
+        guard s.count >= 3 else { return nil }
+        if s[0] == channelHint, s[1] == s[2] { return s[1] }
+        if s[2] == channelHint, s[0] == s[1] { return s[0] }
+        return nil
+    }
+
     private static func detectCHW(shape: [Int], channelHint: Int, targetSize: Int) -> Bool {
         // Strip leading 1s (batch / unit dims).
         var s = shape

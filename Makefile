@@ -127,13 +127,17 @@ product:  ## ProductRelease + the shipping gate: Release minus FIELD_LOOP
 # Which model a build binds is otherwise the residue of an earlier `cp -R`, whose
 # only trace is the 12-hex id a deploy prints. Needs the segmenter venv, and
 # contends with a live training run for the MPS device — check
-# tools/segmenter/build/queue/runner.log first.
-model:  ## export a checkpoint into the app bundle  CHECKPOINT=<path>
+# tools/segmenter/build/queue/runner.log first. TARGET_SIZE must match the
+# checkpoint's train_config.target_size (513 unless the lineage says 641):
+# export.py defaults to 513 and an R16 checkpoint exported there scores below
+# every 513 run. The app reads the side from the model, so nothing else changes.
+model:  ## export a checkpoint into the app bundle  CHECKPOINT=<path> [TARGET_SIZE=513]
 	@test -n "$(CHECKPOINT)" || { \
-	  echo "usage: make model CHECKPOINT=tools/segmenter/build/checkpoint_<run>.pt"; \
+	  echo "usage: make model CHECKPOINT=tools/segmenter/build/checkpoint_<run>.pt [TARGET_SIZE=641]"; \
 	  exit 1; }
 	$(SEGMENTER_PYTHON) tools/segmenter/export.py \
-	  --checkpoint "$(CHECKPOINT)" --skip-tflite
+	  --checkpoint "$(CHECKPOINT)" --skip-tflite \
+	  $(if $(TARGET_SIZE),--target-size $(TARGET_SIZE),)
 
 # Post-hoc only: `log stream` is host-only and devicectl has no log subcommand,
 # so macOS offers no scriptable live stream for an iOS device — live viewing is

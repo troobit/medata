@@ -61,16 +61,17 @@ extension Pipeline {
         palette: ClassPalette = .standard,
         maskLog: CoreMLSegmenter.MaskLogCadence = .perCapture
     ) throws -> CoreMLSegmenter {
-        let targetSize = SegmenterPreProcessor.defaultTargetSize
         #if DEV_STUB_SEGMENTER
+        let targetSize = SegmenterPreProcessor.defaultTargetSize
         let engine: any SegmenterInferenceEngine = StubInferenceEngine(palette: palette)
         let modelPath = "/dev/null"
         let modelVersion: String? = nil
         #else
+        // The input side comes from the bundled model, not a constant: the
+        // model is swapped by `make model` and may be exported at 641.
         let modelURL = try resolveBundledSegmenterURL()
-        let coreEngine = try CoreMLInferenceEngine(
-            modelPath: modelURL.path, targetSize: targetSize
-        )
+        let coreEngine = try CoreMLInferenceEngine(modelPath: modelURL.path)
+        let targetSize = coreEngine.targetSize
         let engine: any SegmenterInferenceEngine = coreEngine
         let modelPath = modelURL.path
         let modelVersion: String? = coreEngine.modelVersion

@@ -336,3 +336,26 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   re-paired with v2 masks at `data/foodseg103_remapped_v2/heldout_leakfree/`
   (same stems; the v1 anchor dir stays byte-identical as the provenance
   artefact).
+
+## R16 `88d34e27e8bf` at 641 (2026-10-03): the input side comes from the model
+
+- Fourth real model exported: `checkpoint_r16_size641_seed1.pt` -> `88d34e27e8bf`,
+  the R8 recipe trained at target size 641 (estimation-quality task 14, R16).
+  Scored at its own 641 it is the only run of the ten-run series above the
+  identical-recipe band: readable-13 mean 0.5072 (band 0.4783–0.5031), region IoU
+  0.5107 (band 0.4808–0.5029). Food IoU 0.890, top-3 hit 0.812. Each mask costs
+  about 1.56× a 513 mask (641² / 513²) on the phone.
+- Export command: `make model CHECKPOINT=tools/segmenter/build/checkpoint_r16_size641_seed1.pt TARGET_SIZE=641`.
+  `TARGET_SIZE` is new and must match the checkpoint's `train_config.target_size`;
+  `export.py` defaults to 513 and R16 exported there scores BELOW every 513 run
+  (region IoU 0.478, food IoU 0.874). Export gates: 22,169,442 B, 36 channels,
+  Core ML vs oracle argmax agree 0.9990.
+- `CoreMLInferenceEngine` now reads its `targetSize` from the model's input
+  constraint (`detectInputSide`) and `PipelineFactory.makeSegmenter` takes the
+  side from the engine. Before this the factory passed
+  `SegmenterPreProcessor.defaultTargetSize` (513) and a 641 model loaded with
+  0 classes because `detectClassesAndLayout` matched neither spatial dim. The
+  `targetSize:` init parameter is kept as an override for tests.
+- The deploy's `SEGMENTER:` line and `segmenterSource` on captures read
+  `88d34e27e8bf`; `ab812dc3aa9d` is the previous bundle, re-exportable from
+  `checkpoint_merged_v2.pt` at 513 if a capture round needs the comparison.

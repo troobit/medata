@@ -61,8 +61,12 @@ resolution.
 ## Pairing a model to a build
 
 ```
-make model CHECKPOINT=tools/segmenter/build/checkpoint_r8_seed1.pt
+make model CHECKPOINT=tools/segmenter/build/checkpoint_r16_size641_seed1.pt TARGET_SIZE=641
 ```
+
+`TARGET_SIZE` must match the checkpoint's `train_config.target_size` in its
+lineage file (513 for every run before R16; `export.py` defaults to 513). The
+app reads the input side from the model, so no code changes when the size does.
 
 `tools/segmenter/export.py` writes `segmenter.mlpackage` into
 `MedataCore/Sources/Pipeline/Resources/` and stamps the first 12 hex of the
