@@ -102,7 +102,8 @@ in the scene); a false card can only raise σ_scale, never lower it;
 `CardOnlyPlaneFitter` is **never called** — the no-depth branch refuses with
 `noLowerSilhouetteEdges` (commit `b916db1`; it formerly fabricated a plane from
 the card's bottom corners plus a hard-coded 20 mm "food centroid"), and the
-lower-silhouette-edge input it needs (Req 4.3) is unbuilt;
+lower-silhouette-edge input it needs (Req 4.3) is unbuilt — and would not help
+if built (§9);
 the "include a card" reminder (iphone-experience Req 6.1) is marked done and
 not built; `includeCardThisCapture` has no readers; `noLidarConfidence` /
 `noCardConfidence` (pipeline Req 7.3/7.4) are unimplemented. The **no-depth
@@ -569,3 +570,81 @@ Gotchas:
   term. Safe (looser), and the same on every no-depth row.
 - The ratio cap does not know a slice from a roll (r 0.16–0.19 against
   0.39–0.49): a slice without LiDAR is capped as a roll of its footprint.
+
+## 9. `noLowerSilhouetteEdges` is not a detector, and building one would not help (2026-10-03)
+
+The 2026-09-29 pull (build `2d39910`) refused every depth-free two-view capture
+with `supportplane.end success=false failure=noLowerSilhouetteEdges`, then
+`noSupportPlaneWithoutDepth`. That is the third time the line has been read as
+"the lower-silhouette-edge detector found nothing". There is no detector.
+`LiDARSupportPlaneFitter.fitOutcome` returns the refusal unconditionally when
+`nadir.depth == nil` (`SupportPlaneFitter.swift`, the card-only branch, since
+`b916db1`), with a default-constructed `SupportPlaneFitStats` — the zeros and
+`-1`s on the old log line and on the outcome rows (`planeCandidateCount 0`,
+`planeResidualMm -1`) are defaults, not measurements. No code anywhere extracts
+lower silhouette edges, and `CardOnlyPlaneFitter` has no production caller.
+
+**Reproduced offline on that session's own nadir.** The two-view bundles of the
+pull were discarded; the weighed roll's single-view bundle survives
+(`medata-corpus/reports/calibration-20260929-roll/1790655022746-success.fixture`,
+same roll, same table, same build, real ID-1 card in frame). Stage D needs only
+the nadir, so `FixtureRunner.nadirFrame` (depth nil) through the production
+`LiDARSupportPlaneFitter().fitOutcome` with the picked card returns
+`refusal=noLowerSilhouetteEdges` and all-default stats — the device's line
+exactly.
+
+**Why wiring an edge input is not the fix.** Req 4.3 / design §6.3 back-project
+edge pixels "at s_card,init". One scale for every pixel places every point at
+the card's depth: e = (s0·(u − c_x), s0·(v − c_y), −d_card). The gravity-normal
+fit is then d = −d_card·g_z + s0·(g_x·ū + g_y·v̄), the card's depth plus a
+tilt × mean-image-position term, and the h_food update is the same term at the
+centroid. No pixel choice carries depth. Measured on the roll's nadir (gravity
+tilt 4.4°, card t_z −388.6 mm, s0 0.2847 mm/px, PnP 0.92 px), plane depth on
+the food-centroid ray:
+
+| plane | depth at food (mm) | vs adopted support |
+|---|---|---|
+| device's adopted support plane (foodSupport refit, residual 2.077 mm, matches the row) | 381.8 | — |
+| card plane (pose normal and t) | 389.9 | +8.1 |
+| §6.3 fed the nadir lower edge (lowest food pixel per column, 374 px) | 388.2 | +6.4 |
+| §6.3 fed the nadir upper edge | 388.7 | +6.9 |
+| §6.3 fed every 8th food pixel | 388.7 | +6.9 |
+| §6.3 fed the four image corners (no food at all) | 386.1 | +4.3 |
+| §6.3 fed the card corners | 371.6 | −10.2 |
+
+Food-derived and food-free inputs agree within 2.6 mm and sit within 3.8 mm of
+the card plane: the output is the card plane, which Decision 13 rejects as a
+default (A1) and A5 rejected as specified. The card-corner row is the tilt term
+read as a food height (card and food 450 px apart at 4.4° tilt: h_food ≈ −9 mm).
+
+**The nadir lower edge is not the contact line either.** LiDAR height of the
+lowest food pixel per column above the adopted plane: p10 / p50 / p90 =
+24.2 / 29.8 / 33.8 mm (argmax mask), 23.8 / 29.9 / 33.6 (pre-shutter mask),
+21.5 / 22.8 / 37.8 (depth-grown region); the upper edge reads 31.8 / 37.5 /
+43.9 on a roll whose P98 is 43.7 mm. Boundary depth is smeared (~7 mm at this
+range), so read these to a few mm — but even the lowest decile is 2 cm off the
+table. A nadir view sees a rounded food's outline at its widest, not where it
+touches the surface. That is Decision 13's "ray, not contact point" concern,
+now measured.
+
+**What a depth-free plane would actually need** (Decision 13, unchanged): depth
+evidence the nadir alone cannot give — triangulating the contact boundary
+across the two views through the verified `t₁→₂` (needs the oblique segmented
+before stage D, contact correspondence between views, and a synthetic test with
+a known contact patch first), or the card placed on the food's own support
+surface (A4, a copy change plus a detection measurement). Neither is a bounded
+change; both wait on the acceptance questions.
+
+Side notes from the same session's rows: the one two-view capture that kept its
+depth (`055BB705`, oblique 58.6°) carved 42 cm³ of the 260 cm³ roll with
+`measuredFoodHeightMm 3.6` and a 16.6 cm² footprint — a mask problem on that
+nadir, not the plane. And a parity gap remains in `FixtureRunner`'s two-view
+branch: `if fixture.hasNadirDepth, let fit = try? fitSupportPlane(…)` drops to
+the −300 mm nominal plane when a depth fixture's fit REFUSES, where production
+would refuse the capture.
+
+The probe was a throwaway test (not committed): load the bundle, pick the card
+with `FixtureRunner.pickCard`, call the production fitter on
+`FixtureRunner.nadirFrame`, then `CardOnlyPlaneFitter.fit` on each pixel set
+back-projected as the removed branch did, comparing planes on the food-centroid
+ray against `refitPlaneFromGrownRegion`'s adopted plane.

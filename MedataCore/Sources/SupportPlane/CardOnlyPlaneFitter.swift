@@ -11,6 +11,13 @@ import PortableContracts
 // extracted by the segmenter (lands in tasks 19+). To make the iteration testable now,
 // the fitter takes those points as Vec3s already back-projected at the INITIAL scale
 // s_card,init; each iteration scales them by (1 + h_food_(k) / d_card) per §6.3.
+//
+// Unreachable from production since b916db1, and DEGENERATE as §6.3 states it:
+// points back-projected at one scale all sit at the card's depth, so `d` comes out
+// as -d_card·g_z + s0·(g_x·Δu + g_y·Δv) and `h_food` is that same image-position
+// term at the centroid — neither reads the food's support. Do not wire an edge
+// extractor into it expecting a measurement; see `SupportPlaneFitter`'s card-only
+// branch and `docs/agent-notes/two-view-geometry-audit.md` section 9.
 public enum CardOnlyPlaneFitter {
     public struct Inputs: Sendable {
         public let cardCentreDepthMm: Float       // d_card from CardObservation (mm, positive)

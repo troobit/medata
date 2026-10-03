@@ -1,5 +1,11 @@
 # Decision Log: Two-View Trust
 
+## Quick Decisions
+
+| ID | Date | Decision | Rationale |
+|----|------|----------|-----------|
+| Q1 | 2026-10-03 | Do not build a lower-silhouette-edge input for `CardOnlyPlaneFitter`; the depth-free branch keeps refusing under Decision 13 | Back-projected at one scale, every pixel lands at the card's depth, so the fit returns the card plane whatever it is fed: on the weighed roll's nadir the lower edge, upper edge, all food pixels and four food-free image corners agree within 2.6 mm, 3.8 mm from the card plane and 4.3–6.9 mm below the adopted support; the nadir lower edge itself sits 24–34 mm above the support (`docs/agent-notes/two-view-geometry-audit.md` section 9) |
+
 ## Decision 1: Fix and verify two-view geometry before building user confirmation on it
 
 **Date**: 2026-09-25

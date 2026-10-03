@@ -55,12 +55,17 @@ is where that mapping lives.
 point-to-plane RMS of the edge projections; the convergence and best-of-N measure
 is renamed `stepMm` and still drives both. A stationary fit through scattered
 points used to claim a perfect one — see `testResidualIsPointToPlaneNotIterationStep`.
-The **input** is what is missing. What would make the branch work: the food's lower
-silhouette edges taken from the nadir food mask (pipeline Req 4.3) — the mask's lowest
-food pixel per column, along the boundary where the food meets the table — back-projected
-at the card-plane scale and handed to `CardOnlyPlaneFitter` as
-`edgePoints3DAtInitScale`, with real food centroids rather than one offset from the card.
-Until then the refusal is the whole behaviour.
+**Feeding it the food's lower silhouette edges would not make the branch work (measured 2026-10-03).** This
+note used to say the missing piece was the nadir mask's lowest food pixel per column,
+back-projected at the card-plane scale. That is information-free: one scale puts every
+point at the card's depth, so `CardOnlyPlaneFitter` returns the card's depth plus a
+tilt × image-position term whatever pixels it is fed. On the weighed roll's nadir the
+lower edge, the upper edge, all food pixels and four food-free image corners land within
+2.6 mm of each other and within 3.8 mm of the card plane, 4.3–6.9 mm below the support
+the device adopted. And the nadir lower edge is not a contact line: its LiDAR height is
+24–34 mm (p10–p90) on a roll ~44 mm tall. Numbers and the closed form in
+`two-view-geometry-audit.md` section 9. The refusal stays the whole behaviour until
+two-view-trust Decision 13's acceptance questions are answered.
 
 The empty-mask gate stays **before** the dispatch, as its comment says: an empty
 pre-shutter mask reads `emptyFoodMask` (→ `noFoodPixels`) on the depthless path too, not

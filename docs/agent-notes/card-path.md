@@ -55,5 +55,7 @@ Req 4; audit of its history in `two-view-geometry-audit.md` §3.
 - The card-only plane fitter is **never reached**: the no-depth branch of
   `SupportPlaneFitter` refuses with `noLowerSilhouetteEdges` rather than seeding
   from the card corners plus a constant offset, which is Req 4.4's refusal half
-  satisfied. Open is the other half — feeding `CardOnlyPlaneFitter` the food's
-  real lower silhouette edges (pipeline Req 4.3).
+  satisfied. The other half — feeding `CardOnlyPlaneFitter` the food's lower
+  silhouette edges (pipeline Req 4.3) — is not a wiring job: at one
+  back-projection scale the fit returns the card's depth whatever pixels it is
+  given (`two-view-geometry-audit.md` section 9). Decision 13 holds the question.

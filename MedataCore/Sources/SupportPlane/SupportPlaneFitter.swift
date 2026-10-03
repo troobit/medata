@@ -156,11 +156,17 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
         // to `EstimationFailure.noSupportPlaneWithoutDepth` — on such a capture
         // the card usually gives scale; it is the plane that is missing.
         //
-        // What would make this branch work: the food's lower silhouette edges,
-        // taken from the nadir food mask (pipeline Req 4.3), back-projected at
-        // the card-plane scale and handed to `CardOnlyPlaneFitter` in place of
-        // the card corners. `CardOnlyPlaneFitter` itself is unchanged and still
-        // covered by `CardOnlyPlaneFitterTests`; it is the INPUT that is missing.
+        // This is NOT a missing edge detector, and feeding one in does not make the
+        // branch work. Every point `CardOnlyPlaneFitter` receives is back-projected
+        // at ONE scale, which places it at the card's depth (z = -d_card) whatever
+        // pixel it came from, so the "fit" returns the card's depth plus a
+        // tilt x image-position term. Measured 2026-10-03 on the weighed roll's
+        // nadir: nadir lower silhouette edge 388.2 mm at the food, upper edge
+        // 388.7, four image corners with no food in them 386.1, card plane 389.9,
+        // the device's adopted support plane 381.8. A depth-free support plane
+        // needs evidence that carries depth (triangulation across the two views,
+        // or the card placed on the food's surface) — two-view-trust Decision 13,
+        // and `docs/agent-notes/two-view-geometry-audit.md` section 9.
         return SupportPlaneFitOutcome(
             plane: nil, stats: SupportPlaneFitStats(), refusal: .noLowerSilhouetteEdges
         )
