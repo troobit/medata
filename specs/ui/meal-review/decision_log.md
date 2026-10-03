@@ -5,6 +5,7 @@
 | ID | Date | Decision | Rationale |
 |----|------|----------|-----------|
 | Q1 | 2026-10-03 | Record, Retake and Delete leave the review whenever it is pushed, whatever the capture state; a review still pushed when the Capture cover is dismissed closes with it rather than reappearing on the next Capture | A screen lock mid-review interrupts the AR session and moved the state off `.showingResult`, which left all three buttons dead; the meal and every correction are already persisted, so closing loses nothing and a review resumed hours later would arm a fresh dose seed for an old meal |
+| Q2 | 2026-10-03 | Under a standing plate scale, a typed or stepped amount is the amount the row shows; the stored base is that amount divided by the scale factor | Req 6.1 keeps serving-adjust's amount behaviour unchanged, and the scale multiplied the entered amount a second time (½: typing 100 g showed 50 g); later scale taps still apply to the base without compounding (Req 6.4) |
 
 ## Decision 1: Split the work into one spec and two amendments
 

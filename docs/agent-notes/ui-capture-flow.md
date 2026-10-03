@@ -189,7 +189,8 @@ composition only; all behaviour is in the model and is unit-tested.
   that moves the state to `.trackingLost`, and gated on the state alone all
   three buttons went dead. `captureDismissed()` clears the path, so a review
   interrupted by a deep link or the dose reminder's Adjust closes with the
-  cover (meal-review Q1).
+  cover (meal-review Q1). Under a standing plate scale, `setAmount` takes the
+  amount the row should show and divides the scale back out (Q2).
 
 - **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
   `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
