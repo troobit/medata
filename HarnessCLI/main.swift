@@ -1133,8 +1133,8 @@ func runCalibration(args: Args, db: any FoodDatabase,
     }
     // Field captures (tools/field_loop/derive_dataset.py): without this a
     // field-only run's lineage would fall back to N5k's CC BY 4.0.
-    if let field = ingestSummaries.first(where: { $0.dataset == "medata_field" }) {
-        perDatasetLineage["medata_field"] = .init(
+    if let field = ingestSummaries.first(where: { $0.dataset == CalibrateRun.fieldDataset }) {
+        perDatasetLineage[CalibrateRun.fieldDataset] = .init(
             snapshot: field.snapshot, mappingArtifactVersion: field.mappingVersion,
             licence: field.licence ?? "")
     }
@@ -1154,7 +1154,8 @@ func runCalibration(args: Args, db: any FoodDatabase,
         conditionNumber: mixtureResult.conditionNumber.isFinite
             ? mixtureResult.conditionNumber : -1,
         identifiablePerClass: mixtureResult.identifiablePerClass,
-        pinnedIntrinsicsModel: args.intrinsicsModel,
+        pinnedIntrinsicsModel: CalibrateRun.pinnedIntrinsicsModel(
+            cliValue: args.intrinsicsModel, summaries: ingestSummaries),
         licence: lineageLicence,
         renderConfig: renderConfig,
         perDataset: perDatasetLineage)

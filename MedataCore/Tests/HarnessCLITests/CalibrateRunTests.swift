@@ -210,6 +210,43 @@ struct CalibrateRunTests {
         #expect(summary.ingestionSkipCount == 1)
     }
 
+    // field-score once recorded realsense_d435_factory, the CLI default, as
+    // the camera of a run made entirely of ARKit captures.
+    @Test("A field run's lineage pins the summary's camera; other runs keep the CLI value")
+    func fieldRunPinsItsOwnIntrinsicsModel() throws {
+        func summary(_ json: String) throws -> CalibrateRun.IngestSummary {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+            defer { try? FileManager.default.removeItem(at: url) }
+            try json.write(to: url, atomically: true, encoding: .utf8)
+            return try CalibrateRun.loadIngestSummary(from: url)
+        }
+        let field = try summary("""
+            {"dataset": "medata_field", "licence": "own", "snapshot": "field",
+             "mapping_version": "palette-native",
+             "render_config": {"intrinsics_model": "arkit_per_capture",
+                               "image_width": 1920, "image_height": 1440,
+                               "seating_rule": "none"}}
+            """)
+        let mf3d = try summary("""
+            {"dataset": "metafood3d", "licence": "CC BY-NC 4.0", "snapshot": "s",
+             "mapping_version": "m",
+             "render_config": {"plane_depth_mm": 385.0,
+                               "intrinsics_model": "realsense_d435_rgb_nominal",
+                               "image_width": 640, "image_height": 480,
+                               "seating_rule": "stable_pose_base_on_plane"}}
+            """)
+        let n5k = try summary(#"{"ingested": 1, "skipped": {}}"#)
+        let cli = "realsense_d435_factory"
+
+        #expect(CalibrateRun.pinnedIntrinsicsModel(cliValue: cli, summaries: [field])
+            == "arkit_per_capture")
+        #expect(CalibrateRun.pinnedIntrinsicsModel(cliValue: cli, summaries: []) == cli)
+        #expect(CalibrateRun.pinnedIntrinsicsModel(cliValue: cli, summaries: [n5k]) == cli)
+        // MetaFood3D's render camera belongs to `render_config`, not the pin.
+        #expect(CalibrateRun.pinnedIntrinsicsModel(cliValue: cli, summaries: [mf3d]) == cli)
+    }
+
     // MARK: - Field review (field-score): relabels reach the volume before the gate
 
     @Test("A field summary's per-fixture review decodes; a summary without one is empty")

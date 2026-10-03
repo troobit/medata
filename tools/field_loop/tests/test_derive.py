@@ -345,7 +345,7 @@ def test_a_marked_capture_leaves_the_evaluation_set(index, corpus_root,
 # ---------------------------------------------------- calibration derivation
 
 def weigh(index, stem_ms, *, outcome_id="o1", meal_id="m1", fidelity="weighed",
-          items=None, carbs=30.4):
+          items=None, carbs=30.4, measurements=None):
     """A benchmark row linked to the capture's outcome, as an ingest leaves it."""
     benchmark_id = "b-%s" % outcome_id
     corpus.upsert_benchmark(index, {
@@ -358,8 +358,8 @@ def weigh(index, stem_ms, *, outcome_id="o1", meal_id="m1", fidelity="weighed",
         "id": outcome_id, "pull_id": "p1", "last_pull_id": "p1",
         "timestamp_ms": stem_ms, "outcome": "success", "failure": None,
         "meal_id": meal_id, "model_version": "coreml_ab812dc3aa9d",
-        "benchmark_meal_id": benchmark_id, "measurements_json": "{}",
-        "protected": 0})
+        "benchmark_meal_id": benchmark_id,
+        "measurements_json": json.dumps(measurements or {}), "protected": 0})
     index.commit()
 
 
@@ -470,6 +470,35 @@ def test_the_review_reaches_the_run_summary_without_amount_corrections(
                                  "rejected": ["white_rice"]}
     assert fixture["truth"] == {"class_mass_g": {"bread_wholemeal": 80.0},
                                 "total_carbs_g": 30.4}
+
+
+def test_the_run_summary_carries_the_segmenter_and_its_prediction_ms(
+        index, corpus_root, tmp_path):
+    """`field-score` prints the phone's cost beside the accuracy it bought."""
+    one = seed_capture(index, corpus_root, TS, note_id="n0")
+    two = seed_capture(index, corpus_root, TS + 600_000, note_id="n1")
+    weigh(index, TS, outcome_id="o1", meal_id="m1", measurements={
+        "modelVersion": "coreml_ab812dc3aa9d",
+        "segmentationNadir": {"predictionMs": 53, "argmaxMs": 151}})
+    weigh(index, TS + 600_000, outcome_id="o2", meal_id="m2", measurements={
+        "modelVersion": "coreml_ab812dc3aa9d",
+        "segmentationNadir": {"predictionMs": 61},
+        "segmentationOblique": {"predictionMs": 59}})
+
+    out = tmp_path / "calibration"
+    derive_dataset.derive_calibration(index, corpus_root, out)
+    fixtures = json.loads(
+        (out / "ab812dc3aa9d" / "run_summary.json").read_text())["fixtures"]
+    assert fixtures[one]["model_version"] == "coreml_ab812dc3aa9d"
+    assert fixtures[one]["prediction_ms"] == {"nadir": 53}
+    assert fixtures[two]["prediction_ms"] == {"nadir": 61, "oblique": 59}
+
+
+def test_an_untimed_outcome_falls_back_to_the_indexed_model_version():
+    assert derive_dataset.device_cost("{}", "coreml_ab812dc3aa9d") == {
+        "model_version": "coreml_ab812dc3aa9d", "prediction_ms": {}}
+    assert derive_dataset.device_cost("not json", None) == {
+        "model_version": None, "prediction_ms": {}}
 
 
 def test_a_bundle_outside_captures_is_used_only_when_its_hash_matches(

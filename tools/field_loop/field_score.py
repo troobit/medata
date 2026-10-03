@@ -6,9 +6,11 @@ segmenter checkpoint (`derive_dataset.derive_calibration`), runs HarnessCLI
 `accuracy` and `calibrate` over each group with the group's run summary, and
 prints one line per capture, the set's error and each group's β result.
 
-Every figure is the harness's own: this module reads the JSON the two
+Every accuracy figure is the harness's own: this module reads the JSON the two
 subcommands write and only lays it out and averages across groups, which no
 single harness run can do because the loader takes one checkpoint at a time.
+The segmenter and its prediction time are the phone's, from the outcome row,
+carried here in the run summary.
 
 Two readings are printed for each capture. "As reviewed" is the meal at the
 classes the review named — the figure the user ends up with, and the one
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -93,6 +96,8 @@ def capture_row(checkpoint: str, fixture_id: str, row: dict,
         "mass_error": _percent(mass, truth_g),
         "carbs_error": _percent(row["predictedCarbsG"], truth["total_carbs_g"]),
         "labelled_error": _percent(labelled, truth["total_carbs_g"]),
+        "segmenter": fixture.get("model_version"),
+        "prediction_ms": fixture.get("prediction_ms") or {},
     }
 
 
@@ -114,6 +119,31 @@ def classes_text(row: dict) -> str:
 
 def _signed(value) -> str:
     return "n/a" if value is None else "%+.1f%%" % value
+
+
+def prediction_text(row: dict) -> str:
+    """The nadir's prediction ms, with the oblique's in brackets on a two-view."""
+    ms = row["prediction_ms"]
+    if "nadir" not in ms:
+        return "n/a"
+    text = "%g" % ms["nadir"]
+    if "oblique" in ms:
+        text += " (%g)" % ms["oblique"]
+    return text
+
+
+def prediction_medians(rows: list) -> str:
+    """One line: each segmenter's median nadir prediction ms over its captures."""
+    by_segmenter = {}
+    for r in rows:
+        if "nadir" in r["prediction_ms"]:
+            by_segmenter.setdefault(r["segmenter"] or "n/a", []).append(
+                r["prediction_ms"]["nadir"])
+    if not by_segmenter:
+        return "predict ms median (nadir): nothing timed"
+    return "predict ms median (nadir): " + "; ".join(
+        "%s %g over %d capture(s)" % (name, statistics.median(values), len(values))
+        for name, values in sorted(by_segmenter.items()))
 
 
 def aggregate(rows: list, predicted: str, truth: str) -> tuple:
@@ -202,18 +232,22 @@ def score(harness: str, conn, root, out) -> list:
         betas.extend(beta_lines(checkpoint, artifact, group_rows))
 
     lines.append("")
-    row_format = "%-21s  %-12s  %-6s  %-11s  %7s  %15s  %7s  %15s  %7s  %14s  %s"
+    row_format = ("%-21s  %-12s  %-19s  %10s  %-6s  %-11s  %7s  %15s  %7s  %15s  "
+                  "%7s  %14s  %s")
     lines.append(row_format % (
-        "capture", "checkpoint", "path", "plane", "vol cm3", "mass g / truth",
-        "err", "carbs g / truth", "err", "as labelled", "classes after review (cm3)"))
+        "capture", "checkpoint", "segmenter", "predict ms", "path", "plane",
+        "vol cm3", "mass g / truth", "err", "carbs g / truth", "err",
+        "as labelled", "classes after review (cm3)"))
     for r in sorted(rows, key=lambda r: r["fixture"]):
         lines.append(row_format % (
-            r["fixture"], r["checkpoint"], r["path"], r["plane"],
+            r["fixture"], r["checkpoint"], r["segmenter"] or "n/a",
+            prediction_text(r), r["path"], r["plane"],
             "%.1f" % r["volume"],
             "%.1f / %.1f" % (r["mass"], r["truth_g"]), _signed(r["mass_error"]),
             "%.1f / %.1f" % (r["carbs"], r["truth_carbs"]), _signed(r["carbs_error"]),
             "%.1f %s" % (r["labelled_carbs"], _signed(r["labelled_error"])),
             classes_text(r)))
+    lines.append(prediction_medians(rows))
 
     lines.append("")
     for label, predicted, truth, unit in (
