@@ -43,6 +43,10 @@ public enum GrownRegionPlaneRefit {
         /// The segmenter's food-like footprint on the first plane, cm²
         /// (`FoodRegionGrowth.foodAreaCm2`), the quantity the gate reads.
         public let seedAreaCm2: Float
+        /// The returned map's food-like footprint on the same first plane, by
+        /// the same helper, so it reads directly against `seedAreaCm2`. Equal
+        /// to it when nothing grew and no seed restriction applied.
+        public let grownAreaCm2: Float
         /// True when the seed-area gate skipped growth: the first plane and
         /// the segmenter's map stand, exactly as with growth disabled.
         public let gated: Bool
@@ -72,8 +76,11 @@ public enum GrownRegionPlaneRefit {
         gateBySeedArea: Bool = false,
         fit: (BinaryMask) -> SupportPlaneFitOutcome
     ) -> Outcome {
-        let seedAreaCm2 = FoodRegionGrowth.foodAreaCm2(
-            argmax: argmax, intrinsics: intrinsics, supportPlane: plane, palette: palette)
+        func footprintCm2(_ map: ArgmaxMap) -> Float {
+            FoodRegionGrowth.foodAreaCm2(
+                argmax: map, intrinsics: intrinsics, supportPlane: plane, palette: palette)
+        }
+        let seedAreaCm2 = footprintCm2(argmax)
         let gated = gateBySeedArea && config.seedAreaGateCm2 > 0
             && seedAreaCm2 > config.seedAreaGateCm2
         // A gated pass still runs `grow` with growth disabled, so a seed
@@ -85,7 +92,8 @@ public enum GrownRegionPlaneRefit {
         guard candidate.applied else {
             return Outcome(plane: plane, reference: supportReference, adoptedStats: nil,
                            growth: candidate, refitReference: nil, refitRefused: false,
-                           seedAreaCm2: seedAreaCm2, gated: gated)
+                           seedAreaCm2: seedAreaCm2, grownAreaCm2: footprintCm2(candidate.argmax),
+                           gated: gated)
         }
         let refit = fit(foodMask(from: candidate.argmax, palette: palette))
         let refitPlane = refit.foodSupportPlane
@@ -96,15 +104,16 @@ public enum GrownRegionPlaneRefit {
             supportPlane: refitPlane ?? plane,
             supportOffsetMm: refitPlane == nil ? supportOffsetMm : 0,
             palette: palette, config: config)
+        let grownAreaCm2 = footprintCm2(growth.argmax)
         if growth.applied, let refitPlane {
             return Outcome(plane: refitPlane, reference: refit.stats.reference,
                            adoptedStats: refit.stats, growth: growth,
                            refitReference: refitReference, refitRefused: refitRefused,
-                           seedAreaCm2: seedAreaCm2, gated: false)
+                           seedAreaCm2: seedAreaCm2, grownAreaCm2: grownAreaCm2, gated: false)
         }
         return Outcome(plane: plane, reference: supportReference, adoptedStats: nil,
                        growth: growth, refitReference: refitReference, refitRefused: refitRefused,
-                       seedAreaCm2: seedAreaCm2, gated: false)
+                       seedAreaCm2: seedAreaCm2, grownAreaCm2: grownAreaCm2, gated: false)
     }
 
     /// The food-region mask on the argmax grid, `isVolumetricClass` per pixel

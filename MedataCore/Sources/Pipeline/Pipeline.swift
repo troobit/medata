@@ -1023,7 +1023,8 @@ public struct Pipeline: Sendable {
             foodPixelsBefore: growth.foodPixelsBefore, foodPixelsAfter: growth.foodPixelsAfter,
             refitReference: outcome.refitReference?.rawValue, refitRefused: outcome.refitRefused,
             planeOnly: planeOnly, seedAreaCm2: outcome.seedAreaCm2,
-            seedAreaGateCm2: regionGrowth.seedAreaGateCm2, gated: outcome.gated))
+            seedAreaGateCm2: regionGrowth.seedAreaGateCm2, gated: outcome.gated,
+            grownAreaCm2: outcome.grownAreaCm2))
         let refitLabel = outcome.refitReference?.rawValue ?? (outcome.refitRefused ? "refused" : "none")
         let residualMm = plane.residualMm
         // On the Release-emitted channel (pipelineStageLog is Debug-only):
@@ -1039,6 +1040,7 @@ public struct Pipeline: Sendable {
             seedAreaCm2=\(outcome.seedAreaCm2, privacy: .public) \
             gateCm2=\(regionGrowth.seedAreaGateCm2, privacy: .public) \
             gated=\(outcome.gated, privacy: .public) \
+            grownAreaCm2=\(outcome.grownAreaCm2, privacy: .public) \
             residual_mm=\(residualMm, privacy: .public)
             """
         )

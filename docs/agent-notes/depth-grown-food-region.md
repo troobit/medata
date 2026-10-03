@@ -225,6 +225,7 @@ region stands.
   seedAreaGateCm2, gated}`; the plane fields describe the plane the volume used
   (the refit when adopted). A gated row reads `applied=false`, `gated=true`,
   before = after.
+- `regionGrowth.grownAreaCm2` (also `grownAreaCm2=` on `event=region.grow`, the `HarnessCLI` growth line and `volumes` rows) is the returned map's footprint on the same first plane by the same `foodAreaCm2`, so it reads directly against `seedAreaCm2` (equal on a gated or ungrown row) and replaces Decision 6's seed × pixel-ratio estimate.
 - The weighed corpus for this feature is four single-view bundles:
   `tmp/device_captures/{1785901032716,1786439141215,1786450130307}-success.fixture`
   and `medata-corpus/reports/calibration-20260929-roll/1790655022746-success.fixture`.
