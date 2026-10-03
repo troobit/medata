@@ -751,9 +751,9 @@ struct CalibrationOutcome {
     let mixtureResult: MixtureBetaCalibrator.Result
     let sdResult: CalibrationResult
     let admittedInputs: [MealCalibrationInput]
-    // True when any fixture carries an estimator_path stamp from a
-    // Nutrition5k (or legacy synthetic) source. MetaFood3D fixtures do not
-    // count: an MF3D-only run has no official split to exclude.
+    // True when any fixture carries a Nutrition5k source_dataset stamp.
+    // MetaFood3D fixtures and device capture bundles do not count: neither
+    // has an official split to exclude.
     let hasN5k: Bool
     let ingestSummaries: [CalibrateRun.IngestSummary]
     // Cross-dataset reporting inputs (cross-dataset-calibration Req 8.2/10):
@@ -799,9 +799,11 @@ func runCalibration(args: Args, db: any FoodDatabase,
     }
     let routed = CalibrateRun.route(fixtures: fixtures, depthTestSplit: split,
                                     unmappedExcluded: mergedUnmapped)
-    let hasN5k = fixtures.contains {
-        !$0.estimatorPath.isEmpty && CalibrateRun.dataset(of: $0) != "metafood3d"
-    }
+    // Identified by the source_dataset stamp, which N5k ingestion has written
+    // since the same commit that introduced estimator_path. A device capture
+    // bundle (CaptureBundleRecorder) is stamped single_dominant with no
+    // source_dataset and has no official split to exclude.
+    let hasN5k = fixtures.contains { CalibrateRun.dataset(of: $0) == "nutrition5k" }
     // Req 4.4 is a SHALL: an N5k run without the official depth-test split
     // would silently calibrate on held-out dishes — fail loudly instead.
     if hasN5k && split.isEmpty {
@@ -1052,6 +1054,13 @@ func runCalibration(args: Args, db: any FoodDatabase,
         perDatasetLineage["metafood3d"] = .init(
             snapshot: mf3d.snapshot, mappingArtifactVersion: mf3d.mappingVersion,
             licence: mf3d.licence ?? "")
+    }
+    // Field captures (tools/field_loop/derive_dataset.py): without this a
+    // field-only run's lineage would fall back to N5k's CC BY 4.0.
+    if let field = ingestSummaries.first(where: { $0.dataset == "medata_field" }) {
+        perDatasetLineage["medata_field"] = .init(
+            snapshot: field.snapshot, mappingArtifactVersion: field.mappingVersion,
+            licence: field.licence ?? "")
     }
     let lineageLicence = CalibrationArtifact.strictestLicence(
         perDatasetLineage.values.map(\.licence)) ?? n5kLicence

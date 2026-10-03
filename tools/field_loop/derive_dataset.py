@@ -79,6 +79,8 @@ MASK_SOURCE = "model_argmax"
 CALIBRATION_DATASET = "medata_field"
 CALIBRATION_LICENCE = "developer's own captures; not redistributable"
 SEATING_RULE = "none — real capture, no authored support plane"
+# Each bundle records its own ARKit intrinsics; there is no pinned camera.
+INTRINSICS_MODEL = "arkit_per_capture"
 
 
 # ------------------------------------------------------------------ PNG I/O
@@ -461,14 +463,17 @@ def derive_calibration(conn, root, out) -> dict:
         "JOIN captures c ON c.timestamp_ms = o.timestamp_ms "
         "WHERE o.benchmark_meal_id IS NOT NULL ORDER BY c.stem")]
 
-    ingested, skipped, width, height = 0, [], 0, 0
+    # `{reason: [stems]}`, the shape every ingest summary uses and
+    # `CalibrateRun.loadIngestSummary` decodes.
+    ingested, width, height = 0, 0, 0
+    skipped = {"not_weighed": [], "bundle_missing": []}
     for row in rows:
         if row["fidelity"] != "weighed":
-            skipped.append(row["stem"])
+            skipped["not_weighed"].append(row["stem"])
             continue
         source = root / "captures" / ("%s.fixture" % row["stem"])
         if not source.exists():
-            skipped.append(row["stem"])
+            skipped["bundle_missing"].append(row["stem"])
             continue
         corpus.link_or_copy(source, out / source.name)
         info = bundle.read_summary(source)
@@ -485,9 +490,12 @@ def derive_calibration(conn, root, out) -> dict:
                                      "captures are already in the palette's "
                                      "label space)",
         "ingested": ingested,
-        "estimator_paths": {"mixture": ingested},
-        "skipped": sorted(skipped),
+        # CaptureBundleRecorder stamps every device bundle single_dominant.
+        "estimator_paths": {"single_dominant": ingested},
+        "skipped": {reason: sorted(stems) for reason, stems in skipped.items()},
+        # No plane_depth_mm: nothing was posed, so there is no authored plane.
         "render_config": {
+            "intrinsics_model": INTRINSICS_MODEL,
             "image_width": width,
             "image_height": height,
             "seating_rule": SEATING_RULE,
@@ -507,7 +515,9 @@ def recommended_commands(out) -> dict:
     return {
         "retrain": "python tools/segmenter/train.py --data %s" % out,
         "recalibrate": "swift run HarnessCLI calibrate --fixtures-dir "
-                       "<calibration output> --output <artifact>",
+                       "<calibration output> --checkpoint-sha256 <bundle "
+                       "checkpoint> --ingest-summary <calibration output>/"
+                       "run_summary.json --output <artifact>",
         "rebake": "make food-db CALIBRATION=<artifact>",
         "human_gated": True,
         "note": "launching a training or calibration run is a human step by "
@@ -548,7 +558,8 @@ def run(args) -> int:
     if args.calibration_out:
         document = derive_calibration(conn, root, Path(args.calibration_out))
         print("derive calibration ingested=%d skipped=%d out=%s"
-              % (document["ingested"], len(document["skipped"]),
+              % (document["ingested"],
+                 sum(len(s) for s in document["skipped"].values()),
                  args.calibration_out))
 
     summary = None

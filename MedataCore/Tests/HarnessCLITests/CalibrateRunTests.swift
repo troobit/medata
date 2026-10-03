@@ -186,6 +186,30 @@ struct CalibrateRunTests {
         #expect(summary.ingestionSkipCount == 1)
     }
 
+    // tools/field_loop/derive_dataset.py's shape: no authored plane, so no
+    // plane_depth_mm. It once wrote `skipped` as a list and failed to decode.
+    @Test("A field summary from derive_dataset.py parses without an authored plane")
+    func fieldSummaryParses() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        {"dataset": "medata_field",
+         "licence": "developer's own captures; not redistributable",
+         "snapshot": "field",
+         "mapping_version": "palette-native",
+         "skipped": {"not_weighed": [], "bundle_missing": ["1790655022746-success"]},
+         "render_config": {"intrinsics_model": "arkit_per_capture",
+                           "image_width": 1920, "image_height": 1440,
+                           "seating_rule": "none"}}
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let summary = try CalibrateRun.loadIngestSummary(from: url)
+        #expect(summary.dataset == "medata_field")
+        #expect(summary.renderPlaneDepthMm == nil)
+        #expect(summary.ingestionSkipCount == 1)
+    }
+
     @Test("The strictest contributing licence wins the top-level lineage field (Decision 17)")
     func strictestLicenceWins() {
         #expect(CalibrationArtifact.strictestLicence(

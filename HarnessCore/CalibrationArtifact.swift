@@ -91,7 +91,10 @@ public enum CalibrateRun {
 
     public static func loadIngestSummary(from url: URL) throws -> IngestSummary {
         struct RenderDoc: Decodable {
-            let planeDepthMm: Float
+            // Absent on a field summary (tools/field_loop/derive_dataset.py):
+            // a real capture has no authored plane. A MetaFood3D run without
+            // it still exits 1 in HarnessCLI's calibrate.
+            let planeDepthMm: Float?
             let intrinsicsModel: String?
             let imageWidth: Int?
             let imageHeight: Int?
