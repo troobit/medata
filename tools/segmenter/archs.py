@@ -21,9 +21,11 @@ Contract per architecture (``ArchSpec``):
     index ``"out"``; plain-tensor architectures (SegFormer-class, which emit
     stride-4 logits) are bilinearly upsampled via ``plain_tensor_logits``.
 
-Registered: ``deeplab_mnv3`` (shipping) and ``segformer_b0`` (backbone-swap
+Registered: ``deeplab_mnv3`` (shipping), ``segformer_b0`` (backbone-swap
 candidate — its conversion spike passed in full, segmenter-foundation
-Decision 28, so the task-22 comparison retrain can select it via ``--arch``).
+Decision 28, so the task-22 comparison retrain can select it via ``--arch``)
+and ``deeplabv3plus_mnv3`` (the shipping backbone and ASPP plus a
+DeepLabV3+-style low-level skip decoder — research note 4.6, queued as R19).
 The ``arch`` recorded in checkpoint/lineage ``train_config`` resolves back
 through ``arch_from_lineage`` / ``arch_from_checkpoint``; absence means the
 historical ``deeplab_mnv3``, so pre-registry artefacts stay resolvable.
@@ -291,4 +293,114 @@ register(ArchSpec(
     build=_segformer_build,
     load_checkpoint=_segformer_load_checkpoint,
     forward_logits=plain_tensor_logits,
+))
+
+
+# ── deeplabv3plus_mnv3 (decoder candidate — research note 4.6, R19) ─────────────
+
+# The backbone stage the skip is taken from: the output of features[3], the
+# last block at stride 4 (24 channels; 161x161 at a 641 input). features[16]
+# (960 channels, stride 16 — the dilated tail keeps it there) feeds the ASPP
+# exactly as in deeplab_mnv3.
+DLV3PLUS_LOW_LEVEL_LAYER = "3"
+DLV3PLUS_LOW_LEVEL_IN = 24
+# Skip projection width and decoder width: the DeepLabV3+ paper's choices
+# (48 low-level channels; two 3x3 convs with 256 filters). The ASPP emits 256.
+DLV3PLUS_LOW_LEVEL_OUT = 48
+DLV3PLUS_DECODER_CHANNELS = 256
+DLV3PLUS_ASPP_CHANNELS = 256
+
+
+def _conv_bn_relu(nn, in_ch: int, out_ch: int, kernel: int) -> list:
+    return [
+        nn.Conv2d(in_ch, out_ch, kernel, padding=kernel // 2, bias=False),
+        nn.BatchNorm2d(out_ch),
+        nn.ReLU(),
+    ]
+
+
+def _dlv3plus_build(num_classes: int, pretrained: bool):
+    """DeepLabV3+ on MobileNetV3-Large: deeplab_mnv3's backbone and a fresh
+    ASPP, then a decoder that upsamples the stride-16 ASPP output to stride 4,
+    concatenates a 48-channel projection of the stride-4 backbone features,
+    runs two 3x3 conv/BN/ReLU blocks and a 1x1 classifier, and upsamples the
+    logits bilinearly to the input size.
+
+    The backbone comes from ``_deeplab_build`` so its initialisation is the
+    shipping arch's exactly (``pretrained`` True: the torchvision COCO-seg
+    DEFAULT weights, which is what every R-series run started from; False:
+    weights-free). The ASPP and decoder start fresh, as deeplab_mnv3's head
+    does, so the only difference from deeplab_mnv3 is the decoder.
+
+    Forward returns ``{"out": logits}`` at the input resolution — the
+    torchvision dict convention, so ``dict_out_logits`` is its normaliser and
+    the export, oracle and validation paths see the same [B, C, H, W] contract.
+    Only conv / BN / ReLU / concat / bilinear resize, all of which Core ML
+    converts and the ANE runs.
+    """
+    import torch
+    import torch.nn.functional as F
+    from torch import nn
+    from torchvision.models._utils import IntermediateLayerGetter
+    from torchvision.models.segmentation.deeplabv3 import ASPP
+
+    base = _deeplab_build(num_classes, pretrained=pretrained)
+    # Re-wrap the same feature modules with a second return point; the
+    # state-dict keys under ``backbone.`` are identical to deeplab_mnv3's.
+    backbone = IntermediateLayerGetter(
+        base.backbone, return_layers={DLV3PLUS_LOW_LEVEL_LAYER: "low", "16": "out"})
+    in_ch = base.classifier[0].convs[0][0].in_channels
+
+    class DeepLabV3PlusMNV3(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = backbone
+            self.aspp = ASPP(in_ch, [12, 24, 36], out_channels=DLV3PLUS_ASPP_CHANNELS)
+            self.low_proj = nn.Sequential(*_conv_bn_relu(
+                nn, DLV3PLUS_LOW_LEVEL_IN, DLV3PLUS_LOW_LEVEL_OUT, 1))
+            self.decoder = nn.Sequential(
+                *_conv_bn_relu(nn, DLV3PLUS_ASPP_CHANNELS + DLV3PLUS_LOW_LEVEL_OUT,
+                               DLV3PLUS_DECODER_CHANNELS, 3),
+                *_conv_bn_relu(nn, DLV3PLUS_DECODER_CHANNELS,
+                               DLV3PLUS_DECODER_CHANNELS, 3),
+                nn.Conv2d(DLV3PLUS_DECODER_CHANNELS, num_classes, 1),
+            )
+
+        def forward(self, x):
+            feats = self.backbone(x)
+            low = self.low_proj(feats["low"])
+            high = F.interpolate(self.aspp(feats["out"]), size=low.shape[-2:],
+                                 mode="bilinear", align_corners=False)
+            logits = self.decoder(torch.cat([high, low], dim=1))
+            logits = F.interpolate(logits, size=x.shape[-2:], mode="bilinear",
+                                   align_corners=False)
+            return {"out": logits}
+
+    return DeepLabV3PlusMNV3()
+
+
+def _dlv3plus_load_checkpoint(num_classes: int, checkpoint_path):
+    """Weights-free build + trained state dict (``{"model": ...}`` wrapper
+    accepted), eval mode. Never downloads: a trained checkpoint covers every
+    parameter. Strict, unlike the older loaders: this arch has no legacy
+    checkpoints, so a key mismatch is a wrong file and must fail loudly
+    rather than export a half-random decoder."""
+    import torch
+
+    model = _dlv3plus_build(num_classes, pretrained=False)
+    if checkpoint_path is not None and Path(checkpoint_path).is_file():
+        state = torch.load(str(checkpoint_path), map_location="cpu")
+        if isinstance(state, dict) and "model" in state:
+            state = state["model"]
+        model.load_state_dict(state)
+    model.eval()
+    return model
+
+
+register(ArchSpec(
+    name="deeplabv3plus_mnv3",
+    output="dict_out",
+    build=_dlv3plus_build,
+    load_checkpoint=_dlv3plus_load_checkpoint,
+    forward_logits=dict_out_logits,
 ))

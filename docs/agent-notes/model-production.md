@@ -359,3 +359,40 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - The deploy's `SEGMENTER:` line and `segmenterSource` on captures read
   `88d34e27e8bf`; `ab812dc3aa9d` is the previous bundle, re-exportable from
   `checkpoint_merged_v2.pt` at 513 if a capture round needs the comparison.
+
+## `deeplabv3plus_mnv3` (2026-10-03): decoder candidate, queued as R19
+
+- Registered in `archs.py` beside `deeplab_mnv3` and `segformer_b0`
+  (research note 4.6). `deeplab_mnv3`'s backbone and a fresh ASPP, then a
+  DeepLabV3+ decoder: `features[3]` (end of the stride-4 stage, 24 channels) →
+  1×1 conv to 48 + BN + ReLU; ASPP output upsampled bilinearly to that grid;
+  concatenate (304); two 3×3 conv (256) + BN + ReLU; 1×1 classifier; bilinear
+  upsample to the input. Forward returns `{"out": ...}`, so `dict_out_logits`
+  is its normaliser and every consumer sees the `[1, 36, H, W]` contract.
+- The current model is output stride 16, not 8: MobileNetV3's dilated tail
+  holds the last stage at 16 (41×41 at 641). The decoder works at stride 4
+  (161×161 at 641).
+- The builder calls `_deeplab_build` and re-wraps its backbone with a second
+  `IntermediateLayerGetter` return point, so `pretrained` gives the same
+  COCO-seg `DEFAULT` initialisation every R-series run used and the
+  `backbone.*` keys are identical to `deeplab_mnv3`'s. The ASPP and decoder
+  start fresh, as `deeplab_mnv3`'s head does.
+- Its checkpoint loader builds weights-free and loads STRICT (the older loaders
+  are `strict=False`): there are no legacy checkpoints to tolerate, and a
+  wrong-arch file would otherwise export with a random decoder.
+- Export gates at 641 on a 50-step CPU smoke checkpoint: 23,577,303 B
+  (+1,407,861 B over `deeplab_mnv3`'s 22,169,442; 1,588,521 B under the
+  24 MiB gate), 36 channels, oracle on a real anchor image max abs err 0.114,
+  argmax agreement 0.9998. Conv multiply-adds 48.8 G against 16.1 G; Core ML
+  CPU-only predict about 1.8× the bundled R16 export (fastest runs; medians
+  noisy under the queue's CPU load). Numbers and the separable-decoder
+  alternative: `docs/ml-training.md` §4.
+- The weight bytes do not depend on the input size, so the export-gate test
+  (`test_archs.py::test_deeplabv3plus_passes_the_export_gates`) converts at
+  65×65 in about 25 s and still measures the real budget.
+- R19 sets `MEDATA_STALL_SECS=10800` in its queue entry. The train log moves
+  once an epoch (stdout flushes when DataLoader workers spawn), and a decoder
+  epoch at 641 may run past `lib.sh`'s default 90-minute stall window.
+- An architecture change goes through a spec/decision-log gate before
+  adoption (research note 4.6); R19 is the measurement, not the adoption, and
+  on-device ANE latency is a human-gated check.

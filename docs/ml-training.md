@@ -626,6 +626,59 @@ moved the edges. Omitted, the loss is the plain per-pixel mean as before; both
 values land in lineage `train_config.boundary_weight` /
 `train_config.boundary_band_px` and are checked by the resume drift-check.
 
+### DeepLabV3+ decoder: `--arch deeplabv3plus_mnv3` (2026-10-03)
+
+The one architecture lever left after ten runs (research note §4.6). R15 showed
+boundary quality is not loss-limited, so this tests whether the model can draw
+a sharper edge when it is given higher-resolution features to draw it from.
+`deeplab_mnv3` predicts on the stride-16 grid (41×41 at 641; the backbone's
+dilated tail holds it at 16, not 8) and upsamples the logits bilinearly to the
+input. `deeplabv3plus_mnv3` keeps the same backbone and ASPP and replaces the
+head with a DeepLabV3+ decoder:
+
+- skip: `features[3]` (end of the stride-4 stage, 24 channels, 161×161 at 641)
+  → 1×1 conv to 48 channels + BN + ReLU;
+- ASPP output (256 channels, stride 16) → bilinear upsample to the skip's grid
+  → concatenate (304 channels);
+- two 3×3 conv (256) + BN + ReLU blocks, a 1×1 classifier to 36, then bilinear
+  upsample to the input.
+
+The backbone starts from the same torchvision COCO-seg `DEFAULT` weights as
+`deeplab_mnv3`, and the ASPP and decoder start fresh, as `deeplab_mnv3`'s head
+does, so the decoder is the only difference. Output contract unchanged:
+`{"out": [1, 36, H, W]}` at the input size. `train.py` stamps `arch` into the
+checkpoint and lineage, so `export.py` and `run_validation.py` resolve it with
+no flag; its checkpoint loader is strict, so a wrong-arch file fails instead of
+exporting an untrained decoder.
+
+Cost at 641, measured on the Mac (2026-10-03, export of a 50-step CPU smoke
+checkpoint against the bundled R16 export):
+
+| | `deeplab_mnv3` | `deeplabv3plus_mnv3` |
+| --- | --- | --- |
+| Parameters | 11.03 M | 11.73 M |
+| FP16 weights (export gate ≤ 25,165,824 B) | 22,169,442 B | 23,577,303 B (1,588,521 B margin) |
+| Conv multiply-adds | 16.1 G | 48.8 G (3.0×) |
+| Core ML CPU-only predict, 20 interleaved runs | 1.00× | about 1.8× |
+
+The smoke export passed every gate: 36 channels, Core ML against the PyTorch
+oracle on a real anchor image max abs logit error 0.114 and argmax agreement
+0.9998. The CPU ratio is about 1.8× fastest-run to fastest-run (1.83–1.89 over
+three sessions); the medians (1.61–1.90) were taken with the training queue
+loading the CPU. The multiply-adds triple because the two 3×3 convs run on the
+161×161 stride-4 grid; the CPU time rises less. The phone (ANE) ratio will
+differ and must be measured before any adoption. A depthwise-separable decoder
+(each 3×3 split into a depthwise 3×3 and a 1×1) measured 21,292,093 B, 19.2 G
+multiply-adds and 1.22× CPU — the cheaper follow-up if R19 shows the decoder
+helps.
+
+Queued as R19 (`tools/segmenter/queue/120-r19_dlv3plus_641_seed1.sh`): the R8
+recipe at 641, seed 1, read against R16 (seed 1) and R17 (seed 2) at 641 on
+the mask block, boundary F first. The entry raises `MEDATA_STALL_SECS` to 3 h:
+the train log only moves once an epoch (stdout is flushed when the next
+epoch's DataLoader workers spawn), R16's epochs took 50 minutes, and a
+decoder epoch can pass the default 90-minute stall window.
+
 ## 5. Validating the segmenter
 
 ### Why
