@@ -159,10 +159,12 @@ priced at 0.
   at 201.6 cm³ against the device's 223.4, and the white_rice phantom at
   16.3 cm³ against 47.7. The seed is large because the table speckle is in it,
   so the gate is firing for the wrong reason.
-- **The toast over-read is growth filling the plate.** The seed is 43,039 px
-  (27.8 cm², well under the gate) and growth takes it to 317,062 px on an
-  `edgeBand` plane. Ungrown it reads 61.4 cm³ (−70 %); grown, 426.0 cm³
-  (+105 %). Flat food on a raised plate is the case growth gets wrong.
+- **The toast over-read is not growth.** Corrected the same day; see
+  "Growth guard replay" below. The seed is 43,039 px (27.8 cm², well under the
+  gate), and growth takes it to 317,062 px (205.2 cm²) on an `edgeBand`
+  plane. Ungrown it reads 61.4 cm³ (−70 %); grown, 426.0 cm³ (+105 %). The
+  grown region is the two slices, not the plate. The excess is the plate
+  under them and the density.
 - **`calibrate` runs and bakes nothing.** With no truth in the bundles, the
   field plates take the legacy single-dominant path with zero truth. With
   truth written in (scratch copies), every plate is purity-dropped: the truth
@@ -187,6 +189,44 @@ reader no longer requires `plane_depth_mm`, which a real capture does not have.
 bundles no longer need `--depth-test-split`. A `medata_field` summary now
 records its own lineage and licence, where the run used to fall back to
 N5k's CC BY 4.0.
+
+### Growth guard replay (harness at `2a6f2b8`, depth-grown-food-region Decision 6)
+
+The toast's +105 % looked like runaway growth, so a second guard was swept: a
+grown/seed ratio cap and a grown-footprint cap, each as a fall-back to the
+ungrown map or as a clamp on the fill. Mass at the true class (the kept
+regions at 0.4 g/cm³) against the scale:
+
+| Capture | Ratio / grown footprint | Growth off | Current | Fall back, ratio > 4–6× | Clamp 3× | Clamp 100 cm² |
+|---|---|---|---|---|---|---|
+| `1790655022746` 104 g roll | 3.92× / 98.8 cm² | −80.8 % | −13.0 % | −13.0 % | −27.1 % | −13.0 % |
+| `1790748465041` 83 g toast | 7.37× / 205.2 cm² | −70.4 % | +105.3 % | −70.4 % | +12.4 % | +32.4 % |
+| `1790989654696` roll, `a179e0b` | gated (259.8 cm² seed) | +0.8 % | +0.8 % | +0.8 % | +0.8 % | +0.8 % |
+| `1790989735795` roll, `0ff10cc` | 1.06× / 80.1 cm² | +14.2 % | +18.4 % | +18.4 % | +18.4 % | +18.4 % |
+| `1790989787903` roll, two-view | plane-only | +12.1 % | +12.1 % | +12.1 % | +12.1 % | +12.1 % |
+| MAE / MAPE (5) | | 32.8 g / 35.7 % | 25.2 g / 29.9 % | 19.4 g / 22.9 % | 12.7 g / 14.2 % | 13.1 g / 15.3 % |
+| Nutrition5k carb MAE (216) | | 9.334 g | 9.215 g | 9.215 g | 9.222 g | 9.239 g |
+
+Nothing shipped. The full grid is in Decision 6.
+
+- **The toast is measured whole, and correctly.** The bundle's LiDAR depth
+  shows two slabs 18–25 mm above the board, where the slices are. The plate
+  between them sits 1–4 mm above the board, and the segmenter labelled only
+  the crust ends. The cells at least 12 mm up cover 207 cm² and hold 415 cm³;
+  growth's region is 205.2 cm² and 426.0 cm³. The excess over the scale has
+  two parts. One is the plate under the toast, 20–80 cm³: the plane is the
+  board, and the `edgeBand` refit was not adopted. The other is density: 83 g
+  over 345–405 cm³ is 0.20–0.24 g/cm³ for thick toasted open-crumb bread,
+  against bread_wholemeal's 0.4 measured on a roll.
+- **Every guard that helps the toast cuts a correct footprint.** The ratio
+  fall-back returns the crust-only 13.6 % of the toast (−70 %). The clamps
+  keep a part of it chosen by distance from the crusts. Their MAE gains are a
+  density error offset by chance. A ratio cap low enough to catch the toast
+  would also have removed the 2026-09-24 roll capture that grew 15.2×
+  (25.6 against 230.7 cm³, roll 260 cm³).
+- **Next for this plate:** a toasted-bread density, and the plane under food on
+  an `edgeBand` fit (`support-plane-reference`). A ring median would not do:
+  it reads the rim (11.4 mm), not the 1–4 mm under the toast.
 
 ## 2026-09-25 — the roll with an ID-1 card in frame: the card path picked nothing, build `1a6c35c-20260925-132501` (Release)
 
