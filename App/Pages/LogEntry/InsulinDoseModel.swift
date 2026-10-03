@@ -186,8 +186,14 @@ final class InsulinDoseModel {
     // than a fresh entry. Nothing is computed or pre-adjusted from recorded
     // activity — the magnitude of that relationship is unmeasured and this
     // does not invent one (Req 5.3).
+    //
+    // The caption names THIS provenance (unified-entry-sheet Req 3.4). Setting
+    // `kind` reloads that kind's opening value and caption, so without the
+    // last line the nominal amount opened under `last basal`, naming a value
+    // that was not on screen.
     func seed(units: Int, kind: InsulinKind) {
         self.kind = kind
         entry.set(value: Double(min(max(units, Self.minUnits), Self.maxUnits)))
+        seedCaption = kind == .bolus ? "scheduled bolus" : "scheduled basal"
     }
 }

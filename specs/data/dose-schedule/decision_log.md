@@ -1,5 +1,12 @@
 # Decision Log: Dose Schedule
 
+## Quick Decisions
+
+| ID | Date | Decision | Rationale |
+|----|------|----------|-----------|
+| Q1 | 2026-10-03 | The Adjust sheet opens with the caption `scheduled basal` (or `scheduled bolus`) under the nominal amount, consumed on the first edit like every other caption | unified-entry-sheet Req 3.4 makes the caption name the opening value's provenance; the kind change inside `seed(units:kind:)` left `last basal` under a value that was not the last basal, and a stale meal seed could put a bolus provenance over a basal dose |
+| Q2 | 2026-10-03 | ADJUST resolves its occurrence from the notification's own (schedule, due instant) through `openOccurrence`, as LOG does; an occurrence no longer outstanding opens a plain dose entry | Reading `outstanding` raced the foreground refresh that opens the occurrence, so the sheet opened unlinked and a saved dose left the reminder running; a closed occurrence must not be closed twice |
+
 ## Decision 1: Reverse the no-reminder requirement, because the reminder is the input
 
 **Date**: 2026-08-14

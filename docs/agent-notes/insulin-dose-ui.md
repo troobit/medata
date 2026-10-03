@@ -59,6 +59,10 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   opened at a meal's suggestion. The optional `@Environment` read hid it.
   `.tint(.medataAccent)` has the same placement and so does not reach the
   covers either; that one is a look, left alone.
+- **Every route to the dose sheet goes through `presentInsulinSheet()`**, which
+  reassigns `pendingSeed` each time and gives the dose-schedule ADJUST path no
+  meal seed (`adjustingDose != nil`). Before, ADJUST set `showInsulinSheet`
+  directly and inherited whatever seed the last Dose tap had taken.
 - **Fail-loud classification** (Req 4.9): `DoseComputation.classify` fires an
   `assertionFailure` on an insulin event whose metadata carries no usable
   `kind`. Basal is a *classified* exclusion and returns normally. The shipped

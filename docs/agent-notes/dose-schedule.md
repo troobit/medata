@@ -70,6 +70,15 @@ outcome beyond recording it, so the latency is harmless.
 it has no successor to compare against. `DoseScheduleModel.delete(scheduleID:)`
 closes it as skipped instead, because that path knows the intent.
 
+**ADJUST resolves its occurrence; it never reads `outstanding`** (Q2).
+ADJUST is `.foreground`, so the app comes up and the scene-phase `refresh()`
+that would open the just-due occurrence runs concurrently with
+`DoseAdjustRouter.pending`. `DoseScheduleModel.outstandingDose(for:)` opens it
+by (schedule, due instant) the way the LOG handler does; reading `outstanding`
+found nothing, the sheet opened as an unlinked bolus, and the saved dose left
+the reminder running beside it. The sheet's caption then reads
+`scheduled basal` (Q1).
+
 **There is no per-occurrence Skip in the UI** (Decision 5). Both surfaces
 carry a gear routing to the schedule's settings where Skip used to be — a
 dose one would skip every time means the schedule is wrong, and the fix is

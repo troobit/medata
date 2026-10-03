@@ -134,7 +134,7 @@ struct AppRoot: View {
             onLogDose: { dose in Task { await doseSchedule.logNominal(dose) } },
             onAdjustDose: { dose in
                 adjustingDose = dose
-                showInsulinSheet = true
+                presentInsulinSheet()
             },
             onScheduleSettings: {
                 settingsOpensAtDoseSchedule = true
@@ -393,16 +393,25 @@ struct AppRoot: View {
     // The ADJUST action arrives with the app coming to the front. Route it
     // through the same `pendingDeepLink` resume every other deep link uses, so
     // landing during a dismissing presentation is not silently dropped
-    // (docs/agent-notes/insulin-dose-ui.md).
+    // (docs/agent-notes/insulin-dose-ui.md). The occurrence is resolved from
+    // the notification's own (schedule, due instant) rather than read off
+    // `outstanding`, which the concurrent foreground refresh may not have
+    // brought up to date yet — see `DoseScheduleModel.outstandingDose(for:)`.
     private func presentAdjust(for pending: PendingDoseAdjust) {
-        adjustingDose = doseSchedule.outstanding.first {
-            $0.schedule.id == pending.scheduleID
-        }
-        if activeSheet == nil {
-            showInsulinSheet = true
-        } else {
-            pendingDeepLink = .insulinSheet
-            activeSheet = nil
+        Task {
+            adjustingDose = await doseSchedule.outstandingDose(for: pending)
+            if showActivitySheet {
+                pendingDeepLink = .insulinSheet
+                showActivitySheet = false
+            } else if showGlucoseSheet {
+                pendingDeepLink = .insulinSheet
+                showGlucoseSheet = false
+            } else if activeSheet == nil {
+                presentInsulinSheet()
+            } else {
+                pendingDeepLink = .insulinSheet
+                activeSheet = nil
+            }
         }
     }
 
@@ -426,8 +435,14 @@ struct AppRoot: View {
     // and at the standing default otherwise. `take()` returns nil once the
     // seed's 45 minutes have lapsed, so both two-tap paths are unchanged when
     // nothing is armed.
+    //
+    // Every route to the dose sheet comes through here, so `pendingSeed` is
+    // reassigned on every presentation and cannot outlive the one it was
+    // taken for. A scheduled dose being adjusted takes no meal seed: it opens
+    // at the schedule's nominal amount, and the armed suggestion — a bolus
+    // for a meal — stays armed for that meal's own dose.
     private func presentInsulinSheet() {
-        pendingSeed = doseSeeds.take()
+        pendingSeed = adjustingDose == nil ? doseSeeds.take() : nil
         showInsulinSheet = true
     }
 
