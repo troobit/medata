@@ -1362,3 +1362,97 @@ The user's tap is a correct prompt, and that is a review-screen feature, not a s
 
 ---
 
+## Decision 38: Segmenter verdicts move to the 2,506-image leak-free anchor heldout_leakfree_v3
+
+**Date**: 2026-10-03
+**Status**: accepted
+
+### Context
+
+Decision 21 made the 182-image `heldout_leakfree` split the instrument every segmenter verdict
+is read on. It is the part of FoodSeg103's re-cut heldout that was also held out of the
+pre-July seed-1234 carve, which was needed because the models shipped then had trained on most
+of the re-cut heldout. Every run since R1 trains only on the merged corpus's `train` split
+(Decision 36's recipe), so that restriction no longer applied to the checkpoints being compared.
+
+Six identical-recipe runs (estimation-quality task 14, 2026-09-29) measured what the 182 images
+could resolve. Only 13 palette classes appear in 20 or more of them. Below that bar the same
+recipe and seed swing 0.2–0.78 IoU between runs, and six classes have no truth at all. On the
+readable 13 the six runs span 0.025, so five of the six recipe levers tested (R11–R16) landed
+inside the noise, and R14's rare-class question could not be asked. Backlog 35 named the anchor,
+not the recipe, as the binding constraint.
+
+### Decision
+
+Read every merged-corpus checkpoint on `heldout_leakfree_v3`. It is every merged-corpus image
+outside `train` that survives a duplicate audit against all 45,515 train images: FoodSeg103
+heldout (830 of 854) and val (687 of 711), and Food Recognition 2022 validation (989 of 1,000).
+`tools/segmenter/build_anchor.py` builds it with a `manifest.json`, and `queue/lib.sh` validates
+on it. The 182-image split stays for checkpoints trained on the seed-1234 carve.
+
+### Rationale
+
+On the same six identical-recipe runs, v3 makes 28 classes readable (at least 20 images and at
+most 0.10 spread between runs), where the 182 managed 13. On the 13 readable on both, the median
+spread falls from 0.044 to 0.014. The readable-set mean band narrows from 0.025 to 0.011. The
+mask bands narrow 2–4×: food IoU spread 0.004, region IoU 0.012, boundary F 0.005, top-3 hit
+0.009. The audit is SHA-256 plus a perceptual-hash screen confirmed by thumbnail correlation.
+It found that 3 of the old 182 images are copies of train images, so the larger set is also the
+cleaner one. Including the merged `val` split is safe because `train.py` evaluates val in eval
+mode and saves the last epoch, so val never reaches the weights.
+
+### Alternatives Considered
+
+- **Average repeated runs on the 182**: two runs per arm would shrink each arm's class-mean noise
+  by about √2 at 6.5–10 h of MPS time per run. It cannot create truth for the classes the 182
+  lacks or barely holds: bread_wholemeal, water, lentils and cereal have none, and soup, banana
+  and apple have 1–2 images. Rejected as the primary fix. It stays the next lever for tightening
+  v3's own band.
+- **A second anchor only**: keep the 182 and add Food Recognition 2022 validation beside it as a
+  separate instrument. Food Recognition 2022 alone holds 18 classes at 20 or more images and
+  misses potato_boiled, chicken, beef, broccoli and peas. Every run would then carry two verdicts
+  to reconcile, on two instruments neither of which reads the whole palette. Rejected.
+- **FoodSeg103 images only (1,517), keeping Food Recognition 2022 out over user-level leakage**:
+  that split shares users and scenes with train in ways no image hash finds. Without it the
+  anchor reads 23 classes and loses bread_wholemeal (a carb staple), water, lentils, soup,
+  unsupported_liquid, tea and milk. The leakage inflates absolute levels on those classes, not
+  the difference between two runs scored on the same images. Rejected. The manifest's per-source
+  counts and per-image stems keep a FoodSeg103-only reading possible when absolute levels matter.
+- **Accept the readable 13 as the permanent gate**: leaves two thirds of the palette unmeasured,
+  and a 0.025 resolution is larger than every lever effect measured. Rejected.
+- **A stem-only or hash-only leak check**: the stem check already in `merge_corpus_foodrec2022.py`
+  missed the 3 copies in the 182. A perceptual hash alone flags unrelated plates as matches at
+  6–8 bits among 45k food photos, yet a colour-filtered copy can correlate at only 0.85. Rejected
+  for the two-stage audit.
+
+### Consequences
+
+**Positive:**
+- 28 classes, all staples except brown_rice and potato_mashed, have single-run readings; per-class
+  verdicts become possible.
+- The class-mean and mask bands are 2–4× narrower, so effects of about 0.011 on the class mean
+  and 0.005 on boundary F are resolvable from one run each.
+- Rare-class levers (R14) and resolution levers (R16, whose boundary F is now readable in the fixed
+  scoring space) can be judged at all.
+
+**Negative:**
+- Absolute levels are not comparable with any 182-anchor figure. Food Recognition 2022's
+  polygon-traced masks read about 0.10 lower on food IoU and 0.13 lower on boundary F than
+  FoodSeg103 for the same checkpoint. Every verdict recorded before 2026-10-03 was read on the
+  old instrument.
+- The anchor contains the merged val split, so it stays held out only while the trainer never
+  selects a checkpoint on val. The in-run val metric now covers part of the anchor's images.
+- Food Recognition 2022's user-level overlap with train remains and cannot be audited.
+- A validation takes about 4.5 minutes on MPS instead of about one, and the seed-1234 checkpoints
+  (`0295ea61edd9`, `24e0b022241a`) cannot be read on v3.
+- Cereal (14 images), beer, potato_mashed, brown_rice and beans_baked stay unreadable, and tea and
+  milk sit at the edge.
+
+### Impact
+
+`tools/segmenter/build_anchor.py` (new), `tools/segmenter/queue/lib.sh`, `docs/ml-training.md`,
+`docs/agent-notes/segmenter-run-queue.md`, and the estimation-quality segmenter task file (task 14
+entries "ANCHOR ENLARGED", "RE-READ ON v3", "R16 ON v3"). The split itself lives in the gitignored
+`data/merged_foodseg_foodrec2022/heldout_leakfree_v3/`.
+
+---

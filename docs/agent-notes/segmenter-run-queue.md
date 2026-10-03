@@ -112,6 +112,15 @@ tools/segmenter/tests -q`), commit, remove `PAUSE`.
   0.4807–0.4923, boundary F 0.3875–0.3921, top-3 hit 0.8177–0.8268. Staple
   spreads: potato_boiled 0.012, pasta 0.017, bread_white 0.023, white_rice
   0.024, chips_fries 0.071, bread_wholemeal 0.072.
+- Judge a lever against a prediction interval, not the band edges. A seventh
+  identical run lands outside a six-run min–max about 2 times in 7, so "just
+  outside the band" is what noise does. Use z = (x − mean6) / (sd6 · √(7/6));
+  |z| > 2.57 is outside the 95% interval for one new identical run. Expect
+  about 1.4 of the 28 classes to fall outside it by chance. PI95 on v3:
+  readable-28 mean 0.4552–0.4757, food IoU 0.8345–0.8424, region IoU
+  0.4758–0.4997, boundary F 0.3838–0.3952, top-3 hit 0.8141–0.8335. A class
+  with a tiny spread can show a large z on a small absolute move, so read the
+  absolute difference beside z.
 - Absolute levels differ by source and must not be compared across anchors.
   FR22's polygon-traced masks read food IoU ~0.78 and boundary F ~0.31 where
   FoodSeg103 reads ~0.88 and ~0.44 for the same checkpoint. Region IoU and

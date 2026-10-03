@@ -580,6 +580,12 @@ counts and the audit). It includes the merged `val` split, which is held out onl
   (0.012), boundary F 0.3875–0.3921 (0.005), top-3 hit 0.8177–0.8268 (0.009).
 - **Staple spreads**: potato_boiled 0.012, pasta 0.017, bread_white 0.023, white_rice 0.024,
   chips_fries 0.071, bread_wholemeal 0.072.
+- **Judge against a prediction interval, not the band edges**: a seventh identical run falls
+  outside a six-run min–max about 2 times in 7. Place each lever by
+  z = (x − mean6) / (sd6 · √(7/6)), where |z| > 2.57 is outside the 95% interval
+  (`docs/agent-notes/segmenter-run-queue.md` has the intervals). Read this way on v3, R16's
+  boundary F is the one clear gain (z +8.2) and R12 (dice 0.75) a clear harm (estimation-quality
+  task 14, "RE-READ R11–R15 ON v3").
 
 Absolute levels on v3 are not comparable with 182-anchor figures: the Food Recognition 2022 third
 of the anchor has polygon-traced masks that read about 0.10 lower on food IoU and 0.13 lower on
