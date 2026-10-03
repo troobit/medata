@@ -231,6 +231,17 @@ Nothing shipped. The full grid is in Decision 6.
 - **Next for this plate:** a toasted-bread density, and the plane under food on
   an `edgeBand` fit (`support-plane-reference`). A ring median would not do:
   it reads the rim (11.4 mm), not the 1–4 mm under the toast.
+- **Corrected the same day: the plate is a bowl, and it is more than 1–4 mm.**
+  Measured against the plane the volume uses, the plate runs from +4.0 between
+  the slices to +12.5 at the rim crest, and the open well 8 mm clear of the toast
+  reads +7.5. The 1–4 mm was the gap between the slices against the local board.
+  The plate holds 75–160 cm³ of the 426.0 (266–351 cm³ measured from it, +28 % to
+  +69 %), so the implied density is 0.24–0.31 g/cm³. No plane fits a bowl. The
+  plate candidate the refit refuses is a board-and-well straddle at +3.4 mm.
+  Admitting it reads +81 % and turns two committed scenes red. Numbers:
+  `support-plane-fit.md`, "Why `foodSupport` loses on the weighed field
+  captures". The same section shows that on `…735795` and `…787903` the
+  `edgeBand` plane is the plate top, not the table.
 
 ### One-command run: `make field-score` (harness at `7a5e44e` plus the segmenter and prediction-ms columns)
 

@@ -164,7 +164,11 @@ fall-back to the ungrown map and as a clamp on the fill. Nothing shipped.
   growth's region is 205 cm² and 426 cm³. The over-read is the plate under the
   toast (the plane is the board, `edgeBand`, and the refit is `edgeBand` too)
   plus density: 83 g over the depth's 345–405 cm³ is 0.20–0.24 g/cm³, against
-  bread_wholemeal's 0.4.
+  bread_wholemeal's 0.4. **Corrected 2026-10-03:** 1–4 mm is the gap between
+  the slices measured against the local board. The plate is a bowl, +4 to
+  +12.5 mm above the plane the volume uses, so it holds 75–160 cm³ of the
+  426, and the implied density is 0.24–0.31 (`support-plane-fit.md`, "Why
+  `foodSupport` loses on the weighed field captures").
 - **The growth ratio measures segmenter recall, not leaks.** Toast 7.4×,
   104 g roll 3.9×, and the founding 2026-09-24 roll capture (`1790223818017`)
   15.2×. Any ratio cap low enough to catch the toast also removes that roll

@@ -2732,3 +2732,128 @@ candidate is the table and which therefore says nothing about the plate-top hypo
 `1785135663727`. The mixing explanation for the 8.309° may well still be right; it is not
 *measured*, and Decision 55's "unexplained" stands until the empty-plate capture at the end of
 that section is taken.
+
+## Why `foodSupport` loses on the weighed field captures, and the toast's plate (2026-10-03)
+
+`make field-score` fits β on `foodSupport` plates only (Req 5.4;
+`CalibrateRun.applyReferenceGate` at `HarnessCLI/main.swift:941`), and three of the five weighed captures of
+`field-truth-sessions.md` (2026-10-03) used an `edgeBand` plane. **Nothing shipped.** The
+refusals come from two `[owed]` constants, but the candidates they refuse are not the plate top,
+and the one change that moves a volume is forbidden by the committed suite.
+
+### Per capture
+
+A scratch harness replayed `FixtureRunner.run`'s single-view order (first fit on the pre-shutter
+mask, card exclusion, reconcile, grow, refit on the grown mask) and evaluated every
+`SupportRegion` candidate against every guard independently. "At food" is the plane's height at
+the food-mask centroid ray above that capture's own edge-band plane. The last column is the
+used plane's inner ring band (8–13.7 mm out, grown footprint) measured against it, so negative
+means the plane sits above the plate around the food.
+
+| Capture | Plane used, at food | First fit (pre-shutter mask) | Refit (grown mask) | Plate ring vs the used plane |
+|---|---|---|---|---|
+| `1790655022746` 104 g roll | `foodSupport` refit, +1.73 | best support 0.414: the 25 cm² seed leaves the ring on unlabelled roll | admitted: 0.727, 6/8 sectors, 2 crossed | +1.17 |
+| `1790748465041` 83 g toast | `edgeBand` (the board), 0 | best 0.380: crust-only seed, ring on the toast | cand 1 at +3.38: **0.592** < 0.6, **5/8** < 6, 3 crossed; cand 2 (+14.60, the rim) 0.266 | plate +4…+9 (see below) |
+| `1790989654696` 80 g roll | `foodSupport` first fit, +21.41 (gated, no refit) | admitted: 0.622, 6/8, 0 crossed | — | −2.98 |
+| `1790989735795` 80 g roll | `edgeBand`, 0 — **the plate** | cand 1 at +5.16: 0.526, 5/8, 2 crossed | cand 1 at +6.41: 0.428, 3/8, inner −5.80 | −0.73 pooled, +0.41 sector-balanced |
+| `1790989787903` 80 g roll, two-view | `edgeBand`, 0 — **the plate** | cand 1 at −0.69: 0.613, **5/8** < 6, 0 crossed, 3 escaped | cand 1 at +0.07: 0.612, **5/8**, 0 crossed | −4.36 pooled, −3.68 balanced |
+
+The guards that refuse are `ringSupportMin = 0.6` (`SupportRegion.swift:298`, check at `:1392`)
+and `minSupportingSectors = 6` (`:386`, check at `:1396`). No other guard fires on a plate
+candidate. A refused refit cannot rescue the first plane: `foodSupportPlane`
+(`SupportPlaneFitter.swift:74`) returns nil for an `edgeBand` refit and
+`GrownRegionPlaneRefit.refit` (`:99`, `:108`) keeps the first plane.
+
+- **The `edgeBand` label covers two geometries.** On the toast it is the board. On `…735795` and
+  `…787903` the phone was close enough that the plate fills the four edge bands, and the
+  edge-band plane is the plate top. Their +18.4 % and +6.5 % are not the plane. Meanwhile
+  `…654696`'s `foodSupport` plane (tilt 5.56°) sits 3 mm above its own ring. Req 5.4's label
+  filter excludes two plate-top planes and admits one that is further off.
+- **The ring ladder tolerates ±5 mm, and that is the roll spread.** `ringMedianMaxMm = 5`
+  admits a plane 5 mm off its ring. At the rolls' 68–88 cm² footprints that is 34–44 cm³, or
+  15–20 % of a roll, which is the size of the whole −13…+18 % spread. On the four roll captures
+  the planes used sit −4.4…+1.2 mm from their rings, and the label does not predict the sign.
+- **No candidate on the toast or on `…735795` is the plate top, so rejecting them is right.**
+  The toast's cand 1 is one 252 mm component that crosses the board and the plate well (inner
+  band +4.01, three crossed sectors at +6.0…+11.4 mm, tilt 1.04°). `…735795`'s candidates sit
+  4.8–6 mm above the plate ring.
+- **`…787903` is the one place a constant is contradicted.** `minSupportingSectors` rejects a
+  plate plane whose three failing sectors are all escaped (−5.0, −7.0, −6.3 mm). That is
+  Decision 30's sign-blindness on a field capture. Decision 40's rule admits it: the adopted
+  plane moves 0.07 mm at the food and the volume 0.6 cm³.
+- **The field bundles bracket `maxCrossedSectors` at 2…2, as Decision 48 did.** The 104 g roll's
+  adopted plate plane carries 2 crossed sectors (floor). The toast's straddle carries 3 (ceiling,
+  if a plane 4–5 mm below the open well is a must-reject). That is a second derivation of
+  the same value, from different captures.
+
+### The toast's plate, measured from the depth
+
+Grown footprint (205 cm²); heights above the edge-band plane the volume uses.
+
+| Surface | Height |
+|---|---|
+| board just outside the plate (110–140 mm from its centre) | +2.5 (the edge-band plane sits 2.5 mm under the board here) |
+| plate between the two slices: the only plate visible inside the toast's span, all within the 7.4 mm smear | row medians +4.0…+4.6, lowest sample +1.4 |
+| open well inside the rim, ≥ 8 mm from the toast | p50 +7.5 (p10 4.7, p90 9.8) |
+| rim crest (circle fit, radius 80.4 mm) | ~+12.5 |
+| a radial bowl model of the visible well, averaged under the footprint | +8.5 (p10–p90 6.6–9.5) |
+
+The plate is a bowl rising from the centre to the rim, and the toast covers 20–97 mm of its
+radius, so no plane describes the support. The earlier "1–4 mm" is the gap between the slices
+read against the local board (+1.5…+2.1 there). The well is +5 on the same reference.
+
+Volume is linear in the plane's lift here, 18.81 cm³ per mm from 426.0 cm³:
+
+| Support surface | Lift | cm³ | Mass at 0.4 g/cm³ | Error vs 83 g | Implied density |
+|---|---|---|---|---|---|
+| edge-band plane (shipped) | 0 | 426.0 | 170.4 g | +105 % | 0.195 |
+| refit cand 1, adopted (harness, re-pruned) | +3.38 | 375.4 | 150.2 g | +81 % | 0.221 |
+| between the slices | +4.0 | 350.8 | 140.3 g | +69 % | 0.237 |
+| visible well p50 | +7.5 | 284.9 | 114.0 g | +37 % | 0.291 |
+| bowl model under the footprint | +8.5 | 266.1 | 106.4 g | +28 % | 0.312 |
+
+The plate accounts for 75–160 cm³, not 20–80. The rest is density: 0.24–0.31 g/cm³ for this
+toast against bread_wholemeal's 0.4.
+
+### The constants the bundles would move, and what each does
+
+Scratch environment overrides, since reverted. Field set: `field_score.py` on a release
+harness. Nutrition5k: `accuracy` over the 236 `single_dominant` fixtures of
+`tmp/n5k_fixtures_ckpt`, 217 scored, base MAE 9.176 g, 160 `edgeBand` / 71 `foodSupport`.
+
+| Setting | Toast | `…787903` | Field mass MAPE / carbs MAE (reviewed) | N5k ΔMAE, 95 % paired bootstrap | N5k flips | Committed suite |
+|---|---|---|---|---|---|---|
+| shipped | `edgeBand` +105.3 % | `edgeBand` +6.5 % | 29.5 % / 12.2 g | — | — | green |
+| Decision 40 rule, `maxCrossedSectors` 2 | unchanged (3 crossed) | `foodSupport` +6.8 % | 29.5 % / 12.2 g | −0.000 g (−0.002…+0.001) | 2 | green |
+| `minSupportingSectors` 5 | unchanged (0.592) | `foodSupport` +6.8 % | 29.5 % / 12.2 g | +0.015 g (−0.002…+0.047) | 5 | red |
+| 5 and `ringSupportMin` 0.59 | `foodSupport` 375.4 cm³, +80.9 % | `foodSupport` +6.8 % | 24.7 % / 10.6 g | +0.015 g (−0.003…+0.047) | 6 | red |
+| 5 and `ringSupportMin` 0.53 | as above | as above | 24.7 % / 10.6 g | +0.014 g (−0.004…+0.046) | 9 | red |
+
+The other three captures do not move in any row (`…735795`'s best is 0.526), and no roll leaves
+±20 %. "Red" is two committed scenes: `food across a plate edge is rejected on sectors` and
+`a ring supported only across an arc … fails on sectors`. That is Decision 41's collision. The
+only change that moves the toast needs that red suite, plus a `ringSupportMin` fitted to 0.008
+of one bundle, and it adopts the straddle and still reads +81 %. No row bakes a β: the best
+admits two bread_wholemeal plates against a floor of 30. The Decision 40 rule passes everything
+and changes one label by 0.6 cm³, which is not enough to ship a guard Req 3.7 still lists as
+owed.
+
+What would change the answer:
+
+- **A support surface for bowl plates, not a plane.** The toast's support is recoverable from
+  the depth as a bowl and not as a plane. That is a Req 1.1–1.3 design question, not a constant.
+- **A β filter keyed on the measured plane-to-ring offset, not the label.** The persisted ring
+  on an `edgeBand` row cannot do it yet. It is measured on the first fit's pre-shutter mask,
+  which sits on unlabelled food on these captures. Its inner band reads +13.5 on the toast and
+  +6.0 on `…735795`.
+
+How it was measured, for the next pass:
+
+- A release harness scores the field set in ~6 s and Nutrition5k in ~35 s:
+  `swift build -c release --product HarnessCLI`, then
+  `python3 tools/field_loop/field_score.py --harness .build/release/HarnessCLI --out <dir>`.
+  The debug `make field-score` takes ~4 min.
+- A scratch swift-testing file in `HarnessCLITests` reaches `SupportRegion`'s internals with
+  `@testable import SupportPlane`. `SplitMix64` is then ambiguous, because `Benchmark` has one
+  too. It cannot be qualified either, because the module name `SupportPlane` is shadowed by the
+  struct. Add `@testable import struct SupportPlane.SplitMix64`.
