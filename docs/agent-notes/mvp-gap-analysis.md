@@ -1,121 +1,124 @@
-# MVP gap analysis — working-model readiness
+# MVP gap analysis — current state
 
-**Date:** 2026-06-28
-**Method:** one validation agent per active iOS spec (9 specs) and per bugfix folder
-(10 specs under `specs/bugfixes/`), each cross-checking its spec against the code tree in
-an isolated worktree. This note synthesises their findings into the path to an MVP that
-produces a *real* carb number (not a dev-stub placeholder). Per-spec detail lives in each
-`decision_log.md`; the meta log is `specs/DECISIONS.md`.
+**As of 2026-10-03** (branch `research`). Replaces the June note, whose single
+blocker — no trained segmenter — closed in July: the bundled model is
+`coreml_ab812dc3aa9d` (`model-production.md`). The MVP is: 1–2 photos of a
+plate → a recorded carbohydrate estimate → a suggested insulin dose from it.
 
-**Update 2026-07-02:** dataset-level verification (Nutrition5k facts, Google
-mobile-food-segmenter-v1 evaluation) and the prioritised remediation plan now live in
-[dataset-strategy.md](dataset-strategy.md); the P0 verdict below is unchanged.
+Classes used below: **(a)** desk-fixable code gap, **(b)** needs the phone (a
+look or a sensor), **(c)** needs hardware or data we do not have yet.
 
-The bugfix pass confirmed the **single-view LiDAR path verifies clean on device** (2.9 mm
-plane residual, no `lidarFitDegenerate`) and that the model-independent App-layer capture
-fixes — first-shot `noFoodPixels` race, Single/Double toggle key, ARSession-config race,
-unblockable refusal sheet — are all present and not regressed. It also corrected
-`DECISIONS.md` MD-9 (a phantom "250k candidate ceiling" that exists in neither the code nor
-the source decision logs).
+## The path, hop by hop
 
-## Verdict
+| Hop | Code | State | Outstanding |
+|---|---|---|---|
+| 1. Capture | `App/Pages/Capture/`, `CaptureKit` | Proven on device (single-view LiDAR, Release) | (b) two-view well-aimed trail (`bugfixes/two-view-carve-no-volume` 1), two-view refit round (`two-view-trust` 21.2), sesame roll end to end (`unknown-food-nameable` 8). (c) a non-LiDAR phone, or the oblique-band capture, for the no-depth path |
+| 2. Estimate | `Pipeline` | Proven: single-view reads the weighed 104 g roll at −13 % / +8 % (±11 % run to run). No-depth two-view refuses (`noSupportPlaneWithoutDepth`) | (b) weighed plate on the promoted plane (`support-plane-reference` 27), capture pass + ANE residency (`myfoodrepo-bridge` 7, 8). (c) β calibration and the benchmark campaign |
+| 3. Persist | `GRDBPersistenceStore`, outcome rows, bundles | Proven (pulls, outcome rows, bundle replay) | (b) meal-review Req 9.4 / 9.10 durability checks |
+| 4. Review | `MealReviewView` / `MealReviewModel` | Proven: layout, one-tap Record, reject, field notes. Relabel never exercised on device | (b) `mass-readout` 4, `manual-carb-intake` 19, `unknown-food-nameable` 8, swap-loop attempt choice |
+| 5. Records / total | `RecordsModel`, `TrendsModel`, `ResultView` | Corrected total read everywhere | (b) meal-review Req 8.7 (corrected name and figures in history) |
+| 6. Dose | `Dosing`, `DoseComputation`, `DosePill`, `DoseWorkingSheet` | Arithmetic proven by `make test`; never seen seeding the sheet on device | (b) `insulin-dosing` 18, 37. (c) 19 retrospective, 20, 22–26 fat programme |
+| 7. Dose sheet + schedule | `AppRoot`, `LogSheet`, `DoseScheduleModel` | Desk-complete | (b) `dose-schedule` 21–25, `settings-information-architecture` 3. (c) `dose-schedule` 26 |
 
-**The MVP is blocked on exactly one thing: there is no trained CoreML segmenter.** Every
-other subsystem — capture, YCbCr→BGRA conversion, pre-shutter masking, card/LiDAR scale,
-volume geometry, persistence, and the full three-tab UI — is implemented and verified
-against the dev-stub. Estimates are garbage *only* because `StubInferenceEngine`
-(`MedataCore/Sources/Segmentation/StubInferenceEngine.swift`, behind `DEV_STUB_SEGMENTER`)
-paints a deterministic centred ellipse instead of real food masks. Swap in a real model
-and the pipeline produces a real number; nothing else is on the critical path.
+No (a) item is left open on this path after the fixes below.
 
-Two myths to retire:
+## Fixed at the desk on 2026-10-03 (built, not yet seen on the phone)
 
-- **The "~22 s freeze" is not a code defect.** It is a Debug `-Onone` artifact; the
-  Release build runs a full estimate in ~827 ms with no AR-frame starvation
-  (`pipeline-rdc` D16 → `DECISIONS.md` MD-28). Do not schedule a perf fix for it.
-- **OVERVIEW "Done" ≠ "shipped and trusted."** Several specs are code-complete but their
-  *accuracy* is unverifiable until a real model and a labelled dataset exist (below).
+1. **The dose sheet was never seeded from a meal.** `.environment(doseSeeds)`
+   sat inside AppRoot's cover and sheet modifiers, so the holder was nil in
+   the Capture and Intake covers and every `arm(_:)` did nothing. Moved
+   outermost. (`insulin-dose-ui.md`)
+2. **Reminder Adjust** opened unlinked when it raced the foreground refresh,
+   inherited the last meal seed, and captioned the nominal amount `last basal`.
+   It now resolves its own occurrence and reads `scheduled basal`. (dose-schedule
+   Q1, Q2)
+3. **Review buttons dead after a screen lock.** The AR interruption moved the
+   state off `.showingResult`; Record, Retake and Delete were gated on it. A
+   cover dismissed mid-review now also clears the stale review. (meal-review Q1)
+4. **Amounts under a plate scale were scaled twice** (½: typing 100 g showed
+   50 g). (meal-review Q2)
+5. **Review dose pill could land behind its total** — now `.task(id:)`.
+6. **History after a relabel or an added food** priced rows at the predicted
+   food, showed a renamed Unknown food at 0 g, and dropped the relabel and
+   added foods from the total at the first stepper tap. (meal-review Q3)
 
-## Per-spec MVP status
+## Desk-complete, never confirmed on the phone
 
-| Spec | Code state | On the MVP critical path? |
-|---|---|---|
-| `estimation/pipeline` | Complete behind the stub; harness restored but never run | **Yes** — owns the missing model + β_c calibration |
-| `estimation/pipeline-real-device-correctness` | Done & verified (single-view LiDAR) | No — two-view on-device verify still open |
-| `estimation/mv-volume-estimator` | **Superseded**, no code landed | No — premise was invalid (see below) |
-| `estimation/lidar-first-scale-fallback` | Done & verified, 4/4 tasks | No |
-| `capture/rawframe-rgb-conversion` | Done; one latent colour gap | No — gap is dormant on ARKit |
-| `data/event-log-schema` | Done & verified, 15/15; carb result persists today | No |
-| `ui/iphone-experience` | Done & verified, 60/60; degraded path handled | No — one cosmetic readout gap |
-| `ui/shutter-blocked-feedback` | 4/5; success path unobserved | Indirectly — gated on the model |
-| `ui/bubble-only-cleanup` | Done & verified | No — pure UI hygiene |
+- The outstanding-dose gear pushing Settings › Insulin and scrolling to the
+  schedule (`settings-information-architecture` 3).
+- The reminder: firing, repeating, stopping, lock-screen Log, stale follow-up
+  writing nothing, refused authorisation (`dose-schedule` 21–24).
+- Relabel, Add a food and the two swap-loop attempts on a real capture.
+- The dose working sheet's arithmetic lines on a real meal.
 
-## The critical path (P0) — not agent-actionable
+## One-sitting device checklist
 
-Reaching a real estimate requires work that is **data- and human-gated**, outside what a
-coding agent can produce:
+Ordered by what each step unlocks. `make dev` (Release + model), then match
+`event=launch buildStamp=…` to the commit before trusting anything.
 
-1. **Train + bundle the segmenter.** No `segmenter.mlpackage` exists anywhere in the tree;
-   Release builds throw `segmenterModelMissing` (`PipelineFactory.swift`). Needs:
-   FoodSeg103 (or equivalent) transfer-learn of DeepLabV3+MobileNetV3-Large, the
-   `tools/segmenter/export.py` Core ML export, and ANE-residency verification. Bars:
-   mean IoU ≥ 0.60 on a held-out set (MD-12) (bars since re-derived to 0.48/0.45 —
-   segmenter-foundation D5/D14).
-2. **Calibrate β_c against a gravimetric dataset.** Every class currently ships
-   `β = 1.0 / uncalibrated_unity`, so even with a good segmenter the carb number carries
-   the visual-hull upward bias. Needs ≥ 30 gravimetric meals/class. `prerequisites.md`
-   flags dataset acquisition as the single largest project risk; it is the true long pole.
-3. **Then** the accuracy bar (MAPE < 20%, MD-25) becomes measurable for the first time —
-   today it is structurally unverifiable.
+1. [ ] **Capture → Record → Dose.** Single-view a plate. The review shows a
+       dose pill; tap it, the working's lines sum. Record, close Capture, tap
+       Home › Dose: the sheet opens at the suggested units under
+       `from N g at R g/U`. Save.
+       *Unlocks insulin-dosing 18 (main bullets) and 37; proves fix 1.*
+2. [ ] **Records → that meal.** The pill shows the same dose and a `given` line
+       pairs the bolus just saved. *insulin-dosing 37.*
+3. [ ] **Relabel and add.** Capture again; relabel one food (sheet or chip),
+       Add a food, tap ½, then step one row: the row shows what was stepped
+       and the pill follows the total. Record. In Records the meal names the
+       corrected food; open it: rows show the corrected food in its own unit,
+       the added food is listed, and tapping + then − leaves the hero total
+       where it was. *Fixes 4–6; meal-review Req 8.7; unknown-food-nameable 8
+       if the plate is the sesame roll.*
+4. [ ] **Lock mid-review.** Capture, lock the phone on the review, unlock, tap
+       Record: it leaves. *Fix 3.*
+5. [ ] **Reminder.** Settings › Insulin: set Repeat every 5 min, Add a
+       schedule entry two minutes ahead (allow notifications); lock the phone. When it fires: tap **Adjust** — the sheet
+       opens at the nominal amount under `scheduled basal`; save; the Home card
+       clears and no repeat arrives. Add another, tap **Log** from the lock
+       screen: the app never appears, and Records shows the dose. *Fix 2;
+       dose-schedule 21, 22.*
+6. [ ] **Stale follow-up.** With a third entry, log it in-app from the Home card,
+       then tap the next repeat's Log: nothing new in Records. *dose-schedule 23.*
+7. [ ] **Gear.** With an entry outstanding, the Home card's gear lands on the
+       schedule, not the Settings top. *settings-information-architecture 3.*
+8. [ ] **Quick-add.** Review › ⋯ › Save as quick-add, name it; Intake shows the
+       tile; tapping it then Home › Dose opens seeded. *manual-carb-intake 19;
+       insulin-dosing 18 bullet 3.*
+9. [ ] **Looks.** Mass line on the review and Records (`mass-readout` 4); the
+       dark theme acceptance band (`unified-dark-theme` 5).
+10. [ ] **Durability.** Relabel, force-quit before Record, reopen: Records shows
+        the correction (meal-review 9.4). Delete that meal: the corpus row
+        survives (9.10).
 
-## Agent/dev-actionable cleanups (P1) — small, independent
+Remove the test schedule entries afterwards (swipe in Settings › Insulin).
 
-These are real spec↔code drifts the validation surfaced; none block the model but all are
-cheap and worth clearing:
+## Needs hardware or data
 
-1. **Delete dead retention code.** `RetentionScheduler.swift` +
-   `RetentionSchedulerTests.swift` remain in `MedataCore/Sources/Persistence/` although
-   `estimation/pipeline` tasks 43/44 mark them DEFERRED-REMOVED.
-2. **Δθ readout is inert (cross-spec contract gap).** `ResultView.maxDeltaThetaDeg` is
-   hardcoded `0` because the persisted `PbConfidenceResult` lacks
-   `deltaThetaNadirDeg`/`deltaThetaObliqueDeg`. The fix is on the **estimation** side
-   (persist the fields); the UI is ready to consume them. (`ui` D21 / MD-19.)
-3. **Video-range YCbCr colour gap (latent).** `PixelBufferAdapter` decodes both full- and
-   video-range YCbCr with the full-range matrix. Dormant because ARKit emits full-range,
-   but it will colour-shift any non-ARKit caller (e.g. the macOS `HarnessCLI`). Fix:
-   select the matrix on the four-CC, or refuse `420v` per Req 1.5. (`rawframe` D8 / MD-17.)
-4. **Shutter log subsystem split.** Two `estimate.end success=false` lines log under
-   `ie.medata.captureflow`/`Estimation`, not the `Shutter` logger, so a single Console
-   predicate misses them (`shutter` validation note).
+- **β calibration and the accuracy bar.** Every class ships at unity β; the
+  MAPE < 20 % bar (MD-25) needs ≥ 30 weighed meals per class, and the SNAQ
+  comparison needs the ≥ 20-meal benchmark campaign (`snaq-parity`). One
+  weighed object exists (the 104 g roll).
+- **The no-depth two-view path.** It refuses before fitting a plane; the
+  oblique-band capture (Developer › Oblique tilt unlocked) or a non-LiDAR phone
+  decides it (`two-view-trust` Decision 8, task 20).
+- **Dose evidence.** `insulin-dosing` 19–20 need an exported database with weeks
+  of CGM, meals and boluses; 22–23 need a weighed fat reference and CGM history;
+  `dose-schedule` 26 needs weeks of due/logged pairs to set I and K.
+- **Segmenter.** Training levers are exhausted against a 13-class-readable
+  anchor; enlarging the held-out set is the next ML action
+  (`segmenter-run-queue.md`).
 
-## Verification debt (P2) — needs a device + (for accuracy) the model
+## Seen, left alone (not on the path or not a defect)
 
-- **Two-view SfS path never confirmed end-to-end on device** (iPhone 13 Pro Max, iOS 26.5).
-  Tracked in `bugfixes/closeout-trail-mvp-cleanup` Phase 5 and
-  `bugfixes/two-view-carve-no-volume` — the latter pins the real two-view
-  `noFoodVolumeRecovered` symptom on a mis-aimed oblique capture, **not** a segmenter or
-  carve defect. The recommended fix — wiring the tilt aim guide into capture — **has since
-  landed** (`TiltBubbleGuide` in `CaptureFlowView`, 2026-06-24); what remains is the
-  on-device confirmation that a well-aimed two-view trail yields `estimate.end success=true`
-  with non-zero volume. Caveat: `StubInferenceEngine` paints an *image-centred* ellipse
-  regardless of camera pose, so the dev-stub two-view path stays aim-sensitive even with the
-  guide — a world-locked stub (or the real segmenter) is the durable fix.
-- **Success path never observed to complete** (`shutter` task 5 stays Pending) — the
-  dev-stub refuses with `noFoodPixels`/garbage, so a clean `estimate.end success=true` +
-  ResultView render is unconfirmed. Unblocks when the real model lands.
-- **Single-view LiDAR success-path** on-device verification still untested.
-
-## Why `mv-volume-estimator` is superseded (not a gap)
-
-It proposed decoupling the volume path from the segmenter so two-view capture returns a
-rough number instead of refusing. A static read invalidated its premise: the dev-stub
-already paints a *food* class (`white_rice`) at ~0.99999 in both views, so the silhouette
-is already carveable — the decouple solved a non-problem. The real two-view defect is
-geometric/capture-side and lives in the bugfix above. Marked Superseded in OVERVIEW.
-
-## Bottom line
-
-Spec hygiene is now clean (references fixed, ledgers rune-valid, decision logs current).
-The product gap is **not** in the specs or the Swift — it is the **absence of a trained
-model and a gravimetric calibration set**. That is the whole MVP. The P1 cleanups can
-proceed in parallel and independently; the P2 verifications mostly wait on the model.
+- The review shows the calibration banner over `dev_stub` figures where
+  ResultView suppresses it; meal-review design keeps the placeholder chip off
+  the review. Stub builds only.
+- ResultView's `Protein — soon` / `Fat — soon` placeholders, although fat and
+  protein are computed and stored (insulin-dosing Req 8 keeps them out of the
+  dose).
+- `.tint(.medataAccent)` on AppRoot does not reach the covers either; changing
+  it is a look decision.
+- A pipeline that finishes after Capture was closed still pushes its review on
+  the next Capture, whenever that is; Record then arms a fresh seed for the old
+  meal.

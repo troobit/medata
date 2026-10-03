@@ -606,11 +606,18 @@ final class MealReviewModel {
 
     // Per-food amount (Req 6.1, 6.8): state updates immediately; the store
     // write is debounced per food so a held stepper coalesces to one UPDATE.
+    //
+    // `grams` is the amount the row should SHOW — the stepper steps from the
+    // displayed mass and the gram editor takes what was typed — so the base is
+    // that amount with the standing plate scale divided back out. Stored
+    // as-is, the scale multiplied it a second time: at ½, typing 100 g showed
+    // 50 g and one stepper tap from 50 g showed 20 g. Later scale taps still
+    // apply to this base without compounding (Req 6.4). Every factor is > 0.
     func setAmount(classId: String, grams: Double) {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
         let clamped = max(0, grams)
-        food.scaleBaseMassG = clamped
+        food.scaleBaseMassG = clamped / scale.factor
         food.baseIsUserSet = true
         food.massSource = .perFood
         food.flags.amountCorrected = true

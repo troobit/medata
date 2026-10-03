@@ -281,6 +281,32 @@ final class DoseScheduleModel {
         await refresh(now: instant)
     }
 
+    // The occurrence a notification's ADJUST names, resolved the way the LOG
+    // action resolves it: by (schedule, due instant), through the idempotent
+    // `openOccurrence`. It cannot be read off `outstanding`. ADJUST brings the
+    // app to the front, and the foreground `refresh()` that would open this
+    // occurrence runs concurrently with the router change — so `outstanding`
+    // can still predate the due instant, and the sheet then opened at the
+    // bolus default with no schedule attached: saving it recorded a dose, left
+    // the occurrence open and the reminder repeating, and invited the same
+    // dose a second time. nil when the schedule is gone or the occurrence is
+    // no longer outstanding; the sheet then opens as a plain dose entry.
+    func outstandingDose(for pending: PendingDoseAdjust) async -> OutstandingDose? {
+        guard let schedule = DoseScheduleSettings.schedules()
+            .first(where: { $0.id == pending.scheduleID })
+        else { return nil }
+        do {
+            let occurrence = try await store.openOccurrence(
+                scheduleID: pending.scheduleID, dueAt: pending.dueAt
+            )
+            guard occurrence.outcome == .outstanding else { return nil }
+            return OutstandingDose(occurrence: occurrence, schedule: schedule)
+        } catch {
+            log.notice("event=dose.adjust.resolve.failed error=\(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
     // Saving through the pre-seeded sheet closes the occurrence with
     // `wasNominal` false, so a fit can tell a default-accepted dose from a
     // deliberately chosen one (Req 5.2). The sheet writes its own insulin

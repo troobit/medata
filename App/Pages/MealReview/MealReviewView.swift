@@ -48,9 +48,10 @@ struct MealReviewView: View {
     // surface cannot show another surface's leftovers.
     @State private var doseReadout: DoseReadout?
     @State private var showingWorking = false
-    // Optional: this surface is also reachable from history routes, and the
-    // seed holder is only injected on the live capture path (it is owned by
-    // AppRoot). Absent, nothing is armed.
+    // Optional so a surface built without AppRoot above it (a preview) still
+    // renders; AppRoot injects the holder at the outermost level of its body,
+    // which is what lets it reach the Capture cover this surface sits in.
+    // Absent, nothing is armed.
     @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
     // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
     // menu action, presented as the same edit sheet a hand-authored preset
@@ -141,8 +142,15 @@ struct MealReviewView: View {
     // every correction — tapping 1/2 on the plate scale rolls the carb total,
     // the plate mass and the dose figure together, which teaches the divisor
     // better than a caption could.
+    //
+    // A superseded run does not write: `.task(id:)` cancels it when the total
+    // moves again, and the cancellation is checked after the store reads, so
+    // a slower computation for an earlier total cannot land last and leave the
+    // pill disagreeing with the figure beside it.
     private func refreshDose() async {
-        doseReadout = await DoseComputation.readout(for: doseSubject, store: store)
+        let readout = await DoseComputation.readout(for: doseSubject, store: store)
+        guard !Task.isCancelled else { return }
+        doseReadout = readout
     }
 
     #if FIELD_LOOP
@@ -227,11 +235,9 @@ struct MealReviewView: View {
         // 500 ms retry); truth attaches to that attempt and nothing else.
         .task(id: model.outcomeID) { await weighedMass.load(outcomeID: model.outcomeID) }
         #endif
-        // On appearance and on every correction — see `refreshDose()`.
-        .task { await refreshDose() }
-        .onChange(of: model.pendingTotalCarbsG) {
-            Task { await refreshDose() }
-        }
+        // On appearance and on every correction — see `refreshDose()`. The
+        // same `.task(id:)` shape ResultView uses for its own readout.
+        .task(id: model.pendingTotalCarbsG) { await refreshDose() }
         .quickAddNamePrompt(
             draft: $presetDraft,
             name: $presetName,

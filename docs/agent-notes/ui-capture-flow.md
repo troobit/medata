@@ -177,11 +177,29 @@ composition only; all behaviour is in the model and is unit-tested.
   solid at one serving or 100 g, user-set, persisted by the ordinary upsert.
   Two things follow from that key. `adoptStoredRows` appends stored `added_`
   rows on a re-push, or the display would drop a food the reconciling total
-  still counts; and history (`ResultView`) never lists it per row because its
-  rows come from `record.macros.perClass` — the corrected total and the dose
-  do include it. `reverseRelabel` and `markAbsent` refuse added rows; reject
-  is their removal. `tools/shortlist_hit_rate.py` will read an added row as a
-  rank-0 relabel until it filters the prefix.
+  still counts; and history (`ResultView`) lists it from the corrections
+  (`addedRowKeys`, the `added_` keys of the folded `correctedClassIds`), with
+  zero share of the stored total and its own food's coefficient (meal-review
+  Q3) — before 2026-10-03 it was not listed, and the first history stepper
+  tap re-totalled the meal without it. `reverseRelabel` and `markAbsent`
+  refuse added rows; reject is their removal. `tools/shortlist_hit_rate.py`
+  will read an added row as a rank-0 relabel until it filters the prefix.
+
+- **History rows price the CURRENT food, not the predicted one** (meal-review
+  Q3). `ResultView.FoodRow` carries `classId` (the corrected food) and
+  `carbsPerGram` for relabelled and added rows; servings are keyed by the
+  current food because the review writes a relabelled row's serving count in
+  that food's unit. Before, a renamed Unknown food read 0 g and 0 g carbs and
+  a stepper tap logged a total priced at the predicted coefficient.
+
+- **The review's Record / Retake / Delete do not require `.showingResult`.**
+  `dismissResult()` and `deleteAndDismiss` act whenever the capture stack has
+  the review pushed: locking the phone mid-review delivers an AR interruption
+  that moves the state to `.trackingLost`, and gated on the state alone all
+  three buttons went dead. `captureDismissed()` clears the path, so a review
+  interrupted by a deep link or the dose reminder's Adjust closes with the
+  cover (meal-review Q1). Under a standing plate scale, `setAmount` takes the
+  amount the row should show and divides the scale back out (Q2).
 
 - **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
   `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
