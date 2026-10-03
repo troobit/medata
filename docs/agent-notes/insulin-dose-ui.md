@@ -49,6 +49,16 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   and seeds nothing. Nothing links a saved dose back to a suggestion; the
   suggested-versus-given pairing is the same ±45-minute window over recorded
   events (`DoseComputation.givenUnits(at:store:)`).
+- **`.environment(doseSeeds)` must stay the OUTERMOST modifier of
+  `AppRoot.body`.** A `.sheet`/`.fullScreenCover`'s content takes its
+  environment from where the presentation modifier sits, so an
+  `.environment` applied inside it never reaches what it presents (verified
+  with a SwiftUI probe, 2026-10-03). Until then it sat on `HomeView`, and the
+  holder was nil in the Capture and Intake covers — the only arming sites —
+  so every `doseSeeds?.arm(_:)` silently did nothing and the dose sheet never
+  opened at a meal's suggestion. The optional `@Environment` read hid it.
+  `.tint(.medataAccent)` has the same placement and so does not reach the
+  covers either; that one is a look, left alone.
 - **Fail-loud classification** (Req 4.9): `DoseComputation.classify` fires an
   `assertionFailure` on an insulin event whose metadata carries no usable
   `kind`. Basal is a *classified* exclusion and returns normally. The shipped

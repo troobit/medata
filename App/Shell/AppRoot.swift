@@ -160,7 +160,6 @@ struct AppRoot: View {
         #if FIELD_LOOP
         .fieldScreen("home")
         #endif
-        .environment(doseSeeds)
         .fullScreenCover(item: $activeSheet, onDismiss: {
             settingsOpensAtDoseSchedule = false
             // A deep-linked present waits for the cover's dismissal to
@@ -381,6 +380,14 @@ struct AppRoot: View {
             adjustRouter.pending = nil
             presentAdjust(for: pending)
         }
+        // OUTERMOST, after every `.fullScreenCover` and `.sheet` above. A
+        // presentation's content takes its environment from where the
+        // presentation modifier sits, so an `.environment` applied inside one
+        // never reaches what it presents. Placed on HomeView, as it was, the
+        // holder was nil in the Capture and Intake covers — the only places a
+        // seed is armed — so every `doseSeeds?.arm(_:)` was a silent no-op and
+        // the dose sheet never opened at a meal's suggestion (Req 6.4).
+        .environment(doseSeeds)
     }
 
     // The ADJUST action arrives with the app coming to the front. Route it

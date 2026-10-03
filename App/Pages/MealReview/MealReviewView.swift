@@ -48,9 +48,10 @@ struct MealReviewView: View {
     // surface cannot show another surface's leftovers.
     @State private var doseReadout: DoseReadout?
     @State private var showingWorking = false
-    // Optional: this surface is also reachable from history routes, and the
-    // seed holder is only injected on the live capture path (it is owned by
-    // AppRoot). Absent, nothing is armed.
+    // Optional so a surface built without AppRoot above it (a preview) still
+    // renders; AppRoot injects the holder at the outermost level of its body,
+    // which is what lets it reach the Capture cover this surface sits in.
+    // Absent, nothing is armed.
     @Environment(DoseSeedHolder.self) private var doseSeeds: DoseSeedHolder?
     // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
     // menu action, presented as the same edit sheet a hand-authored preset
