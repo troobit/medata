@@ -249,6 +249,12 @@ make field-derive OUT=data/merged_foodseg_foodrec2022 IDENT=anthropic:claude-opu
 make field-derive CALIBRATION_OUT=/tmp/field-calibration
 ```
 
+The calibration side takes only weighed truth, and that is entered on the phone:
+the review screen's "…" → **Weighed mass** (field builds) writes a
+`fidelity=weighed` `benchmark_meals` row linked to the capture's outcome, which
+`make field-pull` carries in `meals.sqlite`. No hand edit of `index.sqlite` is
+needed; `docs/agent-notes/field-truth-sessions.md` has the data path.
+
 ### Exporting the calculus
 
 `make field-export [OUT=<file>]` emits one JSONL record per capture. Every

@@ -1,5 +1,11 @@
 # Decision Log: ML Feedback Loop
 
+## Quick Decisions
+
+| ID | Date | Decision | Rationale |
+|----|------|----------|-----------|
+| Q1 | 2026-10-03 | Weighed truth is entered on the review screen: "…" menu → **Weighed mass** (`FIELD_LOOP` only), one gram field per food still on the plate, under each row's current class. It is stored as a `fidelity=weighed` row in the device's `benchmark_meals` table with the capture's `estimation_outcomes.benchmark_meal_id` pointed at it, in one transaction (`PersistenceStore.attachWeighedTruth`); a re-entry replaces the meal it supersedes. The figure joins the review mass line ("≈ N g on plate · M g weighed"). | Applies `docs/roadmap.md` §4's "no second truth surface": `benchmark_meals` is already the weighed surface `make field-pull` carries in `meals.sqlite`, ingest copies and `derive_calibration` joins, so no new table, file format or ingestion code is needed. Rejected: a grams field on the field note (stated values stay apart from weighed truth — this spec's Out of Scope) and a new device table (a second truth store the on-device Benchmark report would not see). |
+
 ## Decision 1: Full-spec mode, homed at `specs/estimation/ml-feedback-loop/`
 
 **Date**: 2026-08-26

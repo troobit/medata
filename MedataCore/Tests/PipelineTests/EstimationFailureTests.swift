@@ -658,6 +658,12 @@ private struct NoOpPersistenceStore: PersistenceStore {
     ) async throws {
         fatalError("unused")
     }
+    func attachWeighedTruth(
+        _ meal: BenchmarkMeal, toOutcome outcomeID: UUID,
+        carbsPer100g: (String, String) -> Double?
+    ) async throws {
+        fatalError("unused")
+    }
     func openOccurrence(scheduleID: UUID, dueAt: Date) async throws -> DoseOccurrence {
         fatalError("unused")
     }

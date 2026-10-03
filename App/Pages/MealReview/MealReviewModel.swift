@@ -146,7 +146,9 @@ final class MealReviewModel {
     private let database: (any FoodDatabase)?
     private let palette: ClassPalette
     private let sessionStartMs: Int64
-    private var outcomeID = ""
+    // Readable so the weighed-mass entry (FIELD_LOOP) can attach truth to the
+    // same attempt this surface's correction rows name; "" until resolved.
+    private(set) var outcomeID = ""
     private let buildStamp: String
     private let log = Logger(subsystem: "ie.medata.app", category: "MealReview")
 
