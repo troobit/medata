@@ -255,24 +255,18 @@ public enum CarveResidualAudit {
             width: obliqueK.imageWidth, height: obliqueK.imageHeight,
             classes: C, palette: palette, regularisation: options.regularisation)
 
-        // Stage D exactly as FixtureRunner's two-view branch runs it.
-        let plane: SupportPlane
-        var planeReference: String?
-        var planeResidualMm: Float?
-        var firstFit: FixtureRunner.SingleViewPlaneFit?
-        if let fit = try? FixtureRunner.fitSupportPlane(
+        // Stage D exactly as FixtureRunner's two-view branch runs it on a
+        // depth-bearing fixture: a refused fit refuses the audit, as the
+        // device refuses the capture, rather than auditing a nominal plane.
+        let firstFit = try FixtureRunner.fitSupportPlane(
             depth: depth, intrinsics: nadirK, gravity: gravity,
             foodMask: FixtureRunner.preShutterMask(
                 fixture, width: nadirK.imageWidth, height: nadirK.imageHeight)
                 ?? FixtureRunner.foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
-            fixtureID: fixture.fixtureID) {
-            plane = fit.plane
-            planeReference = fit.reference?.rawValue
-            planeResidualMm = fit.plane.residualMm
-            firstFit = fit
-        } else {
-            plane = FixtureRunner.nominalPlane(gravity: gravity)
-        }
+            fixtureID: fixture.fixtureID)
+        let plane = firstFit.plane
+        let planeReference = firstFit.reference?.rawValue
+        let planeResidualMm: Float? = firstFit.plane.residualMm
 
         if options.cardExclusion, let card = try FixtureRunner.pickCard(
             fixture: fixture, intrinsics: nadirK,
@@ -408,17 +402,15 @@ public enum CarveResidualAudit {
         // first plane (Decision 10).
         var adoptedPlane = plane
         var adoptedPlaneName = "asFitted"
-        if let first = firstFit {
-            let refit = FixtureRunner.refitPlaneFromGrownRegion(
-                argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirK,
-                gravity: gravity, first: first, palette: palette, growth: .standard)
-            if refit.refitAttempted {
-                planeVariants.append(try describe(
-                    "grownRefit", refit.plane, refit.reference?.rawValue,
-                    refitReference: refit.refitReference?.rawValue ?? "refused"))
-                adoptedPlane = refit.plane
-                adoptedPlaneName = "grownRefit"
-            }
+        let refit = FixtureRunner.refitPlaneFromGrownRegion(
+            argmax: nadirSeg.argmax, depth: depth, intrinsics: nadirK,
+            gravity: gravity, first: firstFit, palette: palette, growth: .standard)
+        if refit.refitAttempted {
+            planeVariants.append(try describe(
+                "grownRefit", refit.plane, refit.reference?.rawValue,
+                refitReference: refit.refitReference?.rawValue ?? "refused"))
+            adoptedPlane = refit.plane
+            adoptedPlaneName = "grownRefit"
         }
 
         // The no-LiDAR sizing at the adopted plane (Decision 11): the constant,
@@ -553,18 +545,14 @@ public enum CarveResidualAudit {
         let mask = FixtureRunner.preShutterMask(
             fixture, width: k.imageWidth, height: k.imageHeight)
             ?? FixtureRunner.foodRegionMask(argmax: seg.argmax, palette: palette)
-        let plane: SupportPlane
-        var reference: String?
-        var residual: Float?
-        if let fit = try? FixtureRunner.fitSupportPlane(
+        // A refused fit refuses the profile: heights above an invented plane
+        // are not measurements.
+        let fit = try FixtureRunner.fitSupportPlane(
             depth: depth, intrinsics: k, gravity: gravity,
-            foodMask: mask, fixtureID: fixture.fixtureID) {
-            plane = fit.plane
-            reference = fit.reference?.rawValue
-            residual = fit.plane.residualMm
-        } else {
-            plane = FixtureRunner.nominalPlane(gravity: gravity)
-        }
+            foodMask: mask, fixtureID: fixture.fixtureID)
+        let plane = fit.plane
+        let reference = fit.reference?.rawValue
+        let residual: Float? = fit.plane.residualMm
         let foodMask = FixtureRunner.foodRegionMask(argmax: seg.argmax, palette: palette)
         let samples = VoxelGridSizer.foodHeightSamplesMm(
             foodMask: foodMask, depth: depth, intrinsics: k, supportPlane: plane)

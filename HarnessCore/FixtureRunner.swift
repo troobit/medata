@@ -181,25 +181,30 @@ public enum FixtureRunner {
             // A device two-view bundle from a LiDAR phone carries nadir depth:
             // fit the support plane exactly as the device did (stage D) so the
             // replay's volume is the device's, not a nominal-plane approximation.
-            // Fixtures without depth (non-LiDAR captures, synthetic) keep the
-            // gravity-aligned nominal plane at -300 mm.
             var plane: SupportPlane
             var firstFit: SingleViewPlaneFit?
-            if fixture.hasNadirDepth,
-               let fit = try? fitSupportPlane(
+            if fixture.hasNadirDepth {
+                // `try`, not `try?`: a refused fit refuses the replay, as
+                // `Pipeline.fitSupportPlane` refuses the capture on both
+                // paths. Falling through to the nominal plane here printed a
+                // volume the device can never produce.
+                let fit = try fitSupportPlane(
                     depth: DepthMap(pb: fixture.nadirDepth), intrinsics: nadirIntrinsics,
                     gravity: gravity,
                     foodMask: preShutterMask(fixture, width: W, height: H)
                         ?? foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
-                    fixtureID: fixture.fixtureID) {
+                    fixtureID: fixture.fixtureID)
                 plane = fit.plane
                 firstFit = fit
                 supportPlaneResidualMm = fit.plane.residualMm
                 supportPlaneReference = fit.reference
             } else {
-                // Carried into the summary so a nominal-plane replay is
-                // identifiable downstream rather than indistinguishable from a
-                // fitted one; production refuses this case outright.
+                // Depth-free fixtures ONLY (non-LiDAR captures, synthetic
+                // controls): the gravity-aligned nominal plane at -300 mm, so
+                // the degraded no-depth carve can be exercised offline.
+                // Production refuses this capture (`noSupportPlaneWithoutDepth`);
+                // the -1 residual carried into the summary marks the result
+                // as a nominal-plane replay, not device behaviour.
                 plane = nominalPlane(gravity: gravity)
                 supportPlaneResidualMm = plane.residualMm
             }

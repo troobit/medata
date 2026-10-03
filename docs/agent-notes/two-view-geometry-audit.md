@@ -638,10 +638,11 @@ change; both wait on the acceptance questions.
 Side notes from the same session's rows: the one two-view capture that kept its
 depth (`055BB705`, oblique 58.6°) carved 42 cm³ of the 260 cm³ roll with
 `measuredFoodHeightMm 3.6` and a 16.6 cm² footprint — a mask problem on that
-nadir, not the plane. And a parity gap remains in `FixtureRunner`'s two-view
-branch: `if fixture.hasNadirDepth, let fit = try? fitSupportPlane(…)` drops to
-the −300 mm nominal plane when a depth fixture's fit REFUSES, where production
-would refuse the capture.
+nadir, not the plane. **Fixed 2026-10-03:** a depth fixture whose fit refuses no
+longer falls to the −300 mm nominal plane in `FixtureRunner`'s two-view branch or
+`CarveResidualAudit`; it skips with the fitter's refusal, as the device refuses
+(the roll rebuilt as two-view with zeroed depth: 64.7 cm³ before, `noLidarPoints`
+now). Only a depth-FREE fixture reaches the nominal plane.
 
 The probe was a throwaway test (not committed): load the bundle, pick the card
 with `FixtureRunner.pickCard`, call the production fitter on
